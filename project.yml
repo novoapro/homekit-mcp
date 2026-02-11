@@ -1,0 +1,61 @@
+name: HomeKitMCP
+options:
+  bundleIdPrefix: com.manuelcarlos
+  deploymentTarget:
+    iOS: "16.0"
+    macOS: "13.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+
+packages:
+  Vapor:
+    url: https://github.com/vapor/vapor.git
+    from: "4.89.0"
+
+targets:
+  HomeKitMCP:
+    type: application
+    platform: iOS
+    supportedDestinations: [macCatalyst]
+    sources:
+      - HomeKitMCP
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.manuelcarlos.HomeKitMCP
+        PRODUCT_NAME: HomeKitMCP
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        SUPPORTS_MACCATALYST: "YES"
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: "NO"
+        INFOPLIST_FILE: HomeKitMCP/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: HomeKitMCP/Resources/HomeKitMCP.entitlements
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: "YES"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - package: Vapor
+      - target: MenuBarPlugin
+    entitlements:
+      path: HomeKitMCP/Resources/HomeKitMCP.entitlements
+      properties:
+        com.apple.developer.homekit: true
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
+
+  MenuBarPlugin:
+    type: bundle
+    platform: macOS
+    sources:
+      - MenuBarPlugin
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.manuelcarlos.HomeKitMCP.MenuBarPlugin
+        PRODUCT_NAME: MenuBarPlugin
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        INFOPLIST_FILE: MenuBarPlugin/Info.plist
+        SKIP_INSTALL: "YES"
+        CODE_SIGN_STYLE: Automatic
+        COMBINE_HIDPI_IMAGES: "YES"

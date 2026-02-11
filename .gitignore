@@ -1,0 +1,38 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserdata
+*.xcworkspace
+xcuserdata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xccheckout
+
+# SPM
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# IDE
+.vscode/
+.idea/
+
+# Gemini
+.gemini/
+
+# Build artifacts / exported apps
+*.app
+HomeKitMCP 2026-*/
+
+# Claude Code
+.claude/
+
+# Project planning docs (generated, not source)
+homekit-mcp-implementation-plan.md
