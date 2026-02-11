@@ -21,6 +21,22 @@ struct DeviceRow: View {
         GridItem(.flexible(minimum: 120), spacing: 10)
     ]
 
+    private var deviceMCPEnabled: Bool {
+        let allKeys = device.services.flatMap { service in
+            service.characteristics.map { configKey(deviceId: device.id, serviceId: service.id, charId: $0.id) }
+        }
+        guard !allKeys.isEmpty else { return true }
+        return allKeys.contains { configs[$0]?.mcpEnabled ?? true }
+    }
+
+    private var deviceWebhookEnabled: Bool {
+        let allKeys = device.services.flatMap { service in
+            service.characteristics.map { configKey(deviceId: device.id, serviceId: service.id, charId: $0.id) }
+        }
+        guard !allKeys.isEmpty else { return false }
+        return allKeys.contains { configs[$0]?.webhookEnabled ?? false }
+    }
+
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
@@ -37,9 +53,41 @@ struct DeviceRow: View {
                 Text(device.name)
                     .font(.headline)
                 Spacer()
-                Circle()
-                    .fill(device.isReachable ? Color.green : Color.red)
-                    .frame(width: 8, height: 8)
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Toggle(isOn: Binding(
+                            get: { deviceMCPEnabled },
+                            set: { newValue in
+                                updateAllConfigs(mcpEnabled: newValue)
+                                viewModel.setDeviceConfig(device: device, mcpEnabled: newValue)
+                            }
+                        )) { EmptyView() }
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                        Text("MCP")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    HStack(spacing: 4) {
+                        Toggle(isOn: Binding(
+                            get: { deviceWebhookEnabled },
+                            set: { newValue in
+                                updateAllConfigs(webhookEnabled: newValue)
+                                viewModel.setDeviceConfig(device: device, webhookEnabled: newValue)
+                            }
+                        )) { EmptyView() }
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                        Text("Webhook")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    Circle()
+                        .fill(device.isReachable ? Color.green : Color.red)
+                        .frame(width: 8, height: 8)
+                }
             }
         }
         .padding(.vertical, 4)
@@ -118,6 +166,18 @@ struct DeviceRow: View {
 
     private func configKey(deviceId: String, serviceId: String, charId: String) -> String {
         "\(deviceId):\(serviceId):\(charId)"
+    }
+
+    private func updateAllConfigs(mcpEnabled: Bool? = nil, webhookEnabled: Bool? = nil) {
+        for service in device.services {
+            for char in service.characteristics {
+                let key = configKey(deviceId: device.id, serviceId: service.id, charId: char.id)
+                var config = configs[key] ?? .default
+                if let mcp = mcpEnabled { config.mcpEnabled = mcp }
+                if let webhook = webhookEnabled { config.webhookEnabled = webhook }
+                configs[key] = config
+            }
+        }
     }
 
     private func loadConfigs() async {

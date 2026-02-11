@@ -50,6 +50,23 @@ actor DeviceConfigurationService {
         getConfig(deviceId: deviceId, serviceId: serviceId, characteristicId: characteristicId).webhookEnabled
     }
 
+    func setAllForDevice(deviceId: String, services: [(serviceId: String, characteristicIds: [String])], mcpEnabled: Bool? = nil, webhookEnabled: Bool? = nil) {
+        for service in services {
+            for charId in service.characteristicIds {
+                let k = Self.key(deviceId: deviceId, serviceId: service.serviceId, characteristicId: charId)
+                var config = configs[k] ?? .default
+                if let mcp = mcpEnabled { config.mcpEnabled = mcp }
+                if let webhook = webhookEnabled { config.webhookEnabled = webhook }
+                if config == .default {
+                    configs.removeValue(forKey: k)
+                } else {
+                    configs[k] = config
+                }
+            }
+        }
+        debouncedSave()
+    }
+
     func resetAll() {
         configs.removeAll()
         saveNow()

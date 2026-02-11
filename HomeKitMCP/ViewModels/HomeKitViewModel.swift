@@ -85,6 +85,18 @@ class HomeKitViewModel: ObservableObject {
         }
     }
 
+    func setDeviceConfig(device: DeviceModel, mcpEnabled: Bool? = nil, webhookEnabled: Bool? = nil) {
+        let services = device.services.map { service in
+            (serviceId: service.id, characteristicIds: service.characteristics.map(\.id))
+        }
+        Task {
+            await configService.setAllForDevice(deviceId: device.id, services: services, mcpEnabled: mcpEnabled, webhookEnabled: webhookEnabled)
+            await MainActor.run {
+                objectWillChange.send()
+            }
+        }
+    }
+
     func resetConfiguration() {
         Task {
             await configService.resetAll()

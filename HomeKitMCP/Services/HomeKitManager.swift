@@ -27,29 +27,33 @@ class HomeKitManager: NSObject, ObservableObject {
     }
 
     func getAllDevices() -> [DeviceModel] {
-        return allAccessories.map { accessory in
-            DeviceModel(
+        return allAccessories.compactMap { accessory in
+            let services = accessory.services.compactMap { service -> ServiceModel? in
+                guard service.serviceType != HMServiceTypeAccessoryInformation else { return nil }
+                let characteristics = service.characteristics.map { char in
+                    CharacteristicModel(
+                        id: char.uniqueIdentifier.uuidString,
+                        type: char.characteristicType,
+                        value: char.value.map { AnyCodable($0) },
+                        format: char.metadata?.format ?? "unknown",
+                        permissions: characteristicPermissions(char)
+                    )
+                }
+                guard !characteristics.isEmpty else { return nil }
+                return ServiceModel(
+                    id: service.uniqueIdentifier.uuidString,
+                    name: service.name,
+                    type: service.serviceType,
+                    characteristics: characteristics
+                )
+            }
+            guard !services.isEmpty else { return nil }
+            return DeviceModel(
                 id: accessory.uniqueIdentifier.uuidString,
                 name: accessory.name,
                 roomName: accessory.room?.name,
                 categoryType: accessory.category.categoryType,
-                services: accessory.services.compactMap { service in
-                    guard service.serviceType != HMServiceTypeAccessoryInformation else { return nil }
-                    return ServiceModel(
-                        id: service.uniqueIdentifier.uuidString,
-                        name: service.name,
-                        type: service.serviceType,
-                        characteristics: service.characteristics.map { char in
-                            CharacteristicModel(
-                                id: char.uniqueIdentifier.uuidString,
-                                type: char.characteristicType,
-                                value: char.value.map { AnyCodable($0) },
-                                format: char.metadata?.format ?? "unknown",
-                                permissions: characteristicPermissions(char)
-                            )
-                        }
-                    )
-                },
+                services: services,
                 isReachable: accessory.isReachable
             )
         }
