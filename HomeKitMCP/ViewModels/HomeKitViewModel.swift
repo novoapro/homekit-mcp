@@ -23,6 +23,26 @@ class HomeKitViewModel: ObservableObject {
     var totalDeviceCount: Int {
         devicesByRoom.reduce(0) { $0 + $1.devices.count }
     }
+    
+    @Published var searchText = ""
+    
+    var filteredDevicesByRoom: [(roomName: String, devices: [DeviceModel])] {
+        if searchText.isEmpty {
+            return devicesByRoom
+        }
+        
+        return devicesByRoom.compactMap { group in
+            let filteredDevices = group.devices.filter { device in
+                device.name.localizedCaseInsensitiveContains(searchText)
+            }
+            
+            if filteredDevices.isEmpty {
+                return nil
+            }
+            
+            return (roomName: group.roomName, devices: filteredDevices)
+        }
+    }
 
     init(homeKitManager: HomeKitManager, configService: DeviceConfigurationService) {
         self.homeKitManager = homeKitManager

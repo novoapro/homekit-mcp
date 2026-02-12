@@ -13,21 +13,21 @@ struct LogRow: View {
                 if isError {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption)
-                        .foregroundColor(.red)
+                        .foregroundColor(Theme.Status.error)
                 }
                 Text(log.deviceName)
                     .font(.headline)
-                    .foregroundColor(isError ? .red : .primary)
+                    .foregroundColor(isError ? Theme.Status.error : Theme.Text.primary)
                 Spacer()
                 Text(log.timestamp, style: .time)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Theme.Text.secondary)
             }
 
             HStack(spacing: 4) {
                 Text(log.category == .serverError ? "Server Error" : isError ? "Webhook Error" : CharacteristicTypes.displayName(for: log.characteristicType))
                     .font(.subheadline)
-                    .foregroundColor(isError ? .red : .secondary)
+                    .foregroundColor(isError ? Theme.Status.error : Theme.Text.secondary)
 
                 Spacer()
 
@@ -35,21 +35,22 @@ struct LogRow: View {
                     if let oldValue = log.oldValue {
                         Text(CharacteristicTypes.formatValue(oldValue.value, characteristicType: log.characteristicType))
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.Text.secondary)
 
                         Image(systemName: "arrow.right")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.Text.secondary)
                     }
 
                     if let newValue = log.newValue {
                         Text(CharacteristicTypes.formatValue(newValue.value, characteristicType: log.characteristicType))
                             .font(.subheadline)
                             .fontWeight(.medium)
+                            .foregroundColor(Theme.Text.primary)
                     } else {
                         Text("--")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Theme.Text.secondary)
                     }
                 }
             }
@@ -57,7 +58,7 @@ struct LogRow: View {
             if let errorDetails = log.errorDetails {
                 Text(errorDetails)
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundColor(Theme.Status.error)
                     .lineLimit(2)
             }
         }

@@ -272,31 +272,36 @@ extension HomeKitManager: HMAccessoryDelegate {
         let serviceId = service.uniqueIdentifier.uuidString
         let charId = characteristic.uniqueIdentifier.uuidString
 
-        let change = StateChange(
-            deviceId: deviceId,
-            deviceName: accessory.name,
-            characteristicType: characteristic.characteristicType,
-            oldValue: nil,
-            newValue: characteristic.value
-        )
-
         Task {
-            // Always log state changes
-            await loggingService.log(change)
-
-            // Only send webhook if characteristic has webhook enabled
-            let webhookEnabled = await configService.isWebhookEnabled(
+            // Check configuration for this specific characteristic
+            let config = await configService.getConfig(
                 deviceId: deviceId,
                 serviceId: serviceId,
                 characteristicId: charId
             )
-            if webhookEnabled {
+            
+            // If neither MCP nor Webhook is enabled, discard the event entirely
+            guard config.mcpEnabled || config.webhookEnabled else { return }
+
+            let change = StateChange(
+                deviceId: deviceId,
+                deviceName: accessory.name,
+                characteristicType: characteristic.characteristicType,
+                oldValue: nil,
+                newValue: characteristic.value
+            )
+            
+            // Log the event since at least one service is enabled
+            await loggingService.log(change)
+
+            // Send webhook if enabled
+            if config.webhookEnabled {
                 await webhookService.sendStateChange(change)
             }
-        }
-
-        DispatchQueue.main.async {
-            self.objectWillChange.send()
+            
+            await MainActor.run {
+                self.objectWillChange.send()
+            }
         }
     }
 

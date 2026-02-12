@@ -18,15 +18,17 @@ struct DeviceListView: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding()
-            } else if viewModel.isLoading {
+            } else if viewModel.isLoading && viewModel.totalDeviceCount == 0 {
                 ProgressView("Discovering devices...")
             } else if viewModel.totalDeviceCount == 0 {
                 VStack(spacing: 12) {
                     Image(systemName: "house")
-                        .font(.largeTitle)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 50))
+                        .foregroundColor(.secondary.opacity(0.3))
+                        .padding(.bottom, 8)
                     Text("No HomeKit devices found")
-                        .font(.headline)
+                        .font(.title3)
+                        .fontWeight(.semibold)
                     Text("Make sure you have devices set up in the Home app.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
@@ -35,33 +37,34 @@ struct DeviceListView: View {
                 .padding()
             } else {
                 List {
-                    ForEach(viewModel.devicesByRoom, id: \.roomName) { group in
-                        Section(header: Text(group.roomName)) {
+                    ForEach(viewModel.filteredDevicesByRoom, id: \.roomName) { group in
+                        Section(header: 
+                            Text(group.roomName)
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundColor(Theme.Text.primary)
+                                .padding(.vertical, 8)
+                                .textCase(nil)
+                        ) {
                             ForEach(group.devices) { device in
                                 DeviceRow(device: device, viewModel: viewModel)
+                                    .listRowInsets(EdgeInsets())
+                                    .listRowSeparator(.hidden)
+                                    .padding(.vertical, 6)
                             }
                         }
                     }
                 }
-                .listStyle(.insetGrouped)
-            }
-        }
-        .navigationTitle("HomeKit Devices")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 8) {
-                    if viewModel.isReadingValues {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                    else {
-                        Button(action: viewModel.refresh) {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                    }
+                .listStyle(.plain)
+                .background(Theme.mainBackground)
+                .scrollContentBackground(.hidden)
+                .searchable(text: $viewModel.searchText, prompt: "Search devices")
+                .refreshable {
+                    viewModel.refresh()
                 }
             }
         }
+        .navigationTitle("HomeKit Devices")
     }
 }
 

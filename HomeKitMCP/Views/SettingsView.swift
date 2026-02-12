@@ -18,14 +18,21 @@ struct SettingsView: View {
     var body: some View {
         Form {
             webhookSection
+                .listRowBackground(Theme.contentBackground)
             if viewModel.webhookEnabled {
                 webhookStatusSection
+                    .listRowBackground(Theme.contentBackground)
             }
             mcpServerSection
+                .listRowBackground(Theme.contentBackground)
             dataSection
+                .listRowBackground(Theme.contentBackground)
             aboutSection
+                .listRowBackground(Theme.contentBackground)
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Theme.mainBackground)
         .navigationTitle("Settings")
         .alert("Saved", isPresented: $showingSaveAlert) {
             Button("OK", role: .cancel) { }

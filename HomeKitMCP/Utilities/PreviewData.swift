@@ -109,7 +109,32 @@ enum PreviewData {
     static var logViewModel: LogViewModel {
         let loggingService = LoggingService()
         let vm = LogViewModel(loggingService: loggingService)
-        vm.logs = sampleLogs
+        
+        // Manually set published properties for preview
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        
+        let grouped = Dictionary(grouping: sampleLogs) { log in
+            calendar.startOfDay(for: log.timestamp)
+        }
+        
+        vm.groupedLogs = grouped
+            .sorted { $0.key > $1.key }
+            .map { (date, logs) in
+                let label: String
+                if calendar.isDateInToday(date) {
+                    label = "Today"
+                } else if calendar.isDateInYesterday(date) {
+                    label = "Yesterday"
+                } else {
+                    label = formatter.string(from: date)
+                }
+                return (date: date.ISO8601Format(), label: label, logs: logs)
+            }
+            
+        vm.filteredLogCount = sampleLogs.count
         return vm
     }
 

@@ -108,14 +108,46 @@ actor WebhookService {
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-                statusSubject.send(.lastFailure(date: Date(), error: "HTTP \(statusCode)"))
+                let errorDesc = "HTTP \(statusCode)"
+                statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
+                
+                // Log the test failure
+                let logEntry = StateChangeLog(
+                    id: UUID(),
+                    timestamp: Date(),
+                    deviceId: "test",
+                    deviceName: "Test Device",
+                    characteristicType: "test",
+                    oldValue: nil,
+                    newValue: nil,
+                    category: .webhookError,
+                    errorDetails: "Test webhook failed: \(errorDesc)"
+                )
+                await loggingService.logEntry(logEntry)
+                
                 return false
             }
 
             statusSubject.send(.lastSuccess(date: Date()))
             return true
         } catch {
-            statusSubject.send(.lastFailure(date: Date(), error: error.localizedDescription))
+            let errorDesc = error.localizedDescription
+            statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
+            
+            // Log the test failure
+            let logEntry = StateChangeLog(
+                id: UUID(),
+                timestamp: Date(),
+                deviceId: "test",
+                deviceName: "Test Device",
+                characteristicType: "test",
+                oldValue: nil,
+                newValue: nil,
+                category: .webhookError,
+                errorDetails: "Test webhook failed: \(errorDesc)"
+            )
+            await loggingService.logEntry(logEntry)
+            
             return false
         }
     }
