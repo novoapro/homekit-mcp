@@ -1,6 +1,6 @@
 name: HomeKitMCP
 options:
-  bundleIdPrefix: com.manuelcarlos
+  bundleIdPrefix: com.novoa
   deploymentTarget:
     iOS: "16.0"
     macOS: "13.0"
@@ -29,7 +29,7 @@ targets:
       - HomeKitMCP
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.manuelcarlos.HomeKitMCP
+        PRODUCT_BUNDLE_IDENTIFIER: com.novoa.HomeKitMCP
         PRODUCT_NAME: HomeKitMCP
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
@@ -44,6 +44,12 @@ targets:
     dependencies:
       - package: Vapor
       - target: MenuBarPlugin
+    entitlements:
+      path: HomeKitMCP/Resources/HomeKitMCP.entitlements
+      properties:
+        com.apple.developer.homekit: true
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
 
   MenuBarPlugin:
     type: bundle
@@ -52,7 +58,7 @@ targets:
       - MenuBarPlugin
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.manuelcarlos.HomeKitMCP.MenuBarPlugin
+        PRODUCT_BUNDLE_IDENTIFIER: com.novoa.HomeKitMCP.MenuBarPlugin
         PRODUCT_NAME: MenuBarPlugin
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"

@@ -15,11 +15,13 @@ class MenuBarController {
     }
 
     private func loadPlugin() {
+        print("MenuBarController: Starting plugin load...")
         // The plugin bundle is embedded in the app's Resources directory
         guard let bundleURL = Bundle.main.url(forResource: "MenuBarPlugin", withExtension: "bundle") else {
             print("MenuBarController: Plugin bundle not found in resources")
             return
         }
+        print("MenuBarController: Found bundle at \(bundleURL.path)")
 
         guard let bundle = Bundle(url: bundleURL) else {
             print("MenuBarController: Could not create bundle from \(bundleURL)")
@@ -28,6 +30,7 @@ class MenuBarController {
 
         do {
             try bundle.loadAndReturnError()
+            print("MenuBarController: Bundle loaded successfully")
         } catch {
             print("MenuBarController: Failed to load plugin bundle: \(error)")
             return
@@ -37,17 +40,23 @@ class MenuBarController {
             print("MenuBarController: Could not get principal class from plugin")
             return
         }
+        print("MenuBarController: Principal class found: \(String(describing: principalClass))")
 
         let instance = principalClass.init()
         self.plugin = instance
+        print("MenuBarController: Plugin instance created")
 
         // Call setupMenuBar(actionHandler:) via selector to avoid cross-target type dependency
         let selector = NSSelectorFromString("setupMenuBarWithActionHandler:")
         if instance.responds(to: selector) {
+            print("MenuBarController: Configuring menu bar...")
             let handler: @convention(block) (String) -> Void = { [weak self] action in
                 self?.handleAction(action)
             }
             instance.perform(selector, with: handler)
+            print("MenuBarController: Setup call performed")
+        } else {
+            print("MenuBarController: Instance does not respond to setup selector")
         }
     }
 
