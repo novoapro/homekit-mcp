@@ -85,6 +85,8 @@ struct DeviceRow: View {
                                 .foregroundColor(Theme.Status.error)
                                 .cornerRadius(4)
                         }
+                        
+                        Spacer()
                     }
                 }
                 
@@ -187,7 +189,6 @@ struct DeviceRow: View {
             RoundedRectangle(cornerRadius: Theme.CornerRadius.large)
                 .stroke(Color.primary.opacity(0.05), lineWidth: 1)
         )
-        .padding(Theme.Spacing.medium)
         .task {
             await loadConfigs()
         }

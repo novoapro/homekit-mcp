@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		042C52299538B719DFA098B2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2CA9EFC817A8EBB94A85AC70 /* Assets.xcassets */; };
 		0AB5E46CEF3A8B68CC454E5E /* DeviceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5831ACADF90552245465043 /* DeviceModel.swift */; };
 		185DAC0F4CCBE7EADDA71DC1 /* HomeKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8BFC87681E42A0EF8D3DAF /* HomeKitManager.swift */; };
 		1E943F272DF289A0708ED7B4 /* LogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3E0E7001560CF7AC8B50C18 /* LogViewerView.swift */; };
@@ -57,7 +56,6 @@
 		1A607932B4D328FC6E85EEDA /* MenuBarPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPlugin.swift; sourceTree = "<group>"; };
 		1D45F1AC83543490E02AE688 /* MCPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPServer.swift; sourceTree = "<group>"; };
 		2875A40DA5D433B3D7981C8F /* HomeKitMCP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HomeKitMCP.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		2CA9EFC817A8EBB94A85AC70 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		42C01AAB5B5EEC084DD1E311 /* MCPRequestHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPRequestHandler.swift; sourceTree = "<group>"; };
 		47D0798E400ADEFA785DCB94 /* DeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListView.swift; sourceTree = "<group>"; };
 		4DEC6F3D579DCC1F32FF60E7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -176,7 +174,6 @@
 		9B2A6A41914CA8A481E50C41 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				2CA9EFC817A8EBB94A85AC70 /* Assets.xcassets */,
 				B464E4D9ACFF628B10360AFA /* HomeKitMCP.entitlements */,
 				A97C3B391AF017E2778652F7 /* Info.plist */,
 			);
@@ -320,7 +317,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				042C52299538B719DFA098B2 /* Assets.xcassets in Resources */,
 				3128C7E7CE4B2E3DD4CDD00A /* MenuBarPlugin.bundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

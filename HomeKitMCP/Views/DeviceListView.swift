@@ -45,11 +45,10 @@ struct DeviceListView: View {
                     filterBar
                         .padding(.horizontal)
                         .padding(.vertical, 8)
-
                     List {
                         ForEach(viewModel.filteredDevicesByRoom, id: \.roomName) { group in
                             Section(header:
-                                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                HStack(spacing: 6) {
                                     Text(group.roomName)
                                         .font(.title3)
                                         .fontWeight(.bold)
@@ -58,21 +57,20 @@ struct DeviceListView: View {
                                         .font(.subheadline)
                                         .fontWeight(.medium)
                                         .foregroundColor(Theme.Text.secondary)
+                                    Spacer()
                                 }
-                                .padding(.vertical, 8)
+                                .background(Theme.mainBackground)
                                 .textCase(nil)
                             ) {
                                 ForEach(group.devices) { device in
                                     DeviceRow(device: device, viewModel: viewModel)
                                         .listRowInsets(EdgeInsets())
                                         .listRowSeparator(.hidden)
-                                        .padding(.vertical, 6)
                                 }
                             }
                         }
                     }
-                    .listStyle(.plain)
-                    .background(Theme.mainBackground)
+                    .listStyle(.insetGrouped)
                     .scrollContentBackground(.hidden)
                 }
                 .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search devices")
@@ -82,13 +80,14 @@ struct DeviceListView: View {
             }
         }
         .navigationTitle("HomeKit Devices (\(filteredDeviceCount))")
+        .background(Theme.mainBackground)
     }
 
     // MARK: - Filter Bar
 
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 // Room filter
                 roomFilterChip
 
@@ -121,7 +120,7 @@ struct DeviceListView: View {
                             .foregroundColor(Theme.Status.error)
                     }
                     .buttonStyle(.plain)
-                    .transition(.opacity)
+                    
                 }
             }
         }
@@ -159,13 +158,13 @@ struct DeviceListView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Color(.systemGray6))
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : .clear)
             )
             .overlay(
                 Capsule()
                     .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
             )
-            .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.secondary)
+            .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.primary)
         }
     }
 
@@ -201,13 +200,13 @@ struct DeviceListView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Color(.systemGray6))
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : .clear)
             )
             .overlay(
                 Capsule()
                     .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
             )
-            .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.secondary)
+            .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.primary)
         }
     }
 
@@ -234,13 +233,13 @@ struct DeviceListView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Color(.systemGray6))
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : .clear)
             )
             .overlay(
                 Capsule()
                     .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
             )
-            .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.secondary)
+            .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.primary)
         }
         .buttonStyle(.plain)
     }

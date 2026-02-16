@@ -4,9 +4,9 @@ struct Theme {
     // MARK: - Colors
     
     struct Text {
-        static let primary = Color.primary
-        static let secondary = Color.secondary
-        static let tertiary = Color(uiColor: .tertiaryLabel)
+        static let primary = Color.dynamic(light: "#121212ff", dark: "#ffdc5eff")
+        static let secondary = Color.dynamic(light: "#121212d3", dark: "#ffdc5ebc")
+        static let tertiary = Color.dynamic(light: "#121212a0", dark: "#ffdc5ebc")
     }
     
     struct Tint {
@@ -34,12 +34,16 @@ struct Theme {
         static let medium: CGFloat = 12
         static let large: CGFloat = 16
     }
+    
+    struct Colors {
+        static let pill = Color.dynamic(light: "#f0f7d7ff", dark: "#FFFFFFFF")
+    }
 }
 
 // Extension to support custom colors without Asset Catalog
 extension Theme {
     static var mainBackground: Color {
-        Color.dynamic(light: "#fffae7ff", dark: "#000000")
+        Color.dynamic(light: "#fff6d4ff", dark: "#000000")
     }
     
     static var contentBackground: Color {

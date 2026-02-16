@@ -74,6 +74,7 @@ struct ContentView: View {
             }
             .tag(NavigationItem.settings)
         }
+        .background(Theme.mainBackground)
     }
 }
 
