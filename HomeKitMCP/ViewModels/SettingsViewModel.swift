@@ -90,7 +90,7 @@ class SettingsViewModel: ObservableObject {
             guard name == "en0" || name == "en1" else { continue }
             var addr = ptr.pointee.ifa_addr.pointee
             var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-            withUnsafePointer(to: &addr) { addrPtr in
+            _ = withUnsafePointer(to: &addr) { addrPtr in
                 addrPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
                     getnameinfo(sockaddrPtr, socklen_t(sa.sa_len), &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST)
                 }

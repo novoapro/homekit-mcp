@@ -39,6 +39,8 @@ actor LoggingService {
             timestamp: Date(),
             deviceId: change.deviceId,
             deviceName: change.deviceName,
+            serviceId: change.serviceId,
+            serviceName: change.serviceName,
             characteristicType: change.characteristicType,
             oldValue: change.oldValue.map { AnyCodable($0) },
             newValue: change.newValue.map { AnyCodable($0) }

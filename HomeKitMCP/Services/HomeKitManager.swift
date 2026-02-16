@@ -68,7 +68,7 @@ class HomeKitManager: NSObject, ObservableObject {
             .map { (roomName: $0.key, devices: $0.value) }
     }
 
-    func updateDevice(id: String, characteristicType: String, value: Any) async throws {
+    func updateDevice(id: String, characteristicType: String, value: Any, serviceId: String? = nil) async throws {
         guard let accessory = allAccessories.first(where: { $0.uniqueIdentifier.uuidString == id }) else {
             throw HomeKitError.deviceNotFound
         }
@@ -76,7 +76,18 @@ class HomeKitManager: NSObject, ObservableObject {
         // Support both raw UUID and human-readable name for characteristic type
         let resolvedType = CharacteristicTypes.characteristicType(forName: characteristicType) ?? characteristicType
 
-        for service in accessory.services {
+        // When a serviceId is provided, target only that specific service
+        let targetServices: [HMService]
+        if let serviceId {
+            guard let matchedService = accessory.services.first(where: { $0.uniqueIdentifier.uuidString == serviceId }) else {
+                throw HomeKitError.serviceNotFound
+            }
+            targetServices = [matchedService]
+        } else {
+            targetServices = accessory.services
+        }
+
+        for service in targetServices {
             for characteristic in service.characteristics where characteristic.characteristicType == resolvedType {
                 try await characteristic.writeValue(value)
                 return
@@ -271,6 +282,7 @@ extension HomeKitManager: HMAccessoryDelegate {
         let deviceId = accessory.uniqueIdentifier.uuidString
         let serviceId = service.uniqueIdentifier.uuidString
         let charId = characteristic.uniqueIdentifier.uuidString
+        let serviceName = ServiceTypes.displayName(for: service.serviceType)
 
         Task {
             // Check configuration for this specific characteristic
@@ -286,16 +298,17 @@ extension HomeKitManager: HMAccessoryDelegate {
             let change = StateChange(
                 deviceId: deviceId,
                 deviceName: accessory.name,
+                serviceId: serviceId,
+                serviceName: serviceName,
                 characteristicType: characteristic.characteristicType,
                 oldValue: nil,
                 newValue: characteristic.value
             )
-            
-            // Log the event since at least one service is enabled
-            await loggingService.log(change)
 
-            // Send webhook if enabled
+            // Only log state changes and send webhooks for webhook-enabled characteristics.
+            // MCP calls already produce their own log entries via mcpCall.
             if config.webhookEnabled {
+                await loggingService.log(change)
                 await webhookService.sendStateChange(change)
             }
             
@@ -315,12 +328,14 @@ extension HomeKitManager: HMAccessoryDelegate {
 // MARK: - Errors
 enum HomeKitError: LocalizedError {
     case deviceNotFound
+    case serviceNotFound
     case characteristicNotFound
     case notAuthorized
 
     var errorDescription: String? {
         switch self {
         case .deviceNotFound: return "Device not found"
+        case .serviceNotFound: return "Service not found"
         case .characteristicNotFound: return "Characteristic not found"
         case .notAuthorized: return "HomeKit access not authorized"
         }

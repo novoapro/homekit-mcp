@@ -12,6 +12,14 @@ packages:
     url: https://github.com/vapor/vapor.git
     from: "4.89.0"
 
+schemes:
+  HomeKitMCP:
+    build:
+      targets:
+        HomeKitMCP: all
+    run:
+      config: Debug
+
 targets:
   HomeKitMCP:
     type: application
@@ -36,12 +44,6 @@ targets:
     dependencies:
       - package: Vapor
       - target: MenuBarPlugin
-    entitlements:
-      path: HomeKitMCP/Resources/HomeKitMCP.entitlements
-      properties:
-        com.apple.developer.homekit: true
-        com.apple.security.network.client: true
-        com.apple.security.network.server: true
 
   MenuBarPlugin:
     type: bundle

@@ -14,6 +14,11 @@ struct ServiceModel: Identifiable, Codable {
     let name: String
     let type: String
     let characteristics: [CharacteristicModel]
+
+    /// Human-readable service type name (e.g. "Fan", "Lightbulb").
+    var displayName: String {
+        ServiceTypes.displayName(for: type)
+    }
 }
 
 struct CharacteristicModel: Identifiable, Codable {
