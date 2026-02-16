@@ -131,22 +131,49 @@ struct DeviceRow: View {
                         // Divider before characteristics if needed, or rely on spacing
                          Divider()
                              .padding(.horizontal, Theme.Spacing.medium)
-                             //.padding(.top, 5) // Reduced top padding since divider is first now
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Characteristics")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(Theme.Text.secondary)
-                                .textCase(.uppercase)
-                                .padding(.horizontal, Theme.Spacing.medium)
-                            
-                            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
-                                ForEach(displayCharacteristics, id: \.char.id) { item in
-                                    characteristicTile(service: item.service, char: item.char)
+                        // Group characteristics by service for multi-service devices
+                        if device.services.count > 1 {
+                            ForEach(device.services.filter { service in
+                                displayCharacteristics.contains { $0.service.id == service.id }
+                            }) { service in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: serviceIcon(for: service.type))
+                                            .font(.caption)
+                                            .foregroundColor(Theme.Tint.main)
+                                        Text(service.displayName)
+                                            .font(.caption)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(Theme.Text.secondary)
+                                            .textCase(.uppercase)
+                                    }
+                                    .padding(.horizontal, Theme.Spacing.medium)
+
+                                    LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                                        ForEach(displayCharacteristics.filter { $0.service.id == service.id }, id: \.char.id) { item in
+                                            characteristicTile(service: item.service, char: item.char)
+                                        }
+                                    }
+                                    .padding(.horizontal, Theme.Spacing.medium)
                                 }
                             }
-                            .padding(.horizontal, Theme.Spacing.medium)
+                        } else {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Characteristics")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(Theme.Text.secondary)
+                                    .textCase(.uppercase)
+                                    .padding(.horizontal, Theme.Spacing.medium)
+                                
+                                LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                                    ForEach(displayCharacteristics, id: \.char.id) { item in
+                                        characteristicTile(service: item.service, char: item.char)
+                                    }
+                                }
+                                .padding(.horizontal, Theme.Spacing.medium)
+                            }
                         }
                     }
                 }
@@ -220,8 +247,13 @@ struct DeviceRow: View {
             }
         }
         .padding(10)
-        .background(Theme.detailBackground.opacity(0.3))
+        .background(Theme.mainBackground.opacity(0.3))
         .cornerRadius(Theme.CornerRadius.small)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.CornerRadius.small)
+                .stroke(Theme.Tint.main.opacity(0.5), lineWidth: 1)
+        )
+        
     }
 
     private func configKey(deviceId: String, serviceId: String, charId: String) -> String {
@@ -286,6 +318,30 @@ struct DeviceRow: View {
             return "network"
         default:
             return "house.fill"
+        }
+    }
+
+    private func serviceIcon(for serviceType: String) -> String {
+        let displayName = ServiceTypes.displayName(for: serviceType)
+        switch displayName {
+        case "Lightbulb": return "lightbulb.fill"
+        case "Fan": return "fan"
+        case "Switch": return "switch.2"
+        case "Outlet": return "poweroutlet.type.b"
+        case "Thermostat": return "thermometer"
+        case "Door": return "door.left.hand.closed"
+        case "Lock": return "lock.fill"
+        case "Window": return "window.vertical.closed"
+        case "Window Covering": return "blinds.vertical.closed"
+        case "Garage Door Opener": return "door.garage.closed"
+        case "Motion Sensor": return "figure.walk"
+        case "Temperature Sensor": return "thermometer"
+        case "Humidity Sensor": return "humidity"
+        case "Speaker": return "speaker.fill"
+        case "Battery": return "battery.100"
+        case "Valve": return "spigot"
+        case "Security System": return "shield.fill"
+        default: return "gearshape"
         }
     }
 }

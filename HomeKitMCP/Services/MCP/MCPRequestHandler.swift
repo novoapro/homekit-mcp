@@ -19,28 +19,37 @@ class MCPRequestHandler {
     }
 
     func handle(_ request: JSONRPCRequest) async -> JSONRPCResponse {
+        let requestSummary = summarizeRequest(request)
+
+        let response: JSONRPCResponse
         switch request.method {
         case "initialize":
-            return handleInitialize(id: request.id)
+            response = handleInitialize(id: request.id, params: request.params)
         case "notifications/initialized":
-            return JSONRPCResponse.success(id: request.id, result: AnyCodable([:] as [String: String]))
+            response = JSONRPCResponse.success(id: request.id, result: AnyCodable([:] as [String: String]))
         case "ping":
-            return JSONRPCResponse.success(id: request.id, result: AnyCodable([:] as [String: String]))
+            response = JSONRPCResponse.success(id: request.id, result: AnyCodable([:] as [String: String]))
         case "resources/list":
-            return handleResourcesList(id: request.id)
+            response = handleResourcesList(id: request.id)
         case "resources/read":
-            return await handleResourcesRead(id: request.id, params: request.params)
+            response = await handleResourcesRead(id: request.id, params: request.params)
         case "tools/list":
-            return handleToolsList(id: request.id)
+            response = handleToolsList(id: request.id)
         case "tools/call":
-            return await handleToolsCall(id: request.id, params: request.params)
+            response = await handleToolsCall(id: request.id, params: request.params)
         default:
-            return JSONRPCResponse.error(
+            response = JSONRPCResponse.error(
                 id: request.id,
                 code: MCPErrorCode.methodNotFound,
                 message: "Method not found: \(request.method)"
             )
         }
+
+        // Single consolidated log entry with both request and response
+        let responseSummary = summarizeResponse(response)
+        await logMCPCall(method: request.method, request: requestSummary, response: responseSummary)
+
+        return response
     }
 
     // MARK: - MCP Filtering
@@ -82,9 +91,29 @@ class MCPRequestHandler {
 
     // MARK: - Initialize
 
-    private func handleInitialize(id: JSONRPCId?) -> JSONRPCResponse {
+    private func handleInitialize(id: JSONRPCId?, params: AnyCodable?) -> JSONRPCResponse {
+        // Read client info for logging/debugging
+        let paramsDict = params?.value as? [String: Any]
+        let clientVersion = paramsDict?["protocolVersion"] as? String
+        let clientInfo = paramsDict?["clientInfo"] as? [String: Any]
+
+        if let clientInfo {
+            let clientName = clientInfo["name"] as? String ?? "unknown"
+            let clientVer = clientInfo["version"] as? String ?? "unknown"
+            print("MCP client connected: \(clientName) v\(clientVer), requested protocol: \(clientVersion ?? "none")")
+        }
+
+        // Negotiate protocol version: pick the client's version if we support it,
+        // otherwise fall back to our latest.
+        let negotiatedVersion: String
+        if let clientVersion, MCPConstants.supportedVersions.contains(clientVersion) {
+            negotiatedVersion = clientVersion
+        } else {
+            negotiatedVersion = MCPConstants.protocolVersion
+        }
+
         let result: [String: Any] = [
-            "protocolVersion": MCPConstants.protocolVersion,
+            "protocolVersion": negotiatedVersion,
             "capabilities": [
                 "resources": [
                     "listChanged": false
@@ -96,7 +125,8 @@ class MCPRequestHandler {
             "serverInfo": [
                 "name": MCPConstants.serverName,
                 "version": MCPConstants.serverVersion
-            ]
+            ],
+            "instructions": MCPConstants.serverInstructions
         ]
         return JSONRPCResponse.success(id: id, result: AnyCodable(result))
     }
@@ -187,7 +217,7 @@ class MCPRequestHandler {
             ],
             [
                 "name": "control_device",
-                "description": "Control a HomeKit device by setting a characteristic value.",
+                "description": "Control a HomeKit device by setting a characteristic value. For devices with multiple components (e.g. a ceiling fan with both fan and light), use service_id to target a specific service.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -201,6 +231,10 @@ class MCPRequestHandler {
                         ],
                         "value": [
                             "description": "Value to set. Type depends on characteristic: bool for power/lock, int 0-100 for brightness/saturation/position, int 0-360 for hue, float for temperature"
+                        ],
+                        "service_id": [
+                            "type": "string",
+                            "description": "Optional service UUID to target a specific component. Required when a device has multiple services with the same characteristic (e.g. separate power controls for fan and light). Get service IDs from list_devices or get_device."
                         ]
                     ] as [String: Any],
                     "required": ["device_id", "characteristic_type", "value"]
@@ -302,17 +336,24 @@ class MCPRequestHandler {
             )
         }
 
+        let serviceId = arguments["service_id"] as? String
+
         do {
-            try await homeKitManager.updateDevice(id: deviceId, characteristicType: characteristicType, value: value)
+            try await homeKitManager.updateDevice(id: deviceId, characteristicType: characteristicType, value: value, serviceId: serviceId)
 
             let displayName = CharacteristicTypes.displayName(
                 for: CharacteristicTypes.characteristicType(forName: characteristicType) ?? characteristicType
             )
 
+            var message = "Successfully set \(displayName) to \(value) on device \(deviceId)"
+            if let serviceId {
+                message += " (service: \(serviceId))"
+            }
+
             let content: [[String: Any]] = [
                 [
                     "type": "text",
-                    "text": "Successfully set \(displayName) to \(value) on device \(deviceId)"
+                    "text": message
                 ]
             ]
             let result: [String: Any] = ["content": content, "isError": false]
@@ -341,10 +382,15 @@ class MCPRequestHandler {
                 let status = device.isReachable ? "online" : "offline"
                 lines.append("- \(device.name) [\(status)] (id: \(device.id))")
                 for service in device.services {
+                    // Show service header when the device has multiple services
+                    if device.services.count > 1 {
+                        lines.append("  ### \(service.displayName) (service_id: \(service.id))")
+                    }
                     for char in service.characteristics {
                         let name = CharacteristicTypes.displayName(for: char.type)
                         let val = char.value.map { CharacteristicTypes.formatValue($0.value, characteristicType: char.type) } ?? "--"
-                        lines.append("    \(name): \(val)")
+                        let indent = device.services.count > 1 ? "      " : "    "
+                        lines.append("\(indent)\(name): \(val)")
                     }
                 }
             }
@@ -427,7 +473,8 @@ class MCPRequestHandler {
             let charName = CharacteristicTypes.displayName(for: log.characteristicType)
             let oldVal = log.oldValue.map { CharacteristicTypes.formatValue($0.value, characteristicType: log.characteristicType) } ?? "nil"
             let newVal = log.newValue.map { CharacteristicTypes.formatValue($0.value, characteristicType: log.characteristicType) } ?? "nil"
-            lines.append("[\(formatter.string(from: log.timestamp))] \(log.deviceName) — \(charName): \(oldVal) → \(newVal)")
+            let serviceLabel = log.serviceName.map { " [\($0)]" } ?? ""
+            lines.append("[\(formatter.string(from: log.timestamp))] \(log.deviceName)\(serviceLabel) — \(charName): \(oldVal) → \(newVal)")
         }
 
         if lines.isEmpty {
@@ -494,6 +541,71 @@ class MCPRequestHandler {
         ]
         let result: [String: Any] = ["content": content, "isError": false]
         return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+    }
+
+    // MARK: - MCP Logging Helpers
+
+    private func logMCPCall(method: String, request: String, response: String) async {
+        let entry = StateChangeLog(
+            id: UUID(),
+            timestamp: Date(),
+            deviceId: "mcp",
+            deviceName: "MCP Server",
+            characteristicType: method,
+            oldValue: nil,
+            newValue: nil,
+            category: .mcpCall,
+            requestBody: request,
+            responseBody: response
+        )
+        await loggingService.logEntry(entry)
+    }
+
+    private func summarizeRequest(_ request: JSONRPCRequest) -> String {
+        var parts = ["method: \(request.method)"]
+        if let id = request.id {
+            switch id {
+            case .int(let v): parts.append("id: \(v)")
+            case .string(let v): parts.append("id: \(v)")
+            }
+        }
+        if let params = request.params,
+           let dict = params.value as? [String: Any] {
+            // For tools/call, show the tool name and arguments
+            if let toolName = dict["name"] as? String {
+                parts.append("tool: \(toolName)")
+            }
+            if let args = dict["arguments"] as? [String: Any] {
+                let argSummary = args.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
+                let truncated = argSummary.prefix(200)
+                parts.append("args: {\(truncated)}")
+            }
+            // For resources/read, show the URI
+            if let uri = dict["uri"] as? String {
+                parts.append("uri: \(uri)")
+            }
+        }
+        return parts.joined(separator: " | ")
+    }
+
+    private func summarizeResponse(_ response: JSONRPCResponse) -> String {
+        if let error = response.error {
+            return "ERROR [\(error.code)]: \(error.message)"
+        }
+        if let result = response.result,
+           let dict = result.value as? [String: Any] {
+            // For tool call results, show isError and truncated content
+            if let isError = dict["isError"] as? Bool,
+               let content = dict["content"] as? [[String: Any]],
+               let firstText = content.first?["text"] as? String {
+                let truncated = String(firstText.prefix(300))
+                return "isError: \(isError) | \(truncated)"
+            }
+            // For other responses, show top-level keys
+            let keys = dict.keys.sorted().joined(separator: ", ")
+            return "keys: [\(keys)]"
+        }
+        return "empty result"
     }
 }
 

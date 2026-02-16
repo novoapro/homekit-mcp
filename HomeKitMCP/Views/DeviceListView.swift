@@ -3,6 +3,10 @@ import SwiftUI
 struct DeviceListView: View {
     @ObservedObject var viewModel: HomeKitViewModel
 
+    private var filteredDeviceCount: Int {
+        viewModel.filteredDevicesByRoom.reduce(0) { $0 + $1.devices.count }
+    }
+
     var body: some View {
         Group {
             if let error = viewModel.errorMessage {
@@ -36,35 +40,209 @@ struct DeviceListView: View {
                 }
                 .padding()
             } else {
-                List {
-                    ForEach(viewModel.filteredDevicesByRoom, id: \.roomName) { group in
-                        Section(header: 
-                            Text(group.roomName)
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundColor(Theme.Text.primary)
+                VStack(spacing: 0) {
+                    // Filter bar
+                    filterBar
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+
+                    List {
+                        ForEach(viewModel.filteredDevicesByRoom, id: \.roomName) { group in
+                            Section(header:
+                                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                    Text(group.roomName)
+                                        .font(.title3)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(Theme.Text.primary)
+                                    Text("(\(group.devices.count))")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(Theme.Text.secondary)
+                                }
                                 .padding(.vertical, 8)
                                 .textCase(nil)
-                        ) {
-                            ForEach(group.devices) { device in
-                                DeviceRow(device: device, viewModel: viewModel)
-                                    .listRowInsets(EdgeInsets())
-                                    .listRowSeparator(.hidden)
-                                    .padding(.vertical, 6)
+                            ) {
+                                ForEach(group.devices) { device in
+                                    DeviceRow(device: device, viewModel: viewModel)
+                                        .listRowInsets(EdgeInsets())
+                                        .listRowSeparator(.hidden)
+                                        .padding(.vertical, 6)
+                                }
                             }
                         }
                     }
+                    .listStyle(.plain)
+                    .background(Theme.mainBackground)
+                    .scrollContentBackground(.hidden)
                 }
-                .listStyle(.plain)
-                .background(Theme.mainBackground)
-                .scrollContentBackground(.hidden)
                 .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search devices")
                 .refreshable {
                     viewModel.refresh()
                 }
             }
         }
-        .navigationTitle("HomeKit Devices")
+        .navigationTitle("HomeKit Devices (\(filteredDeviceCount))")
+    }
+
+    // MARK: - Filter Bar
+
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                // Room filter
+                roomFilterChip
+
+                // Service type filter
+                serviceTypeFilterChip
+
+                // MCP filter
+                triStateChip(
+                    label: "MCP",
+                    icon: "server.rack",
+                    filter: $viewModel.mcpFilter
+                )
+
+                // Webhook filter
+                triStateChip(
+                    label: "Webhook",
+                    icon: "bell.badge",
+                    filter: $viewModel.webhookFilter
+                )
+
+                // Clear all
+                if viewModel.hasActiveFilters {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            viewModel.clearFilters()
+                        }
+                    } label: {
+                        Label("Clear", systemImage: "xmark.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(Theme.Status.error)
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.opacity)
+                }
+            }
+        }
+    }
+
+    private var roomFilterChip: some View {
+        Menu {
+            Button("All Rooms") {
+                withAnimation { viewModel.selectedRoom = nil }
+            }
+            Divider()
+            ForEach(viewModel.availableRooms, id: \.self) { room in
+                Button {
+                    withAnimation { viewModel.selectedRoom = room }
+                } label: {
+                    if viewModel.selectedRoom == room {
+                        Label(room, systemImage: "checkmark")
+                    } else {
+                        Text(room)
+                    }
+                }
+            }
+        } label: {
+            let isActive = viewModel.selectedRoom != nil
+            HStack(spacing: 4) {
+                Image(systemName: "house")
+                    .font(.caption2)
+                Text(viewModel.selectedRoom ?? "All Rooms")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Color(.systemGray6))
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
+            )
+            .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.secondary)
+        }
+    }
+
+    private var serviceTypeFilterChip: some View {
+        Menu {
+            Button("All Types") {
+                withAnimation { viewModel.selectedServiceType = nil }
+            }
+            Divider()
+            ForEach(viewModel.availableServiceTypes, id: \.self) { serviceType in
+                Button {
+                    withAnimation { viewModel.selectedServiceType = serviceType }
+                } label: {
+                    if viewModel.selectedServiceType == serviceType {
+                        Label(serviceType, systemImage: "checkmark")
+                    } else {
+                        Text(serviceType)
+                    }
+                }
+            }
+        } label: {
+            let isActive = viewModel.selectedServiceType != nil
+            HStack(spacing: 4) {
+                Image(systemName: "cube")
+                    .font(.caption2)
+                Text(viewModel.selectedServiceType ?? "All Types")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Color(.systemGray6))
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
+            )
+            .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.secondary)
+        }
+    }
+
+    private func triStateChip(label: String, icon: String, filter: Binding<TriStateFilter>) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                // Cycle: all → enabled → disabled → all
+                switch filter.wrappedValue {
+                case .all: filter.wrappedValue = .enabled
+                case .enabled: filter.wrappedValue = .disabled
+                case .disabled: filter.wrappedValue = .all
+                }
+            }
+        } label: {
+            let isActive = filter.wrappedValue != .all
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                Text(isActive ? "\(label): \(filter.wrappedValue.rawValue)" : label)
+                    .font(.caption)
+                    .fontWeight(.medium)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Color(.systemGray6))
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
+            )
+            .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.secondary)
+        }
+        .buttonStyle(.plain)
     }
 }
 

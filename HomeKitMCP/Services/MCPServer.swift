@@ -3,7 +3,7 @@ import Vapor
 import NIOCore
 import Combine
 
-class MCPServer: ObservableObject {
+class MCPServer: ObservableObject, @unchecked Sendable {
     @Published var isRunning = false
     @Published var connectedClients = 0
     @Published var lastError: String?
@@ -16,6 +16,8 @@ class MCPServer: ObservableObject {
 
     /// Active SSE connections for the legacy transport.
     private var sseConnections: [UUID: SSEConnection] = [:]
+    /// Active Streamable HTTP sessions (keyed by Mcp-Session-Id).
+    private var activeSessions: Set<String> = []
     private let lock = NSLock()
 
     private static let encoder: JSONEncoder = {
@@ -44,25 +46,37 @@ class MCPServer: ObservableObject {
         }
 
         let env = Environment(name: "production", arguments: ["serve"])
-        let app = Application(env)
-        app.http.server.configuration.hostname = "127.0.0.1"
-        app.http.server.configuration.port = port
-        app.http.server.configuration.reuseAddress = true
-        app.logger.logLevel = .warning
 
-        configureRoutes(app)
-        self.app = app
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
             do {
-                try app.start()
+                let app = try await Application.make(env)
+                app.http.server.configuration.hostname = "0.0.0.0"
+                app.http.server.configuration.port = self.port
+                app.http.server.configuration.reuseAddress = true
+                app.logger.logLevel = .warning
+
+                self.configureRoutes(app)
+                self.app = app
+
+                do {
+                    try await app.startup()
+                } catch {
+                    let message = "MCP Server failed to start on port \(self.port): \(error.localizedDescription)"
+                    print(message)
+                    self.logServerError(message)
+                    await MainActor.run {
+                        self.isRunning = false
+                        self.lastError = message
+                    }
+                }
             } catch {
-                let message = "MCP Server failed to start on port \(self?.port ?? 0): \(error.localizedDescription)"
+                let message = "MCP Server failed to initialize Application: \(error.localizedDescription)"
                 print(message)
-                self?.logServerError(message)
-                DispatchQueue.main.async {
-                    self?.isRunning = false
-                    self?.lastError = message
+                self.logServerError(message)
+                await MainActor.run {
+                    self.isRunning = false
+                    self.lastError = message
                 }
             }
         }
@@ -89,9 +103,10 @@ class MCPServer: ObservableObject {
     }
 
     private func stopSync() {
-        lock.lock()
-        sseConnections.removeAll()
-        lock.unlock()
+        lock.withLock {
+            sseConnections.removeAll()
+            activeSessions.removeAll()
+        }
         app?.shutdown()
         app = nil
     }
@@ -99,7 +114,7 @@ class MCPServer: ObservableObject {
     // MARK: - Route Configuration
 
     private func configureRoutes(_ app: Application) {
-        // Streamable HTTP transport: single endpoint supporting POST and GET
+        // Streamable HTTP transport: single endpoint supporting POST, GET, and DELETE
         app.on(.POST, "mcp", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             return try await self.handleStreamablePost(req)
@@ -108,6 +123,11 @@ class MCPServer: ObservableObject {
         app.on(.GET, "mcp") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             return self.handleStreamableGet(req)
+        }
+
+        app.on(.DELETE, "mcp") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            return self.handleStreamableDelete(req)
         }
 
         // Legacy SSE transport (2024-11-05): separate /sse and /messages endpoints
@@ -135,9 +155,18 @@ class MCPServer: ObservableObject {
             throw Abort(.badRequest)
         }
 
-        let jsonrpcRequest: JSONRPCRequest
+        // Try decoding as a batch (JSON array) first, then fall back to single request.
+        let requests: [JSONRPCRequest]
+        let isBatch: Bool
         do {
-            jsonrpcRequest = try Self.decoder.decode(JSONRPCRequest.self, from: data)
+            if let batchRequests = try? Self.decoder.decode([JSONRPCRequest].self, from: data) {
+                requests = batchRequests
+                isBatch = true
+            } else {
+                let single = try Self.decoder.decode(JSONRPCRequest.self, from: data)
+                requests = [single]
+                isBatch = false
+            }
         } catch {
             let errorResponse = JSONRPCResponse.error(
                 id: nil,
@@ -147,17 +176,79 @@ class MCPServer: ObservableObject {
             return try encodeJSONResponse(errorResponse)
         }
 
-        // Handle notifications (no id) — return 202 Accepted
-        if jsonrpcRequest.id == nil && jsonrpcRequest.method == "notifications/initialized" {
+        // Determine if this is an initialize request (exempt from session check).
+        let isInitialize = requests.contains { $0.method == "initialize" }
+
+        // Session validation: non-initialize requests must carry a valid Mcp-Session-Id.
+        if !isInitialize {
+            if let sessionId = req.headers.first(name: "Mcp-Session-Id") {
+                let valid = lock.withLock { activeSessions.contains(sessionId) }
+                if !valid {
+                    return Response(status: .notFound)
+                }
+            } else {
+                // If there are active sessions, require the header.
+                let hasSessions = lock.withLock { !activeSessions.isEmpty }
+                if hasSessions {
+                    return Response(status: .badRequest)
+                }
+            }
+        }
+
+        // Check if all messages are notifications (no id)
+        let allNotifications = requests.allSatisfy { $0.id == nil }
+        if allNotifications {
             return Response(status: .accepted)
         }
 
-        let response = await handler.handle(jsonrpcRequest)
-        return try encodeJSONResponse(response)
+        // Process each request
+        var responses: [JSONRPCResponse] = []
+        var sessionIdToAttach: String?
+
+        for request in requests {
+            // Skip notifications — they don't produce a response
+            if request.id == nil { continue }
+
+            let response = await handler.handle(request)
+            responses.append(response)
+
+            // If this was an initialize request, create a new session
+            if request.method == "initialize" {
+                let newSessionId = UUID().uuidString
+                lock.withLock { _ = activeSessions.insert(newSessionId) }
+                sessionIdToAttach = newSessionId
+            }
+        }
+
+        // Encode the response
+        let httpResponse: Response
+        if isBatch {
+            httpResponse = try encodeBatchJSONResponse(responses)
+        } else if let single = responses.first {
+            httpResponse = try encodeJSONResponse(single)
+        } else {
+            return Response(status: .accepted)
+        }
+
+        // Attach Mcp-Session-Id header on initialize response
+        if let sessionId = sessionIdToAttach {
+            httpResponse.headers.add(name: "Mcp-Session-Id", value: sessionId)
+        }
+
+        return httpResponse
     }
 
     private func handleStreamableGet(_ req: Request) -> Response {
         return Response(status: .methodNotAllowed)
+    }
+
+    private func handleStreamableDelete(_ req: Request) -> Response {
+        guard let sessionId = req.headers.first(name: "Mcp-Session-Id") else {
+            return Response(status: .badRequest)
+        }
+
+        let removed = lock.withLock { activeSessions.remove(sessionId) != nil }
+        return removed ? Response(status: .ok) : Response(status: .notFound)
     }
 
     // MARK: - Legacy SSE Transport (2024-11-05)
@@ -166,9 +257,7 @@ class MCPServer: ObservableObject {
         let connectionId = UUID()
         let connection = SSEConnection(id: connectionId)
 
-        lock.lock()
-        sseConnections[connectionId] = connection
-        lock.unlock()
+        lock.withLock { sseConnections[connectionId] = connection }
         updateClientCount()
 
         let host = req.headers.first(name: .host) ?? "127.0.0.1:\(port)"
@@ -202,10 +291,10 @@ class MCPServer: ObservableObject {
                 }
 
                 // Cleanup on disconnect
-                self?.lock.lock()
-                self?.sseConnections.removeValue(forKey: connectionId)
-                self?.lock.unlock()
-                self?.updateClientCount()
+                if let self {
+                    self.lock.withLock { _ = self.sseConnections.removeValue(forKey: connectionId) }
+                    self.updateClientCount()
+                }
             })
         )
 
@@ -218,9 +307,7 @@ class MCPServer: ObservableObject {
             throw Abort(.badRequest, reason: "Missing or invalid sessionId")
         }
 
-        lock.lock()
-        let connection = sseConnections[sessionId]
-        lock.unlock()
+        let connection = lock.withLock { sseConnections[sessionId] }
 
         guard let connection else {
             throw Abort(.notFound, reason: "Session not found")
@@ -266,12 +353,17 @@ class MCPServer: ObservableObject {
         return Response(status: .ok, headers: headers, body: .init(data: data))
     }
 
+    private func encodeBatchJSONResponse(_ responses: [JSONRPCResponse]) throws -> Response {
+        let data = try Self.encoder.encode(responses)
+        var headers = HTTPHeaders()
+        headers.add(name: .contentType, value: "application/json")
+        return Response(status: .ok, headers: headers, body: .init(data: data))
+    }
+
     private func updateClientCount() {
-        lock.lock()
-        let count = sseConnections.count
-        lock.unlock()
-        DispatchQueue.main.async {
-            self.connectedClients = count
+        let count = lock.withLock { sseConnections.count }
+        DispatchQueue.main.async { [weak self] in
+            self?.connectedClients = count
         }
     }
 

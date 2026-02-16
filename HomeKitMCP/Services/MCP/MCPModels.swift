@@ -65,9 +65,22 @@ enum JSONRPCId: Codable, Equatable {
 // MARK: - MCP Protocol Constants
 
 enum MCPConstants {
-    static let protocolVersion = "2024-11-05"
+    static let protocolVersion = "2025-03-26"
+    static let supportedVersions = ["2025-03-26", "2024-11-05"]
     static let serverName = "HomeKitMCP"
     static let serverVersion = "1.0.0"
+    static let serverInstructions = """
+        This MCP server exposes Apple HomeKit smart home devices. \
+        Use 'list_devices' to discover all devices and their current states, \
+        'get_device' to inspect a specific device, 'control_device' to change \
+        device characteristics (power, brightness, temperature, etc.), \
+        'list_rooms' to see room layout, 'get_room_devices' to get devices in \
+        a specific room, and 'get_logs' to review recent state changes. \
+        Some devices have multiple components (e.g. a ceiling fan with both \
+        a fan and a light). These appear as separate services, each with their \
+        own service_id. When controlling such devices, use the service_id \
+        parameter in 'control_device' to target the correct component.
+        """
 }
 
 // MARK: - MCP Error Codes

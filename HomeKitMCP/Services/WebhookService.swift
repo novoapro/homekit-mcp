@@ -31,6 +31,8 @@ actor WebhookService {
             timestamp: change.timestamp,
             deviceId: change.deviceId,
             deviceName: change.deviceName,
+            serviceId: change.serviceId,
+            serviceName: change.serviceName,
             characteristicType: change.characteristicType,
             characteristicName: displayName,
             oldValue: change.oldValue.map { AnyCodable($0) },
@@ -52,6 +54,8 @@ actor WebhookService {
             timestamp: Date(),
             deviceId: "test",
             deviceName: "Test Device",
+            serviceId: nil,
+            serviceName: nil,
             characteristicType: "test",
             characteristicName: "Test",
             oldValue: AnyCodable(false),
@@ -66,7 +70,7 @@ actor WebhookService {
         statusSubject.send(.sending)
 
         do {
-            let (data, response) = try await performRequest(url: url, payload: payload)
+            let (_, response) = try await performRequest(url: url, payload: payload)
 
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
@@ -75,6 +79,23 @@ actor WebhookService {
             }
 
             statusSubject.send(.lastSuccess(date: Date()))
+
+            // Log successful webhook call
+            let logEntry = StateChangeLog(
+                id: UUID(),
+                timestamp: Date(),
+                deviceId: payload.deviceId,
+                deviceName: deviceName,
+                serviceId: payload.serviceId,
+                serviceName: payload.serviceName,
+                characteristicType: payload.characteristicType,
+                oldValue: payload.oldValue,
+                newValue: payload.newValue,
+                category: .webhookCall,
+                requestBody: "POST \(url.absoluteString)",
+                responseBody: "HTTP 2xx OK"
+            )
+            await loggingService.logEntry(logEntry)
         } catch {
             if attempt < maxRetries {
                 let delay = pow(2.0, Double(attempt))
@@ -89,11 +110,15 @@ actor WebhookService {
                     timestamp: Date(),
                     deviceId: payload.deviceId,
                     deviceName: deviceName,
+                    serviceId: payload.serviceId,
+                    serviceName: payload.serviceName,
                     characteristicType: payload.characteristicType,
                     oldValue: payload.oldValue,
                     newValue: payload.newValue,
                     category: .webhookError,
-                    errorDetails: "Webhook failed after \(maxRetries) retries to \(url.absoluteString): \(errorDesc)"
+                    errorDetails: "Webhook failed after \(maxRetries) retries to \(url.absoluteString): \(errorDesc)",
+                    requestBody: "POST \(url.absoluteString)",
+                    responseBody: errorDesc
                 )
                 await loggingService.logEntry(logEntry)
             }
@@ -110,8 +135,7 @@ actor WebhookService {
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
                 let errorDesc = "HTTP \(statusCode)"
                 statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
-                
-                // Log the test failure
+
                 let logEntry = StateChangeLog(
                     id: UUID(),
                     timestamp: Date(),
@@ -121,20 +145,36 @@ actor WebhookService {
                     oldValue: nil,
                     newValue: nil,
                     category: .webhookError,
-                    errorDetails: "Test webhook failed: \(errorDesc)"
+                    errorDetails: "Test webhook failed: \(errorDesc)",
+                    requestBody: "POST \(url.absoluteString)",
+                    responseBody: errorDesc
                 )
                 await loggingService.logEntry(logEntry)
-                
+
                 return false
             }
 
             statusSubject.send(.lastSuccess(date: Date()))
+
+            let logEntry = StateChangeLog(
+                id: UUID(),
+                timestamp: Date(),
+                deviceId: "test",
+                deviceName: "Test Device",
+                characteristicType: "test",
+                oldValue: nil,
+                newValue: nil,
+                category: .webhookCall,
+                requestBody: "POST \(url.absoluteString)",
+                responseBody: "HTTP 2xx OK"
+            )
+            await loggingService.logEntry(logEntry)
+
             return true
         } catch {
             let errorDesc = error.localizedDescription
             statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
-            
-            // Log the test failure
+
             let logEntry = StateChangeLog(
                 id: UUID(),
                 timestamp: Date(),
@@ -144,10 +184,12 @@ actor WebhookService {
                 oldValue: nil,
                 newValue: nil,
                 category: .webhookError,
-                errorDetails: "Test webhook failed: \(errorDesc)"
+                errorDetails: "Test webhook failed: \(errorDesc)",
+                requestBody: "POST \(url.absoluteString)",
+                responseBody: errorDesc
             )
             await loggingService.logEntry(logEntry)
-            
+
             return false
         }
     }
@@ -168,6 +210,8 @@ struct WebhookPayload: Codable {
     let timestamp: Date
     let deviceId: String
     let deviceName: String
+    let serviceId: String?
+    let serviceName: String?
     let characteristicType: String
     let characteristicName: String
     let oldValue: AnyCodable?
