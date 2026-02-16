@@ -10,6 +10,7 @@ class MenuBarPlugin: NSObject {
 
     /// Called by the Catalyst app to set up the menu bar icon.
     @objc func setupMenuBar(actionHandler: @escaping (String) -> Void) {
+        NSLog("MenuBarPlugin: setupMenuBar called")
         self.actionHandler = actionHandler
 
         // Bring the app to foreground on launch so the window is visible
@@ -18,12 +19,21 @@ class MenuBarPlugin: NSObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "house.fill", accessibilityDescription: "HomeKit MCP")
+            let image = NSImage(systemSymbolName: "house.fill", accessibilityDescription: "HomeKit MCP")
+            if image == nil {
+                NSLog("MenuBarPlugin: Failed to load system symbol 'house.fill'")
+            } else {
+                NSLog("MenuBarPlugin: Icon image loaded successfully")
+            }
+            button.image = image
             button.image?.size = NSSize(width: 18, height: 18)
             button.image?.isTemplate = true
+        } else {
+            NSLog("MenuBarPlugin: Failed to get status item button")
         }
 
         rebuildMenu()
+        NSLog("MenuBarPlugin: Menu rebuilt")
     }
 
     /// Called by the Catalyst app to update the server status display.
