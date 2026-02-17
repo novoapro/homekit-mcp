@@ -278,7 +278,6 @@ class MCPRequestHandler {
                         ]
                     ] as [String: Any]
                 ] as [String: Any]
-            ]
             ],
             [
                 "name": "get_devices_in_rooms",
@@ -296,7 +295,6 @@ class MCPRequestHandler {
                     ] as [String: Any],
                     "required": ["rooms"]
                 ] as [String: Any]
-            ]
             ],
             [
                 "name": "get_devices_by_type",
