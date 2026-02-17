@@ -279,6 +279,42 @@ class MCPRequestHandler {
                     ] as [String: Any]
                 ] as [String: Any]
             ]
+            ],
+            [
+                "name": "get_devices_in_rooms",
+                "description": "Get all devices in specific rooms. Filter by a list of room names. Returns devices for found rooms and optionally reports missing rooms.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "rooms": [
+                            "type": "array",
+                            "items": [
+                                "type": "string"
+                            ],
+                            "description": "List of room names to fetch devices for."
+                        ]
+                    ] as [String: Any],
+                    "required": ["rooms"]
+                ] as [String: Any]
+            ]
+            ],
+            [
+                "name": "get_devices_by_type",
+                "description": "Get all devices that contain specific service types (e.g. 'Lightbulb', 'Switch', 'Outlet'). Filters devices to only include those matching the requested types.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "types": [
+                            "type": "array",
+                            "items": [
+                                "type": "string"
+                            ],
+                            "description": "List of service types to filter by (e.g. ['Lightbulb', 'Switch'])."
+                        ]
+                    ] as [String: Any],
+                    "required": ["types"]
+                ] as [String: Any]
+            ]
         ]
         let result: [String: Any] = ["tools": tools]
         return JSONRPCResponse.success(id: id, result: AnyCodable(result))
@@ -309,6 +345,10 @@ class MCPRequestHandler {
             return await handleGetRoomDevices(id: id, arguments: arguments)
         case "get_logs":
             return await handleGetLogs(id: id, arguments: arguments)
+        case "get_devices_in_rooms":
+            return await handleGetDevicesInRooms(id: id, arguments: arguments)
+        case "get_devices_by_type":
+            return await handleGetDevicesByType(id: id, arguments: arguments)
         default:
             return JSONRPCResponse.error(
                 id: id,
@@ -441,6 +481,82 @@ class MCPRequestHandler {
         }
 
         let filteredDevices = await filterDevicesByConfig(group.devices)
+
+        guard let jsonData = try? Self.encoder.encode(filteredDevices),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            let content: [[String: Any]] = [["type": "text", "text": "Failed to encode device data"]]
+            let result: [String: Any] = ["content": content, "isError": true]
+            return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+        }
+
+        let content: [[String: Any]] = [["type": "text", "text": jsonString]]
+        let result: [String: Any] = ["content": content, "isError": false]
+        return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+    }
+
+    private func handleGetDevicesInRooms(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let rooms = arguments["rooms"] as? [String] else {
+            return JSONRPCResponse.error(
+                id: id,
+                code: MCPErrorCode.invalidParams,
+                message: "Missing required argument: rooms (array of strings)"
+            )
+        }
+
+        let groups = await MainActor.run { homeKitManager.getDevicesGroupedByRoom() }
+        var resultDevices: [DeviceModel] = []
+        var missingRooms: [String] = []
+
+        for roomName in rooms {
+            if let group = groups.first(where: { $0.roomName.localizedCaseInsensitiveCompare(roomName) == .orderedSame }) {
+                resultDevices.append(contentsOf: group.devices)
+            } else {
+                missingRooms.append(roomName)
+            }
+        }
+
+        let filteredDevices = await filterDevicesByConfig(resultDevices)
+
+        guard let jsonData = try? Self.encoder.encode(filteredDevices),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            let content: [[String: Any]] = [["type": "text", "text": "Failed to encode device data"]]
+            let result: [String: Any] = ["content": content, "isError": true]
+            return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+        }
+
+        var responseText = jsonString
+        if !missingRooms.isEmpty {
+            let missingMsg = "\n\nNote: The following rooms were not found: \(missingRooms.joined(separator: ", "))"
+            responseText += missingMsg
+        }
+
+        let content: [[String: Any]] = [["type": "text", "text": responseText]]
+        let result: [String: Any] = ["content": content, "isError": false]
+        return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+    }
+
+    private func handleGetDevicesByType(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let types = arguments["types"] as? [String] else {
+            return JSONRPCResponse.error(
+                id: id,
+                code: MCPErrorCode.invalidParams,
+                message: "Missing required argument: types (array of strings)"
+            )
+        }
+
+        let allDevices = await MainActor.run { homeKitManager.getAllDevices() }
+        
+        // Filter devices that have at least one service matching one of the requested types
+        let matchingDevices = allDevices.filter { device in
+            device.services.contains { service in
+                types.contains { type in
+                    service.type.localizedCaseInsensitiveContains(type) ||
+                    service.displayName.localizedCaseInsensitiveContains(type)
+                }
+            }
+        }
+
+        let filteredDevices = await filterDevicesByConfig(matchingDevices)
 
         guard let jsonData = try? Self.encoder.encode(filteredDevices),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
