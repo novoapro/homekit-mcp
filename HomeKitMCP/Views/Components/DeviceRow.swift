@@ -3,6 +3,7 @@ import SwiftUI
 struct DeviceRow: View {
     let device: DeviceModel
     @ObservedObject var viewModel: HomeKitViewModel
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var isExpanded = false
     @State private var configs: [String: CharacteristicConfiguration] = [:]
 

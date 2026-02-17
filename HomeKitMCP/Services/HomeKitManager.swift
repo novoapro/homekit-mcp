@@ -12,18 +12,28 @@ class HomeKitManager: NSObject, ObservableObject {
     private let homeManager = HMHomeManager()
     private let loggingService: LoggingService
     private let webhookService: WebhookService
+    private let storage: StorageService
     let configService: DeviceConfigurationService
     private var cancellables = Set<AnyCancellable>()
 
     /// Coalesces rapid objectWillChange signals during bulk reads.
     private var uiUpdateWorkItem: DispatchWorkItem?
 
-    init(loggingService: LoggingService, webhookService: WebhookService, configService: DeviceConfigurationService) {
+    init(loggingService: LoggingService, webhookService: WebhookService, configService: DeviceConfigurationService, storage: StorageService) {
         self.loggingService = loggingService
         self.webhookService = webhookService
         self.configService = configService
+        self.storage = storage
         super.init()
         homeManager.delegate = self
+        
+        // Forward storage changes to trigger refreshes when settings change
+        storage.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 
     func getAllDevices() -> [DeviceModel] {
@@ -48,7 +58,10 @@ class HomeKitManager: NSObject, ObservableObject {
                         permissions: characteristicPermissions(char)
                     )
                 }
-                guard !characteristics.isEmpty else { return nil }
+
+                if characteristics.isEmpty { return nil }
+
+                // Use ServiceTypes.displayName to get a human-readable service name (e.g. "Lightbulb")
                 return ServiceModel(
                     id: service.uniqueIdentifier.uuidString,
                     name: service.name,
@@ -56,10 +69,19 @@ class HomeKitManager: NSObject, ObservableObject {
                     characteristics: characteristics
                 )
             }
-            guard !services.isEmpty else { return nil }
+
+            if services.isEmpty { return nil }
+            
+            // Format name based on settings
+            let formattedName = DeviceNameFormatter.format(
+                deviceName: accessory.name,
+                roomName: accessory.room?.name,
+                hideRoomName: storage.hideRoomNameInTheApp
+            )
+
             return DeviceModel(
                 id: accessory.uniqueIdentifier.uuidString,
-                name: accessory.name,
+                name: formattedName,
                 roomName: accessory.room?.name,
                 categoryType: accessory.category.categoryType,
                 services: services,
@@ -326,20 +348,41 @@ extension HomeKitManager: HMAccessoryDelegate {
             // If neither MCP nor Webhook is enabled, discard the event entirely
             guard config.mcpEnabled || config.webhookEnabled else { return }
 
+            let value = characteristic.value
+        
+            // Format name for logs
+            let formattedName = DeviceNameFormatter.format(
+                deviceName: accessory.name,
+                roomName: accessory.room?.name,
+                hideRoomName: storage.hideRoomNameInTheApp
+            )
+
+            let logEntry = StateChangeLog(
+                id: UUID(),
+                timestamp: Date(),
+                deviceId: accessory.uniqueIdentifier.uuidString,
+                deviceName: formattedName,
+                serviceName: ServiceTypes.displayName(for: service.serviceType),
+                characteristicType: characteristic.characteristicType,
+                oldValue: nil, // We don't easily have the old value here without caching
+                newValue: value.map { AnyCodable($0) },
+                category: .stateChange
+            )
+
             let change = StateChange(
                 deviceId: deviceId,
-                deviceName: accessory.name,
+                deviceName: formattedName, // Use formatted name for the change object too
                 serviceId: serviceId,
                 serviceName: serviceName,
                 characteristicType: characteristic.characteristicType,
                 oldValue: nil,
-                newValue: characteristic.value
+                newValue: value
             )
 
             // Only log state changes and send webhooks for webhook-enabled characteristics.
             // MCP calls already produce their own log entries via mcpCall.
             if config.webhookEnabled {
-                await loggingService.log(change)
+                await loggingService.logEntry(logEntry) // Log the new logEntry
                 await webhookService.sendStateChange(change)
             }
             

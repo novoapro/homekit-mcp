@@ -3,7 +3,7 @@ import Combine
 
 actor LoggingService {
     private var logs: [StateChangeLog] = []
-    private let maxLogs = 200
+    private let maxLogs = 500
     private let fileURL: URL
     private var saveTask: Task<Void, Never>?
 

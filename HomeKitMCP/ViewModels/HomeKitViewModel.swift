@@ -17,8 +17,8 @@ class HomeKitViewModel: ObservableObject {
 
     // Search & Filters
     @Published var searchText = ""
-    @Published var selectedRoom: String? = nil
-    @Published var selectedServiceType: String? = nil
+    @Published var selectedRooms: Set<String> = []
+    @Published var selectedServiceTypes: Set<String> = []
     @Published var mcpFilter: TriStateFilter = .all
     @Published var webhookFilter: TriStateFilter = .all
 
@@ -54,60 +54,76 @@ class HomeKitViewModel: ObservableObject {
     }
 
     var hasActiveFilters: Bool {
-        selectedRoom != nil || selectedServiceType != nil || mcpFilter != .all || webhookFilter != .all
+        !selectedRooms.isEmpty || !selectedServiceTypes.isEmpty || mcpFilter != .all || webhookFilter != .all
     }
 
-    var filteredDevicesByRoom: [(roomName: String, devices: [DeviceModel])] {
-        var groups = devicesByRoom
-
-        // Filter by room
-        if let room = selectedRoom {
-            groups = groups.filter { $0.roomName == room }
-        }
-
-        // Apply search + MCP/Webhook/ServiceType filters to devices within groups
-        return groups.compactMap { group in
-            let filteredDevices = group.devices.filter { device in
-                // Search filter
-                if !searchText.isEmpty && !device.name.localizedCaseInsensitiveContains(searchText) {
-                    return false
-                }
-
-                // Service type filter
-                if let serviceType = selectedServiceType {
-                    let hasServiceType = device.services.contains { service in
-                        ServiceTypes.displayName(for: service.type) == serviceType
-                    }
-                    if !hasServiceType { return false }
-                }
-
-                // MCP filter
-                if mcpFilter != .all {
-                    let cache = deviceConfigCache[device.id]
-                    let hasMCP = cache?.mcpEnabled ?? true // default is MCP enabled
-                    if mcpFilter == .enabled && !hasMCP { return false }
-                    if mcpFilter == .disabled && hasMCP { return false }
-                }
-
-                // Webhook filter
-                if webhookFilter != .all {
-                    let cache = deviceConfigCache[device.id]
-                    let hasWebhook = cache?.webhookEnabled ?? false // default is webhook disabled
-                    if webhookFilter == .enabled && !hasWebhook { return false }
-                    if webhookFilter == .disabled && hasWebhook { return false }
-                }
-
-                return true
-            }
-
-            if filteredDevices.isEmpty { return nil }
-            return (roomName: group.roomName, devices: filteredDevices)
-        }
-    }
+    @Published var filteredDevicesByRoom: [(roomName: String, devices: [DeviceModel])] = []
 
     init(homeKitManager: HomeKitManager, configService: DeviceConfigurationService) {
         self.homeKitManager = homeKitManager
         self.configService = configService
+
+        // Setup background filtering pipeline
+        Publishers.CombineLatest4(
+            $devicesByRoom,
+            $searchText,
+            $selectedRooms,
+            $selectedServiceTypes
+        )
+        .combineLatest($mcpFilter, $webhookFilter, $deviceConfigCache)
+        .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main) // Debounce UI updates
+        .receive(on: DispatchQueue.global(qos: .userInitiated)) // Process on background thread
+        .map { (inputs, mcpFilter, webhookFilter, configCache) -> [(roomName: String, devices: [DeviceModel])] in
+            let (devicesByRoom, searchText, selectedRooms, selectedServiceTypes) = inputs
+            
+            var groups = devicesByRoom
+
+            // Filter by room
+            if !selectedRooms.isEmpty {
+                groups = groups.filter { selectedRooms.contains($0.roomName) }
+            }
+
+            // Apply search + MCP/Webhook/ServiceType filters to devices within groups
+            return groups.compactMap { group in
+                let filteredDevices = group.devices.filter { device in
+                    // Search filter
+                    if !searchText.isEmpty && !device.name.localizedCaseInsensitiveContains(searchText) {
+                        return false
+                    }
+
+                    // Service type filter
+                    if !selectedServiceTypes.isEmpty {
+                        let hasServiceType = device.services.contains { service in
+                            selectedServiceTypes.contains(ServiceTypes.displayName(for: service.type))
+                        }
+                        if !hasServiceType { return false }
+                    }
+
+                    // MCP filter
+                    if mcpFilter != .all {
+                        let cache = configCache[device.id]
+                        let hasMCP = cache?.mcpEnabled ?? true // default is MCP enabled
+                        if mcpFilter == .enabled && !hasMCP { return false }
+                        if mcpFilter == .disabled && hasMCP { return false }
+                    }
+
+                    // Webhook filter
+                    if webhookFilter != .all {
+                        let cache = configCache[device.id]
+                        let hasWebhook = cache?.webhookEnabled ?? false // default is webhook disabled
+                        if webhookFilter == .enabled && !hasWebhook { return false }
+                        if webhookFilter == .disabled && hasWebhook { return false }
+                    }
+
+                    return true
+                }
+
+                if filteredDevices.isEmpty { return nil }
+                return (roomName: group.roomName, devices: filteredDevices)
+            }
+        }
+        .receive(on: DispatchQueue.main) // Update UI on main thread
+        .assign(to: &$filteredDevicesByRoom)
 
         homeKitManager.$isReady
             .receive(on: DispatchQueue.main)
@@ -145,8 +161,8 @@ class HomeKitViewModel: ObservableObject {
     }
 
     func clearFilters() {
-        selectedRoom = nil
-        selectedServiceType = nil
+        selectedRooms.removeAll()
+        selectedServiceTypes.removeAll()
         mcpFilter = .all
         webhookFilter = .all
     }
@@ -227,6 +243,15 @@ class HomeKitViewModel: ObservableObject {
                 objectWillChange.send()
             }
         }
+    }
+
+    func getRoomName(for deviceId: String) -> String? {
+        for group in devicesByRoom {
+            if group.devices.contains(where: { $0.id == deviceId }) {
+                return group.roomName
+            }
+        }
+        return nil
     }
 
     private func updateErrorForStatus(_ status: HMHomeManagerAuthorizationStatus) {

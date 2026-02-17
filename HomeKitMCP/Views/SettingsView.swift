@@ -17,6 +17,9 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("UI") {
+                Toggle("Hide Room Name in App", isOn: $viewModel.hideRoomNameInTheApp)
+            }
             webhookSection
                 .listRowBackground(Theme.contentBackground)
             if viewModel.webhookEnabled {

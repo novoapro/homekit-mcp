@@ -6,7 +6,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let loggingService = LoggingService()
     let configService = DeviceConfigurationService()
     lazy var webhookService = WebhookService(storage: storageService, loggingService: loggingService)
-    lazy var homeKitManager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService)
+    lazy var homeKitManager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storageService)
     lazy var mcpServer = MCPServer(homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, port: storageService.mcpServerPort)
     lazy var homeKitViewModel = HomeKitViewModel(homeKitManager: homeKitManager, configService: configService)
     lazy var logViewModel = LogViewModel(loggingService: loggingService)

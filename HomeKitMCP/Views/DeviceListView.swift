@@ -22,9 +22,11 @@ struct DeviceListView: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Theme.mainBackground)
             } else if viewModel.isLoading && viewModel.totalDeviceCount == 0 {
                 ProgressView("Discovering devices...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.totalDeviceCount == 0 {
                 VStack(spacing: 12) {
                     Image(systemName: "house")
@@ -40,6 +42,7 @@ struct DeviceListView: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Theme.mainBackground)
             } else {
                 VStack(spacing: 0) {
@@ -154,14 +157,20 @@ struct DeviceListView: View {
     private var roomFilterChip: some View {
         Menu {
             Button("All Rooms") {
-                withAnimation { viewModel.selectedRoom = nil }
+                withAnimation { viewModel.selectedRooms.removeAll() }
             }
             Divider()
             ForEach(viewModel.availableRooms, id: \.self) { room in
                 Button {
-                    withAnimation { viewModel.selectedRoom = room }
+                    withAnimation {
+                        if viewModel.selectedRooms.contains(room) {
+                            viewModel.selectedRooms.remove(room)
+                        } else {
+                            viewModel.selectedRooms.insert(room)
+                        }
+                    }
                 } label: {
-                    if viewModel.selectedRoom == room {
+                    if viewModel.selectedRooms.contains(room) {
                         Label(room, systemImage: "checkmark")
                     } else {
                         Text(room)
@@ -169,11 +178,16 @@ struct DeviceListView: View {
                 }
             }
         } label: {
-            let isActive = viewModel.selectedRoom != nil
+            let isActive = !viewModel.selectedRooms.isEmpty
             HStack(spacing: 4) {
                 Image(systemName: "house")
                     .font(.caption2)
-                Text(viewModel.selectedRoom ?? "All Rooms")
+                let text: String = {
+                    if viewModel.selectedRooms.isEmpty { return "All Rooms" }
+                    if viewModel.selectedRooms.count == 1 { return viewModel.selectedRooms.first! }
+                    return "\(viewModel.selectedRooms.count) Rooms"
+                }()
+                Text(text)
                     .font(.caption)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
@@ -196,14 +210,20 @@ struct DeviceListView: View {
     private var serviceTypeFilterChip: some View {
         Menu {
             Button("All Types") {
-                withAnimation { viewModel.selectedServiceType = nil }
+                withAnimation { viewModel.selectedServiceTypes.removeAll() }
             }
             Divider()
             ForEach(viewModel.availableServiceTypes, id: \.self) { serviceType in
                 Button {
-                    withAnimation { viewModel.selectedServiceType = serviceType }
+                    withAnimation {
+                        if viewModel.selectedServiceTypes.contains(serviceType) {
+                            viewModel.selectedServiceTypes.remove(serviceType)
+                        } else {
+                            viewModel.selectedServiceTypes.insert(serviceType)
+                        }
+                    }
                 } label: {
-                    if viewModel.selectedServiceType == serviceType {
+                    if viewModel.selectedServiceTypes.contains(serviceType) {
                         Label(serviceType, systemImage: "checkmark")
                     } else {
                         Text(serviceType)
@@ -211,11 +231,16 @@ struct DeviceListView: View {
                 }
             }
         } label: {
-            let isActive = viewModel.selectedServiceType != nil
+            let isActive = !viewModel.selectedServiceTypes.isEmpty
             HStack(spacing: 4) {
                 Image(systemName: "cube")
                     .font(.caption2)
-                Text(viewModel.selectedServiceType ?? "All Types")
+                let text: String = {
+                    if viewModel.selectedServiceTypes.isEmpty { return "All Types" }
+                    if viewModel.selectedServiceTypes.count == 1 { return viewModel.selectedServiceTypes.first! }
+                    return "\(viewModel.selectedServiceTypes.count) Types"
+                }()
+                Text(text)
                     .font(.caption)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")

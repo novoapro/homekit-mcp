@@ -43,9 +43,9 @@ class LogViewModel: ObservableObject {
     @Published var filteredLogCount = 0
 
     // Filters
-    @Published var selectedCategory: LogCategoryFilter = .all
-    @Published var selectedDevice: String? = nil
-    @Published var selectedService: String? = nil
+    @Published var selectedCategories: Set<LogCategoryFilter> = []
+    @Published var selectedDevices: Set<String> = []
+    @Published var selectedServices: Set<String> = []
 
     // We keep the raw logs here but don't publish them to avoid unnecessary view updates
     private var rawLogs: [StateChangeLog] = []
@@ -54,14 +54,15 @@ class LogViewModel: ObservableObject {
     var totalLogCount: Int { rawLogs.count }
 
     var hasActiveFilters: Bool {
-        selectedCategory != .all || selectedDevice != nil || selectedService != nil
+        !selectedCategories.isEmpty || !selectedDevices.isEmpty || !selectedServices.isEmpty
     }
 
     /// Unique device names found in the current logs, filtered by selected category.
     var availableDevices: [String] {
         let filtered = rawLogs.filter { log in
-            if let categories = selectedCategory.logCategories {
-                return categories.contains(log.category)
+            if !selectedCategories.isEmpty {
+                let allowedCategories = selectedCategories.flatMap { $0.logCategories ?? [] }
+                return allowedCategories.contains(log.category)
             }
             return true
         }
@@ -72,12 +73,13 @@ class LogViewModel: ObservableObject {
     var availableServices: [String] {
         let filtered = rawLogs.filter { log in
             // Filter by category
-            if let categories = selectedCategory.logCategories {
-                guard categories.contains(log.category) else { return false }
+            if !selectedCategories.isEmpty {
+                let allowedCategories = selectedCategories.flatMap { $0.logCategories ?? [] }
+                guard allowedCategories.contains(log.category) else { return false }
             }
             // Filter by device
-            if let device = selectedDevice {
-                guard log.deviceName == device else { return false }
+            if !selectedDevices.isEmpty {
+                guard selectedDevices.contains(log.deviceName) else { return false }
             }
             return true
         }
@@ -110,28 +112,19 @@ class LogViewModel: ObservableObject {
 
         // Listen to filter changes
         // Listen to filter changes
-        $selectedCategory
+        $selectedCategories
             .dropFirst()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                // Reset child filters when category changes to prevent invalid states
-                self?.selectedDevice = nil
-                self?.selectedService = nil
-                self?.updateView()
-            }
+            .sink { [weak self] _ in self?.updateView() }
             .store(in: &cancellables)
         
-        $selectedDevice
+        $selectedDevices
             .dropFirst()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                // Reset service filter when device changes
-                self?.selectedService = nil
-                self?.updateView()
-            }
+            .sink { [weak self] _ in self?.updateView() }
             .store(in: &cancellables)
 
-        $selectedService
+        $selectedServices
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.updateView() }
@@ -150,12 +143,12 @@ class LogViewModel: ObservableObject {
     private func updateView() {
         let logs = self.rawLogs
         let query = self.searchText
-        let category = self.selectedCategory
-        let device = self.selectedDevice
-        let service = self.selectedService
+        let categories = self.selectedCategories
+        let devices = self.selectedDevices
+        let services = self.selectedServices
 
         Task.detached(priority: .userInitiated) {
-            let filtered = Self.filterLogs(logs, with: query, category: category, device: device, service: service)
+            let filtered = Self.filterLogs(logs, with: query, categories: categories, devices: devices, services: services)
             let grouped = Self.groupLogs(filtered)
             let count = filtered.count
 
@@ -169,25 +162,28 @@ class LogViewModel: ObservableObject {
     private static func filterLogs(
         _ logs: [StateChangeLog],
         with query: String,
-        category: LogCategoryFilter,
-        device: String?,
-        service: String?
+        categories: Set<LogCategoryFilter>,
+        devices: Set<String>,
+        services: Set<String>
     ) -> [StateChangeLog] {
         var result = logs
 
         // Category filter
-        if let categories = category.logCategories {
-            result = result.filter { categories.contains($0.category) }
+        if !categories.isEmpty {
+            let allowedLogCategories = categories.flatMap { $0.logCategories ?? [] }
+            if !allowedLogCategories.isEmpty {
+                result = result.filter { allowedLogCategories.contains($0.category) }
+            }
         }
 
         // Device filter
-        if let device {
-            result = result.filter { $0.deviceName == device }
+        if !devices.isEmpty {
+            result = result.filter { devices.contains($0.deviceName) }
         }
 
         // Service filter
-        if let service {
-            result = result.filter { $0.serviceName == service }
+        if !services.isEmpty {
+            result = result.filter { $0.serviceName != nil && services.contains($0.serviceName!) }
         }
 
         // Text search
@@ -229,9 +225,9 @@ class LogViewModel: ObservableObject {
     }
 
     func clearFilters() {
-        selectedCategory = .all
-        selectedDevice = nil
-        selectedService = nil
+        selectedCategories.removeAll()
+        selectedDevices.removeAll()
+        selectedServices.removeAll()
     }
 
     func clearLogs() {

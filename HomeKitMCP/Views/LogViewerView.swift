@@ -111,23 +111,53 @@ struct LogViewerView: View {
 
     private var categoryFilterChip: some View {
         Menu {
+            Button("All Categories") {
+                withAnimation { viewModel.selectedCategories.removeAll() }
+            }
+            Divider()
             ForEach(LogCategoryFilter.allCases) { category in
-                Button {
-                    withAnimation { viewModel.selectedCategory = category }
-                } label: {
-                    if viewModel.selectedCategory == category {
-                        Label(category.rawValue, systemImage: "checkmark")
-                    } else {
-                        Label(category.rawValue, systemImage: category.icon)
+                // Skip .all in the multi-select menu list if we have a separate "Clear/All" button, 
+                // but checking it here usually means "Toggle this one". 
+                // .all is a special case in the enum, might want to exclude it from the list if it represents "no filter".
+                if category != .all {
+                    Button {
+                        withAnimation {
+                            if viewModel.selectedCategories.contains(category) {
+                                viewModel.selectedCategories.remove(category)
+                            } else {
+                                viewModel.selectedCategories.insert(category)
+                            }
+                        }
+                    } label: {
+                        if viewModel.selectedCategories.contains(category) {
+                            Label(category.rawValue, systemImage: "checkmark")
+                        } else {
+                            Label(category.rawValue, systemImage: category.icon)
+                        }
                     }
                 }
             }
         } label: {
-            let isActive = viewModel.selectedCategory != .all
+            let isActive = !viewModel.selectedCategories.isEmpty
             HStack(spacing: 4) {
-                Image(systemName: viewModel.selectedCategory.icon)
+                // Icon: use first selected or generic if multiple/empty
+                let iconName: String = {
+                    if let first = viewModel.selectedCategories.first, viewModel.selectedCategories.count == 1 {
+                        return first.icon
+                    }
+                    return "line.3.horizontal.decrease.circle"
+                }()
+                
+                Image(systemName: iconName)
                     .font(.caption2)
-                Text(viewModel.selectedCategory.rawValue)
+                
+                let text: String = {
+                    if viewModel.selectedCategories.isEmpty { return "All Categories" }
+                    if viewModel.selectedCategories.count == 1 { return viewModel.selectedCategories.first!.rawValue }
+                    return "\(viewModel.selectedCategories.count) Categories"
+                }()
+                
+                Text(text)
                     .font(.caption)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
@@ -150,14 +180,20 @@ struct LogViewerView: View {
     private var deviceFilterChip: some View {
         Menu {
             Button("All Devices") {
-                withAnimation { viewModel.selectedDevice = nil }
+                withAnimation { viewModel.selectedDevices.removeAll() }
             }
             Divider()
             ForEach(viewModel.availableDevices, id: \.self) { device in
                 Button {
-                    withAnimation { viewModel.selectedDevice = device }
+                    withAnimation {
+                        if viewModel.selectedDevices.contains(device) {
+                            viewModel.selectedDevices.remove(device)
+                        } else {
+                            viewModel.selectedDevices.insert(device)
+                        }
+                    }
                 } label: {
-                    if viewModel.selectedDevice == device {
+                    if viewModel.selectedDevices.contains(device) {
                         Label(device, systemImage: "checkmark")
                     } else {
                         Text(device)
@@ -165,11 +201,16 @@ struct LogViewerView: View {
                 }
             }
         } label: {
-            let isActive = viewModel.selectedDevice != nil
+            let isActive = !viewModel.selectedDevices.isEmpty
             HStack(spacing: 4) {
                 Image(systemName: "desktopcomputer")
                     .font(.caption2)
-                Text(viewModel.selectedDevice ?? "All Devices")
+                let text: String = {
+                    if viewModel.selectedDevices.isEmpty { return "All Devices" }
+                    if viewModel.selectedDevices.count == 1 { return viewModel.selectedDevices.first! }
+                    return "\(viewModel.selectedDevices.count) Devices"
+                }()
+                Text(text)
                     .font(.caption)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
@@ -192,14 +233,20 @@ struct LogViewerView: View {
     private var serviceFilterChip: some View {
         Menu {
             Button("All Services") {
-                withAnimation { viewModel.selectedService = nil }
+                withAnimation { viewModel.selectedServices.removeAll() }
             }
             Divider()
             ForEach(viewModel.availableServices, id: \.self) { service in
                 Button {
-                    withAnimation { viewModel.selectedService = service }
+                    withAnimation {
+                        if viewModel.selectedServices.contains(service) {
+                            viewModel.selectedServices.remove(service)
+                        } else {
+                            viewModel.selectedServices.insert(service)
+                        }
+                    }
                 } label: {
-                    if viewModel.selectedService == service {
+                    if viewModel.selectedServices.contains(service) {
                         Label(service, systemImage: "checkmark")
                     } else {
                         Text(service)
@@ -207,11 +254,16 @@ struct LogViewerView: View {
                 }
             }
         } label: {
-            let isActive = viewModel.selectedService != nil
+            let isActive = !viewModel.selectedServices.isEmpty
             HStack(spacing: 4) {
                 Image(systemName: "cube")
                     .font(.caption2)
-                Text(viewModel.selectedService ?? "All Services")
+                 let text: String = {
+                    if viewModel.selectedServices.isEmpty { return "All Services" }
+                    if viewModel.selectedServices.count == 1 { return viewModel.selectedServices.first! }
+                    return "\(viewModel.selectedServices.count) Services"
+                }()
+                Text(text)
                     .font(.caption)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")

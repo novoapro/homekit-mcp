@@ -99,7 +99,7 @@ enum PreviewData {
         let loggingService = LoggingService()
         let configService = DeviceConfigurationService()
         let webhookService = WebhookService(storage: storage, loggingService: loggingService)
-        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService)
+        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storage)
         let vm = HomeKitViewModel(homeKitManager: manager, configService: configService)
         vm.devicesByRoom = devicesByRoom
         vm.isLoading = false
@@ -143,7 +143,7 @@ enum PreviewData {
         let loggingService = LoggingService()
         let configService = DeviceConfigurationService()
         let webhookService = WebhookService(storage: storage, loggingService: loggingService)
-        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService)
+        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storage)
         let mcpServer = MCPServer(homeKitManager: manager, loggingService: loggingService, configService: configService)
         return SettingsViewModel(storage: storage, webhookService: webhookService, mcpServer: mcpServer, configService: configService)
     }
