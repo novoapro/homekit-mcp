@@ -346,7 +346,7 @@ extension HomeKitManager: HMAccessoryDelegate {
             )
             
             // If neither MCP nor Webhook is enabled, discard the event entirely
-            guard config.mcpEnabled || config.webhookEnabled else { return }
+            // guard config.mcpEnabled || config.webhookEnabled else { return }
 
             let value = characteristic.value
         

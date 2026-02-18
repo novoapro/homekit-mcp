@@ -148,7 +148,7 @@ struct SettingsView: View {
 
     private var mcpServerSection: some View {
         Section {
-            Toggle("Enable MCP Server", isOn: Binding(
+            Toggle("Enable External Access", isOn: Binding(
                 get: { viewModel.storage.mcpServerEnabled },
                 set: { viewModel.toggleMCPServer(enabled: $0) }
             ))
@@ -173,8 +173,8 @@ struct SettingsView: View {
 
             if let error = viewModel.mcpServerError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundColor(.red)
+                .font(.caption)
+                .foregroundColor(.red)
             }
 
             HStack {
@@ -184,18 +184,19 @@ struct SettingsView: View {
                     get: { String(viewModel.storage.mcpServerPort) },
                     set: { if let port = Int($0) { viewModel.storage.mcpServerPort = port } }
                 ))
-                    .textFieldStyle(.roundedBorder)
-                    .keyboardType(.numberPad)
-                    .frame(width: 100)
-                    .multilineTextAlignment(.trailing)
-                    .disabled(viewModel.mcpServerRunning)
+                .textFieldStyle(.roundedBorder)
+                .keyboardType(.numberPad)
+                .frame(width: 100)
+                .multilineTextAlignment(.trailing)
+                .disabled(viewModel.mcpServerRunning)
             }
         } header: {
-            Text("MCP Server")
+            Text("External Services (MCP & REST)")
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: "Streamable: http://\(viewModel.localIPAddress):\(viewModel.storage.mcpServerPort)/mcp")
-                Text(verbatim: "Legacy SSE: http://\(viewModel.localIPAddress):\(viewModel.storage.mcpServerPort)/sse")
+                Text(verbatim: "MCP Streamable: http://\(viewModel.localIPAddress):\(viewModel.storage.mcpServerPort)/mcp")
+                Text(verbatim: "MCP Legacy SSE: http://\(viewModel.localIPAddress):\(viewModel.storage.mcpServerPort)/sse")
+                Text(verbatim: "REST API: http://\(viewModel.localIPAddress):\(viewModel.storage.mcpServerPort)/devices")
             }
             .font(.caption)
         }

@@ -141,10 +141,58 @@ class MCPServer: ObservableObject, @unchecked Sendable {
             return try await self.handleLegacyMessages(req)
         }
 
+        // REST Endpoints
+        app.on(.GET, "devices") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            return try await self.handleRestGetDevices(req)
+        }
+        
+        app.on(.GET, "devices", ":deviceId") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            return try await self.handleRestGetDevice(req)
+        }
+
         // Health check
         app.on(.GET, "health") { _ -> String in
             return "ok"
         }
+    }
+    
+    // MARK: - REST Handlers
+    
+    private func handleRestGetDevices(_ req: Request) async throws -> Response {
+        let allDevices = await MainActor.run { homeKitManager.getAllDevices() }
+        let filteredDevices = await handler.filterDevicesByConfig(allDevices)
+        let restDevices = filteredDevices.map { RESTDevice.from($0) }
+        
+        let data = try Self.encoder.encode(restDevices)
+        var headers = HTTPHeaders()
+        headers.add(name: .contentType, value: "application/json")
+        return Response(status: .ok, headers: headers, body: .init(data: data))
+    }
+    
+    private func handleRestGetDevice(_ req: Request) async throws -> Response {
+        guard let deviceId = req.parameters.get("deviceId") else {
+            throw Abort(.badRequest)
+        }
+        
+        let device = await MainActor.run { homeKitManager.getDeviceState(id: deviceId) }
+        
+        guard let device else {
+            throw Abort(.notFound, reason: "Device not found")
+        }
+        
+        let filtered = await handler.filterDevicesByConfig([device])
+        
+        guard let filteredDevice = filtered.first else {
+             throw Abort(.notFound, reason: "Device not found or not exposed")
+        }
+        
+        let restDevice = RESTDevice.from(filteredDevice)
+        let data = try Self.encoder.encode(restDevice)
+        var headers = HTTPHeaders()
+        headers.add(name: .contentType, value: "application/json")
+        return Response(status: .ok, headers: headers, body: .init(data: data))
     }
 
     // MARK: - Streamable HTTP Transport

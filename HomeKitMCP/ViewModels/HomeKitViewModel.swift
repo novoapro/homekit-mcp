@@ -22,8 +22,8 @@ class HomeKitViewModel: ObservableObject {
     @Published var mcpFilter: TriStateFilter = .all
     @Published var webhookFilter: TriStateFilter = .all
 
-    // Device-level config cache: deviceId -> (anyMCPEnabled, anyWebhookEnabled)
-    @Published private(set) var deviceConfigCache: [String: (mcpEnabled: Bool, webhookEnabled: Bool)] = [:]
+    // Device-level config cache: deviceId -> (externalAccessEnabled: Bool, webhookEnabled: Bool)
+    @Published private(set) var deviceConfigCache: [String: (externalAccessEnabled: Bool, webhookEnabled: Bool)] = [:]
 
     private let homeKitManager: HomeKitManager
     let configService: DeviceConfigurationService
@@ -102,9 +102,9 @@ class HomeKitViewModel: ObservableObject {
                     // MCP filter
                     if mcpFilter != .all {
                         let cache = configCache[device.id]
-                        let hasMCP = cache?.mcpEnabled ?? true // default is MCP enabled
-                        if mcpFilter == .enabled && !hasMCP { return false }
-                        if mcpFilter == .disabled && hasMCP { return false }
+                        let hasExternal = cache?.externalAccessEnabled ?? true // default is enabled
+                        if mcpFilter == .enabled && !hasExternal { return false }
+                        if mcpFilter == .disabled && hasExternal { return false }
                     }
 
                     // Webhook filter
@@ -179,11 +179,11 @@ class HomeKitViewModel: ObservableObject {
 
     /// Builds a device-level config cache from the per-characteristic configs.
     private func refreshConfigCache() async {
-        var cache: [String: (mcpEnabled: Bool, webhookEnabled: Bool)] = [:]
+        var cache: [String: (externalAccessEnabled: Bool, webhookEnabled: Bool)] = [:]
 
         for group in devicesByRoom {
             for device in group.devices {
-                var anyMCP = false
+                var anyExternal = false
                 var anyWebhook = false
 
                 for service in device.services {
@@ -193,12 +193,12 @@ class HomeKitViewModel: ObservableObject {
                             serviceId: service.id,
                             characteristicId: char.id
                         )
-                        if config.mcpEnabled { anyMCP = true }
+                        if config.externalAccessEnabled { anyExternal = true }
                         if config.webhookEnabled { anyWebhook = true }
                     }
                 }
 
-                cache[device.id] = (mcpEnabled: anyMCP, webhookEnabled: anyWebhook)
+                cache[device.id] = (externalAccessEnabled: anyExternal, webhookEnabled: anyWebhook)
             }
         }
 
@@ -222,12 +222,12 @@ class HomeKitViewModel: ObservableObject {
         }
     }
 
-    func setDeviceConfig(device: DeviceModel, mcpEnabled: Bool? = nil, webhookEnabled: Bool? = nil) {
+    func setDeviceConfig(device: DeviceModel, externalAccessEnabled: Bool? = nil, webhookEnabled: Bool? = nil) {
         let services = device.services.map { service in
             (serviceId: service.id, characteristicIds: service.characteristics.map(\.id))
         }
         Task {
-            await configService.setAllForDevice(deviceId: device.id, services: services, mcpEnabled: mcpEnabled, webhookEnabled: webhookEnabled)
+            await configService.setAllForDevice(deviceId: device.id, services: services, externalAccessEnabled: externalAccessEnabled, webhookEnabled: webhookEnabled)
             await refreshConfigCache()
             await MainActor.run {
                 objectWillChange.send()

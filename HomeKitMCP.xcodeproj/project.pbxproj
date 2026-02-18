@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0AB5E46CEF3A8B68CC454E5E /* DeviceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5831ACADF90552245465043 /* DeviceModel.swift */; };
+		DCF797CFDCB54CE8A528D627 /* RESTModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E76399A1218F4445AAA6B957 /* RESTModels.swift */; };
 		185DAC0F4CCBE7EADDA71DC1 /* HomeKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8BFC87681E42A0EF8D3DAF /* HomeKitManager.swift */; };
 		1E943F272DF289A0708ED7B4 /* LogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3E0E7001560CF7AC8B50C18 /* LogViewerView.swift */; };
 		21CEF85B38EFE91E076A7B41 /* MCPRequestHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42C01AAB5B5EEC084DD1E311 /* MCPRequestHandler.swift */; };
@@ -74,6 +75,8 @@
 		94E00E5E7805C7F145F187EA /* LogRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogRow.swift; sourceTree = "<group>"; };
 		99DEDCA340108084F34C2396 /* LoggingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingService.swift; sourceTree = "<group>"; };
 		A5831ACADF90552245465043 /* DeviceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceModel.swift; sourceTree = "<group>"; };
+		E76399A1218F4445AAA6B957 /* RESTModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RESTModels.swift; sourceTree = "<group>"; };
+
 		A97C3B391AF017E2778652F7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		AA6598C98AB6126400BA1270 /* HomeKitViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeKitViewModel.swift; sourceTree = "<group>"; };
 		B3E0E7001560CF7AC8B50C18 /* LogViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogViewerView.swift; sourceTree = "<group>"; };
@@ -230,6 +233,7 @@
 			children = (
 				8520B3C8169ADBD675E1136B /* AnyCodable.swift */,
 				A5831ACADF90552245465043 /* DeviceModel.swift */,
+				E76399A1218F4445AAA6B957 /* RESTModels.swift */,
 				610207602B912E193EA7D16F /* StateChangeLog.swift */,
 			);
 			path = Models;
@@ -346,6 +350,7 @@
 				604138D8F7B166CDADB33EE9 /* DeviceConfigurationService.swift in Sources */,
 				DDB9C4F7DAF16E5F1C638A4E /* DeviceListView.swift in Sources */,
 				0AB5E46CEF3A8B68CC454E5E /* DeviceModel.swift in Sources */,
+				DCF797CFDCB54CE8A528D627 /* RESTModels.swift in Sources */,
 				5E6D895157FC47B4A75A4A28 /* DeviceRow.swift in Sources */,
 				97DAC0FF8E443C2BE91E9C0E /* HomeKitMCPApp.swift in Sources */,
 				185DAC0F4CCBE7EADDA71DC1 /* HomeKitManager.swift in Sources */,

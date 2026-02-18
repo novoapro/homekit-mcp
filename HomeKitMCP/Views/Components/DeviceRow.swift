@@ -19,12 +19,12 @@ struct DeviceRow: View {
         GridItem(.adaptive(minimum: 160, maximum: 240), spacing: 8)
     ]
 
-    private var deviceMCPEnabled: Bool {
+    private var deviceExternalAccessEnabled: Bool {
         let allKeys = device.services.flatMap { service in
             service.characteristics.map { configKey(deviceId: device.id, serviceId: service.id, charId: $0.id) }
         }
         guard !allKeys.isEmpty else { return true }
-        return allKeys.contains { configs[$0]?.mcpEnabled ?? true }
+        return allKeys.contains { configs[$0]?.externalAccessEnabled ?? true }
     }
 
     private var deviceWebhookEnabled: Bool {
@@ -96,12 +96,12 @@ struct DeviceRow: View {
                 // Compact Controls
                 VStack(alignment: .trailing, spacing: 12) {
                     MiniToggle(isOn: Binding(
-                        get: { deviceMCPEnabled },
+                        get: { deviceExternalAccessEnabled },
                         set: { result in
-                            updateAllConfigs(mcpEnabled: result)
-                            viewModel.setDeviceConfig(device: device, mcpEnabled: result)
+                            updateAllConfigs(externalAccessEnabled: result)
+                            viewModel.setDeviceConfig(device: device, externalAccessEnabled: result)
                         }
-                    ), label: "MCP")
+                    ), label: "EXT")
                     
                     MiniToggle(isOn: Binding(
                         get: { deviceWebhookEnabled },
@@ -226,14 +226,14 @@ struct DeviceRow: View {
             // granular controls
             HStack(spacing: 4) {
                 MiniToggle(isOn: Binding(
-                    get: { config.mcpEnabled },
+                    get: { config.externalAccessEnabled },
                     set: { val in
                         var updated = config
-                        updated.mcpEnabled = val
+                        updated.externalAccessEnabled = val
                         configs[key] = updated
                         viewModel.setConfig(deviceId: device.id, serviceId: service.id, characteristicId: char.id, config: updated)
                     }
-                ), label: "MCP")
+                ), label: "EXT")
                 
                 Spacer()
                 
@@ -262,12 +262,12 @@ struct DeviceRow: View {
         "\(deviceId):\(serviceId):\(charId)"
     }
 
-    private func updateAllConfigs(mcpEnabled: Bool? = nil, webhookEnabled: Bool? = nil) {
+    private func updateAllConfigs(externalAccessEnabled: Bool? = nil, webhookEnabled: Bool? = nil) {
         for service in device.services {
             for char in service.characteristics {
                 let key = configKey(deviceId: device.id, serviceId: service.id, charId: char.id)
                 var config = configs[key] ?? .default
-                if let mcp = mcpEnabled { config.mcpEnabled = mcp }
+                if let ext = externalAccessEnabled { config.externalAccessEnabled = ext }
                 if let webhook = webhookEnabled { config.webhookEnabled = webhook }
                 configs[key] = config
             }

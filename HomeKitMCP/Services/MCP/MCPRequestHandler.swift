@@ -53,14 +53,14 @@ class MCPRequestHandler {
     }
 
     // MARK: - MCP Filtering
-
-    private func filterDevicesByConfig(_ devices: [DeviceModel]) async -> [DeviceModel] {
+    
+    func filterDevicesByConfig(_ devices: [DeviceModel]) async -> [DeviceModel] {
         var result: [DeviceModel] = []
         for device in devices {
             var filteredServices: [ServiceModel] = []
             for service in device.services {
                 let filteredChars = await service.characteristics.asyncFilter { char in
-                    await configService.isMCPEnabled(
+                    await configService.isExternalAccessEnabled(
                         deviceId: device.id,
                         serviceId: service.id,
                         characteristicId: char.id
@@ -160,8 +160,9 @@ class MCPRequestHandler {
         case "homekit://devices":
             let allDevices = await MainActor.run { homeKitManager.getAllDevices() }
             let devices = await filterDevicesByConfig(allDevices)
+            let restDevices = devices.map { RESTDevice.from($0) }
 
-            guard let jsonData = try? Self.encoder.encode(devices),
+            guard let jsonData = try? Self.encoder.encode(restDevices),
                   let jsonString = String(data: jsonData, encoding: .utf8) else {
                 return JSONRPCResponse.error(
                     id: id,
@@ -422,7 +423,7 @@ class MCPRequestHandler {
                 for service in device.services {
                     // Show service header when the device has multiple services
                     if device.services.count > 1 {
-                        lines.append("  ### \(service.displayName) (service_id: \(service.id))")
+                        lines.append("  ### \(service.name) (service_id: \(service.id))")
                     }
                     for char in service.characteristics {
                         let name = CharacteristicTypes.displayName(for: char.type)
@@ -514,8 +515,9 @@ class MCPRequestHandler {
         }
 
         let filteredDevices = await filterDevicesByConfig(resultDevices)
+        let restDevices = filteredDevices.map { RESTDevice.from($0) }
 
-        guard let jsonData = try? Self.encoder.encode(filteredDevices),
+        guard let jsonData = try? Self.encoder.encode(restDevices),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
             let content: [[String: Any]] = [["type": "text", "text": "Failed to encode device data"]]
             let result: [String: Any] = ["content": content, "isError": true]
@@ -555,8 +557,9 @@ class MCPRequestHandler {
         }
 
         let filteredDevices = await filterDevicesByConfig(matchingDevices)
+        let restDevices = filteredDevices.map { RESTDevice.from($0) }
 
-        guard let jsonData = try? Self.encoder.encode(filteredDevices),
+        guard let jsonData = try? Self.encoder.encode(restDevices),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
             let content: [[String: Any]] = [["type": "text", "text": "Failed to encode device data"]]
             let result: [String: Any] = ["content": content, "isError": true]
@@ -635,7 +638,8 @@ class MCPRequestHandler {
             return JSONRPCResponse.success(id: id, result: AnyCodable(result))
         }
 
-        guard let jsonData = try? Self.encoder.encode(filteredDevice),
+        let restDevice = RESTDevice.from(filteredDevice)
+        guard let jsonData = try? Self.encoder.encode(restDevice),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
             let content: [[String: Any]] = [
                 [

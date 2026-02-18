@@ -122,9 +122,9 @@ struct DeviceListView: View {
                 // Service type filter
                 serviceTypeFilterChip
 
-                // MCP filter
+                // EXT filter
                 triStateChip(
-                    label: "MCP",
+                    label: "EXT",
                     icon: "server.rack",
                     filter: $viewModel.mcpFilter
                 )

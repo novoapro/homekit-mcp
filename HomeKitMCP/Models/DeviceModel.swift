@@ -30,8 +30,8 @@ struct CharacteristicModel: Identifiable, Codable {
 }
 
 struct CharacteristicConfiguration: Codable, Equatable {
-    var mcpEnabled: Bool
+    var externalAccessEnabled: Bool
     var webhookEnabled: Bool
 
-    static let `default` = CharacteristicConfiguration(mcpEnabled: true, webhookEnabled: false)
+    static let `default` = CharacteristicConfiguration(externalAccessEnabled: true, webhookEnabled: false)
 }
