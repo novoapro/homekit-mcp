@@ -110,34 +110,7 @@ struct LogViewerView: View {
     }
 
     private var categoryFilterChip: some View {
-        Menu {
-            Button("All Categories") {
-                withAnimation { viewModel.selectedCategories.removeAll() }
-            }
-            Divider()
-            ForEach(LogCategoryFilter.allCases) { category in
-                // Skip .all in the multi-select menu list if we have a separate "Clear/All" button, 
-                // but checking it here usually means "Toggle this one". 
-                // .all is a special case in the enum, might want to exclude it from the list if it represents "no filter".
-                if category != .all {
-                    Button {
-                        withAnimation {
-                            if viewModel.selectedCategories.contains(category) {
-                                viewModel.selectedCategories.remove(category)
-                            } else {
-                                viewModel.selectedCategories.insert(category)
-                            }
-                        }
-                    } label: {
-                        if viewModel.selectedCategories.contains(category) {
-                            Label(category.rawValue, systemImage: "checkmark")
-                        } else {
-                            Label(category.rawValue, systemImage: category.icon)
-                        }
-                    }
-                }
-            }
-        } label: {
+        FilterDropdown {
             let isActive = !viewModel.selectedCategories.isEmpty
             HStack(spacing: 4) {
                 // Icon: use first selected or generic if multiple/empty
@@ -160,6 +133,7 @@ struct LogViewerView: View {
                 Text(text)
                     .font(.caption)
                     .fontWeight(.medium)
+                
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
             }
@@ -174,33 +148,50 @@ struct LogViewerView: View {
                     .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
             )
             .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.secondary)
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                Button("All Categories") {
+                    withAnimation { viewModel.selectedCategories.removeAll() }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                Divider()
+                
+                ForEach(LogCategoryFilter.allCases, id: \.self) { category in
+                    if category != .all {
+                        Button {
+                            if viewModel.selectedCategories.contains(category) {
+                                viewModel.selectedCategories.remove(category)
+                            } else {
+                                viewModel.selectedCategories.insert(category)
+                            }
+                        } label: {
+                            HStack {
+                                Label(category.rawValue, systemImage: category.icon)
+                                    .foregroundColor(Theme.Text.primary)
+                                Spacer()
+                                if viewModel.selectedCategories.contains(category) {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(Theme.Tint.main)
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(width: 220)
         }
     }
 
     private var deviceFilterChip: some View {
-        Menu {
-            Button("All Devices") {
-                withAnimation { viewModel.selectedDevices.removeAll() }
-            }
-            Divider()
-            ForEach(viewModel.availableDevices, id: \.self) { device in
-                Button {
-                    withAnimation {
-                        if viewModel.selectedDevices.contains(device) {
-                            viewModel.selectedDevices.remove(device)
-                        } else {
-                            viewModel.selectedDevices.insert(device)
-                        }
-                    }
-                } label: {
-                    if viewModel.selectedDevices.contains(device) {
-                        Label(device, systemImage: "checkmark")
-                    } else {
-                        Text(device)
-                    }
-                }
-            }
-        } label: {
+        FilterDropdown {
             let isActive = !viewModel.selectedDevices.isEmpty
             HStack(spacing: 4) {
                 Image(systemName: "desktopcomputer")
@@ -227,38 +218,64 @@ struct LogViewerView: View {
                     .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
             )
             .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.secondary)
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                Button("All Devices") {
+                    withAnimation { viewModel.selectedDevices.removeAll() }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                Divider()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(viewModel.availableDevices, id: \.self) { device in
+                            Button {
+                                if viewModel.selectedDevices.contains(device) {
+                                    viewModel.selectedDevices.remove(device)
+                                } else {
+                                    viewModel.selectedDevices.insert(device)
+                                }
+                            } label: {
+                                HStack {
+                                    Text(device)
+                                        .foregroundColor(Theme.Text.primary)
+                                    Spacer()
+                                    if viewModel.selectedDevices.contains(device) {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(Theme.Tint.main)
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if viewModel.availableDevices.isEmpty {
+                            Text("No devices found")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(12)
+                        }
+                    }
+                }
+                .frame(maxHeight: 300)
+            }
+            .frame(width: 200)
         }
     }
 
     private var serviceFilterChip: some View {
-        Menu {
-            Button("All Services") {
-                withAnimation { viewModel.selectedServices.removeAll() }
-            }
-            Divider()
-            ForEach(viewModel.availableServices, id: \.self) { service in
-                Button {
-                    withAnimation {
-                        if viewModel.selectedServices.contains(service) {
-                            viewModel.selectedServices.remove(service)
-                        } else {
-                            viewModel.selectedServices.insert(service)
-                        }
-                    }
-                } label: {
-                    if viewModel.selectedServices.contains(service) {
-                        Label(service, systemImage: "checkmark")
-                    } else {
-                        Text(service)
-                    }
-                }
-            }
-        } label: {
+        FilterDropdown {
             let isActive = !viewModel.selectedServices.isEmpty
             HStack(spacing: 4) {
-                Image(systemName: "cube")
+                Image(systemName: "gearshape.2")
                     .font(.caption2)
-                 let text: String = {
+                let text: String = {
                     if viewModel.selectedServices.isEmpty { return "All Services" }
                     if viewModel.selectedServices.count == 1 { return viewModel.selectedServices.first! }
                     return "\(viewModel.selectedServices.count) Services"
@@ -280,6 +297,54 @@ struct LogViewerView: View {
                     .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
             )
             .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.secondary)
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                Button("All Services") {
+                    withAnimation { viewModel.selectedServices.removeAll() }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                Divider()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(viewModel.availableServices, id: \.self) { service in
+                            Button {
+                                if viewModel.selectedServices.contains(service) {
+                                    viewModel.selectedServices.remove(service)
+                                } else {
+                                    viewModel.selectedServices.insert(service)
+                                }
+                            } label: {
+                                HStack {
+                                    Text(service)
+                                        .foregroundColor(Theme.Text.primary)
+                                    Spacer()
+                                    if viewModel.selectedServices.contains(service) {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(Theme.Tint.main)
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if viewModel.availableServices.isEmpty {
+                            Text("No services found")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(12)
+                        }
+                    }
+                }
+                .frame(maxHeight: 300)
+            }
+            .frame(width: 200)
         }
     }
 }

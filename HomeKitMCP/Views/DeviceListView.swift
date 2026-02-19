@@ -3,6 +3,10 @@ import SwiftUI
 struct DeviceListView: View {
     @ObservedObject var viewModel: HomeKitViewModel
 
+    @State private var showBulkConfirm = false
+    @State private var pendingBulkAction: (() -> Void)?
+    @State private var bulkConfirmMessage = ""
+
     private var filteredDeviceCount: Int {
         viewModel.filteredDevicesByRoom.reduce(0) { $0 + $1.devices.count }
     }
@@ -50,6 +54,9 @@ struct DeviceListView: View {
                     filterBar
                         .padding(.horizontal)
                         .padding(.vertical, 8)
+
+
+
                     List {
                         ForEach(viewModel.filteredDevicesByRoom, id: \.roomName) { group in
                             Section(header:
@@ -109,10 +116,53 @@ struct DeviceListView: View {
         }
         .navigationTitle("HomeKit Devices (\(filteredDeviceCount))")
         .background(Theme.mainBackground)
+        .alert("Confirm Bulk Action", isPresented: $showBulkConfirm) {
+            Button("Apply", role: .destructive) {
+                pendingBulkAction?()
+                pendingBulkAction = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingBulkAction = nil
+            }
+        } message: {
+            Text(bulkConfirmMessage)
+        }
+    }
+
+    // MARK: - Bulk Action Bar
+
+
+
+    private func bulkButton(label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 9))
+                Text(label)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(color.opacity(0.12))
+            )
+            .overlay(
+                Capsule().strokeBorder(color.opacity(0.4), lineWidth: 1)
+            )
+            .foregroundColor(color)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func confirmBulkAction(message: String, action: @escaping () -> Void) {
+        bulkConfirmMessage = message
+        pendingBulkAction = action
+        showBulkConfirm = true
     }
 
     // MARK: - Filter Bar
-
+    
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
@@ -123,21 +173,14 @@ struct DeviceListView: View {
                 serviceTypeFilterChip
 
                 // EXT filter
-                triStateChip(
-                    label: "EXT",
-                    icon: "server.rack",
-                    filter: $viewModel.mcpFilter
-                )
+                extFilterChip
 
                 // Webhook filter
-                triStateChip(
-                    label: "Webhook",
-                    icon: "bell.badge",
-                    filter: $viewModel.webhookFilter
-                )
-
-                // Clear all
+                webhookFilterChip
+                
+                // Bulk Actions & Clear (Only when filtered)
                 if viewModel.hasActiveFilters {
+                    // Clear all
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             viewModel.clearFilters()
@@ -149,35 +192,48 @@ struct DeviceListView: View {
                     }
                     .buttonStyle(.plain)
                     
+                    // Separator for visual distinction
+                    Spacer()
+                    
+                    HStack{
+                        // Bulk EXT Toggle
+                        let allExtEnabled = viewModel.filteredDevicesByRoom.flatMap(\.devices).allSatisfy { viewModel.isExternalAccessEnabled(for: $0) }
+                        
+                        
+                        
+                        MiniToggle(isOn: Binding(
+                            get: { allExtEnabled },
+                            set: { newValue in
+                                confirmBulkAction(message: newValue ? "Enable EXT for \(filteredDeviceCount) devices?" : "Disable EXT for \(filteredDeviceCount) devices?") {
+                                    viewModel.setBulkConfig(externalAccessEnabled: newValue)
+                                }
+                            }
+                        ), label: "Bulk EXT")
+                        
+                        // Bulk Webhook Toggle
+                        let allHookEnabled = viewModel.filteredDevicesByRoom.flatMap(\.devices).allSatisfy { viewModel.isWebhookEnabled(for: $0) }
+                        MiniToggle(isOn: Binding(
+                            get: { allHookEnabled },
+                            set: { newValue in
+                                confirmBulkAction(message: newValue ? "Enable Webhooks for \(filteredDeviceCount) devices?" : "Disable Webhooks for \(filteredDeviceCount) devices?") {
+                                    viewModel.setBulkConfig(webhookEnabled: newValue)
+                                }
+                            }
+                        ), label: "Bulk Hook")
+                    }
+                    .padding(4)
+                    .background(
+                        Capsule()
+                            .fill(Theme.Tint.main.opacity(0.15))
+                    )
+                    
                 }
             }
         }
     }
 
     private var roomFilterChip: some View {
-        Menu {
-            Button("All Rooms") {
-                withAnimation { viewModel.selectedRooms.removeAll() }
-            }
-            Divider()
-            ForEach(viewModel.availableRooms, id: \.self) { room in
-                Button {
-                    withAnimation {
-                        if viewModel.selectedRooms.contains(room) {
-                            viewModel.selectedRooms.remove(room)
-                        } else {
-                            viewModel.selectedRooms.insert(room)
-                        }
-                    }
-                } label: {
-                    if viewModel.selectedRooms.contains(room) {
-                        Label(room, systemImage: "checkmark")
-                    } else {
-                        Text(room)
-                    }
-                }
-            }
-        } label: {
+        FilterDropdown {
             let isActive = !viewModel.selectedRooms.isEmpty
             HStack(spacing: 4) {
                 Image(systemName: "house")
@@ -204,33 +260,37 @@ struct DeviceListView: View {
                     .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
             )
             .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.primary)
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                menuRow(title: "All Rooms", isSelected: viewModel.selectedRooms.isEmpty) {
+                    withAnimation { viewModel.selectedRooms.removeAll() }
+                }
+                
+                Divider()
+                    .padding(.vertical, 4)
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(viewModel.availableRooms, id: \.self) { room in
+                            menuRow(title: room, isSelected: viewModel.selectedRooms.contains(room)) {
+                                if viewModel.selectedRooms.contains(room) {
+                                    viewModel.selectedRooms.remove(room)
+                                } else {
+                                    viewModel.selectedRooms.insert(room)
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 300)
+            }
+            .frame(width: 220)
+            .padding(.vertical, 4)
         }
     }
 
     private var serviceTypeFilterChip: some View {
-        Menu {
-            Button("All Types") {
-                withAnimation { viewModel.selectedServiceTypes.removeAll() }
-            }
-            Divider()
-            ForEach(viewModel.availableServiceTypes, id: \.self) { serviceType in
-                Button {
-                    withAnimation {
-                        if viewModel.selectedServiceTypes.contains(serviceType) {
-                            viewModel.selectedServiceTypes.remove(serviceType)
-                        } else {
-                            viewModel.selectedServiceTypes.insert(serviceType)
-                        }
-                    }
-                } label: {
-                    if viewModel.selectedServiceTypes.contains(serviceType) {
-                        Label(serviceType, systemImage: "checkmark")
-                    } else {
-                        Text(serviceType)
-                    }
-                }
-            }
-        } label: {
+        FilterDropdown {
             let isActive = !viewModel.selectedServiceTypes.isEmpty
             HStack(spacing: 4) {
                 Image(systemName: "cube")
@@ -257,27 +317,46 @@ struct DeviceListView: View {
                     .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
             )
             .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.primary)
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                menuRow(title: "All Types", isSelected: viewModel.selectedServiceTypes.isEmpty) {
+                    withAnimation { viewModel.selectedServiceTypes.removeAll() }
+                }
+                
+                Divider()
+                    .padding(.vertical, 4)
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(viewModel.availableServiceTypes, id: \.self) { serviceType in
+                            menuRow(title: serviceType, isSelected: viewModel.selectedServiceTypes.contains(serviceType)) {
+                                if viewModel.selectedServiceTypes.contains(serviceType) {
+                                    viewModel.selectedServiceTypes.remove(serviceType)
+                                } else {
+                                    viewModel.selectedServiceTypes.insert(serviceType)
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 300)
+            }
+            .frame(width: 220)
+            .padding(.vertical, 4)
         }
     }
 
-    private func triStateChip(label: String, icon: String, filter: Binding<TriStateFilter>) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                // Cycle: all → enabled → disabled → all
-                switch filter.wrappedValue {
-                case .all: filter.wrappedValue = .enabled
-                case .enabled: filter.wrappedValue = .disabled
-                case .disabled: filter.wrappedValue = .all
-                }
-            }
-        } label: {
-            let isActive = filter.wrappedValue != .all
+    private var extFilterChip: some View {
+        FilterDropdown {
+            let isActive = viewModel.mcpFilter != .all
             HStack(spacing: 4) {
-                Image(systemName: icon)
+                Image(systemName: "server.rack")
                     .font(.caption2)
-                Text(isActive ? "\(label): \(filter.wrappedValue.rawValue)" : label)
+                Text(isActive ? "EXT: \(viewModel.mcpFilter.rawValue)" : "EXT")
                     .font(.caption)
                     .fontWeight(.medium)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -290,6 +369,83 @@ struct DeviceListView: View {
                     .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
             )
             .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.primary)
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                // Filter Options
+                ForEach(TriStateFilter.allCases, id: \.self) { option in
+                    menuRow(title: option.rawValue, isSelected: viewModel.mcpFilter == option) {
+                        viewModel.mcpFilter = option
+                    }
+                }
+            }
+            .frame(width: 200)
+            .padding(.vertical, 4)
+        }
+    }
+
+    private var webhookFilterChip: some View {
+        FilterDropdown {
+            let isActive = viewModel.webhookFilter != .all
+            HStack(spacing: 4) {
+                Image(systemName: "bell.badge")
+                    .font(.caption2)
+                Text(isActive ? "Webhook: \(viewModel.webhookFilter.rawValue)" : "Webhook")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : .clear)
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(isActive ? Theme.Tint.main : Color.clear, lineWidth: 1)
+            )
+            .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.primary)
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                // Filter Options
+                ForEach(TriStateFilter.allCases, id: \.self) { option in
+                    menuRow(title: option.rawValue, isSelected: viewModel.webhookFilter == option) {
+                        viewModel.webhookFilter = option
+                    }
+                }
+            }
+            .frame(width: 220)
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func menuRow(title: String, icon: String? = nil, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(Theme.Text.primary)
+                        .frame(width: 12)
+                } else {
+                    Color.clear.frame(width: 12, height: 10)
+                }
+                
+                if let icon = icon {
+                    Image(systemName: icon)
+                        .font(.body)
+                        .foregroundColor(Theme.Text.secondary)
+                }
+                
+                Text(title)
+                    .foregroundColor(Theme.Text.primary)
+                
+                Spacer()
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -298,5 +454,36 @@ struct DeviceListView: View {
 #Preview {
     NavigationStack {
         DeviceListView(viewModel: PreviewData.homeKitViewModel)
+    }
+}
+
+struct FilterDropdown<Label: View, Content: View>: View {
+    let label: () -> Label
+    let content: () -> Content
+    
+    @State private var isPresented = false
+    
+    init(@ViewBuilder label: @escaping () -> Label, @ViewBuilder content: @escaping () -> Content) {
+        self.label = label
+        self.content = content
+    }
+    
+    var body: some View {
+        Button {
+            isPresented.toggle()
+        } label: {
+            label()
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 0) {
+                content()
+            }
+            // Removed default padding to allow rows to touch edges
+             // .padding(.vertical, 8) 
+            .background(Theme.contentBackground)
+            // Ensure a minimum width for usability, but allow it to grow
+            .frame(minWidth: 200) 
+        }
     }
 }

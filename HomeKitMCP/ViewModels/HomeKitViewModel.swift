@@ -235,6 +235,27 @@ class HomeKitViewModel: ObservableObject {
         }
     }
 
+    func setBulkConfig(externalAccessEnabled: Bool? = nil, webhookEnabled: Bool? = nil) {
+        let devices = filteredDevicesByRoom.flatMap(\.devices)
+        Task {
+            for device in devices {
+                let services = device.services.map { service in
+                    (serviceId: service.id, characteristicIds: service.characteristics.map(\.id))
+                }
+                await configService.setAllForDevice(
+                    deviceId: device.id,
+                    services: services,
+                    externalAccessEnabled: externalAccessEnabled,
+                    webhookEnabled: webhookEnabled
+                )
+            }
+            await refreshConfigCache()
+            await MainActor.run {
+                objectWillChange.send()
+            }
+        }
+    }
+
     func resetConfiguration() {
         Task {
             await configService.resetAll()
@@ -252,6 +273,14 @@ class HomeKitViewModel: ObservableObject {
             }
         }
         return nil
+    }
+
+    func isExternalAccessEnabled(for device: DeviceModel) -> Bool {
+        deviceConfigCache[device.id]?.externalAccessEnabled ?? true
+    }
+
+    func isWebhookEnabled(for device: DeviceModel) -> Bool {
+        deviceConfigCache[device.id]?.webhookEnabled ?? false
     }
 
     private func updateErrorForStatus(_ status: HMHomeManagerAuthorizationStatus) {

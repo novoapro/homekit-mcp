@@ -20,19 +20,11 @@ struct DeviceRow: View {
     ]
 
     private var deviceExternalAccessEnabled: Bool {
-        let allKeys = device.services.flatMap { service in
-            service.characteristics.map { configKey(deviceId: device.id, serviceId: service.id, charId: $0.id) }
-        }
-        guard !allKeys.isEmpty else { return true }
-        return allKeys.contains { configs[$0]?.externalAccessEnabled ?? true }
+        viewModel.isExternalAccessEnabled(for: device)
     }
 
     private var deviceWebhookEnabled: Bool {
-        let allKeys = device.services.flatMap { service in
-            service.characteristics.map { configKey(deviceId: device.id, serviceId: service.id, charId: $0.id) }
-        }
-        guard !allKeys.isEmpty else { return false }
-        return allKeys.contains { configs[$0]?.webhookEnabled ?? false }
+        viewModel.isWebhookEnabled(for: device)
     }
     
     // Status color based on reachability and activity
