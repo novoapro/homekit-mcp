@@ -5,6 +5,7 @@ class MCPRequestHandler {
     private let homeKitManager: HomeKitManager
     private let loggingService: LoggingService
     private let configService: DeviceConfigurationService
+    private let storage: StorageService
 
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -12,10 +13,11 @@ class MCPRequestHandler {
         return encoder
     }()
 
-    init(homeKitManager: HomeKitManager, loggingService: LoggingService, configService: DeviceConfigurationService) {
+    init(homeKitManager: HomeKitManager, loggingService: LoggingService, configService: DeviceConfigurationService, storage: StorageService) {
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
         self.configService = configService
+        self.storage = storage
     }
 
     func handle(_ request: JSONRPCRequest) async -> JSONRPCResponse {
@@ -47,7 +49,8 @@ class MCPRequestHandler {
 
         // Single consolidated log entry with both request and response
         let responseSummary = summarizeResponse(response)
-        await logMCPCall(method: request.method, request: requestSummary, response: responseSummary)
+        await logMCPCall(method: request.method, request: requestSummary, response: responseSummary,
+                         fullRequest: request, fullResponse: response)
 
         return response
     }
@@ -598,7 +601,20 @@ class MCPRequestHandler {
 
     // MARK: - MCP Logging Helpers
 
-    private func logMCPCall(method: String, request: String, response: String) async {
+    private func logMCPCall(method: String, request: String, response: String,
+                            fullRequest: JSONRPCRequest? = nil, fullResponse: JSONRPCResponse? = nil) async {
+        var detailedReq: String?
+        var detailedResp: String?
+
+        if storage.readDetailedLogsEnabled() {
+            if let fullRequest, let data = try? Self.encoder.encode(fullRequest) {
+                detailedReq = String(data: data, encoding: .utf8)
+            }
+            if let fullResponse, let data = try? Self.encoder.encode(fullResponse) {
+                detailedResp = String(data: data, encoding: .utf8)
+            }
+        }
+
         let entry = StateChangeLog(
             id: UUID(),
             timestamp: Date(),
@@ -609,7 +625,9 @@ class MCPRequestHandler {
             newValue: nil,
             category: .mcpCall,
             requestBody: request,
-            responseBody: response
+            responseBody: response,
+            detailedRequestBody: detailedReq,
+            detailedResponseBody: detailedResp
         )
         await loggingService.logEntry(entry)
     }

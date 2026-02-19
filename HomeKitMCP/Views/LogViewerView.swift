@@ -43,7 +43,7 @@ struct LogViewerView: View {
                                 .textCase(nil)
                         ) {
                             ForEach(group.logs) { log in
-                                LogRow(log: log)
+                                LogRow(log: log, detailedLogsEnabled: viewModel.detailedLogsEnabled)
                                     .listRowBackground(Theme.contentBackground)
                             }
                         }
@@ -351,6 +351,6 @@ struct LogViewerView: View {
 
 #Preview {
     NavigationStack {
-        LogViewerView(viewModel: LogViewModel(loggingService: LoggingService()))
+        LogViewerView(viewModel: LogViewModel(loggingService: LoggingService(), storage: StorageService()))
     }
 }

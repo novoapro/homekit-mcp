@@ -20,6 +20,8 @@ struct SettingsView: View {
             Section("UI") {
                 Toggle("Hide Room Name in App", isOn: $viewModel.hideRoomNameInTheApp)
             }
+            loggingSection
+                .listRowBackground(Theme.contentBackground)
             webhookSection
                 .listRowBackground(Theme.contentBackground)
             if viewModel.webhookEnabled {
@@ -53,6 +55,16 @@ struct SettingsView: View {
     }
 
     // MARK: - Sections
+
+    private var loggingSection: some View {
+        Section {
+            Toggle("Detailed Logs", isOn: $viewModel.detailedLogsEnabled)
+        } header: {
+            Text("Logging")
+        } footer: {
+            Text("When enabled, full request and response data is captured for MCP, REST, and webhook logs. Tap a log entry to expand details.")
+        }
+    }
 
     private var webhookSection: some View {
         Section {

@@ -6,6 +6,7 @@ enum LogCategory: String, Codable {
     case webhookCall = "webhook_call"
     case serverError = "server_error"
     case mcpCall = "mcp_call"
+    case restCall = "rest_call"
 }
 
 struct StateChangeLog: Identifiable, Codable {
@@ -22,8 +23,10 @@ struct StateChangeLog: Identifiable, Codable {
     var errorDetails: String?
     var requestBody: String?
     var responseBody: String?
+    var detailedRequestBody: String?
+    var detailedResponseBody: String?
 
-    init(id: UUID, timestamp: Date, deviceId: String, deviceName: String, serviceId: String? = nil, serviceName: String? = nil, characteristicType: String, oldValue: AnyCodable?, newValue: AnyCodable?, category: LogCategory = .stateChange, errorDetails: String? = nil, requestBody: String? = nil, responseBody: String? = nil) {
+    init(id: UUID, timestamp: Date, deviceId: String, deviceName: String, serviceId: String? = nil, serviceName: String? = nil, characteristicType: String, oldValue: AnyCodable?, newValue: AnyCodable?, category: LogCategory = .stateChange, errorDetails: String? = nil, requestBody: String? = nil, responseBody: String? = nil, detailedRequestBody: String? = nil, detailedResponseBody: String? = nil) {
         self.id = id
         self.timestamp = timestamp
         self.deviceId = deviceId
@@ -37,6 +40,8 @@ struct StateChangeLog: Identifiable, Codable {
         self.errorDetails = errorDetails
         self.requestBody = requestBody
         self.responseBody = responseBody
+        self.detailedRequestBody = detailedRequestBody
+        self.detailedResponseBody = detailedResponseBody
     }
 }
 
