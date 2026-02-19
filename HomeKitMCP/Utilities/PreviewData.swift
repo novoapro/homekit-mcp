@@ -90,6 +90,46 @@ enum PreviewData {
             characteristicType: "00000025-0000-1000-8000-0026BB765291",
             oldValue: nil,
             newValue: AnyCodable(true)
+        ),
+        StateChangeLog(
+            id: UUID(),
+            timestamp: Date().addingTimeInterval(-1800),
+            deviceId: "mcp",
+            deviceName: "MCP Server",
+            characteristicType: "tools/call",
+            oldValue: nil,
+            newValue: nil,
+            category: .mcpCall,
+            requestBody: "method: tools/call | tool: control_device | args: {device_id=device-1, value=true}",
+            responseBody: "isError: false | Successfully set Power to true on device device-1",
+            detailedRequestBody: "{\"method\":\"tools/call\",\"params\":{\"name\":\"control_device\",\"arguments\":{\"device_id\":\"device-1\",\"value\":true}}}",
+            detailedResponseBody: "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Successfully set Power to true\"}],\"isError\":false}}"
+        ),
+        StateChangeLog(
+            id: UUID(),
+            timestamp: Date().addingTimeInterval(-900),
+            deviceId: "rest",
+            deviceName: "REST API",
+            characteristicType: "GET /devices",
+            oldValue: nil,
+            newValue: nil,
+            category: .restCall,
+            requestBody: "GET /devices",
+            responseBody: "200 3 devices",
+            detailedResponseBody: "[{\"id\":\"device-1\",\"name\":\"Living Room Light\"}]"
+        ),
+        StateChangeLog(
+            id: UUID(),
+            timestamp: Date().addingTimeInterval(-600),
+            deviceId: "webhook-1",
+            deviceName: "Living Room Light",
+            serviceName: "Lightbulb",
+            characteristicType: "00000025-0000-1000-8000-0026BB765291",
+            oldValue: AnyCodable(false),
+            newValue: AnyCodable(true),
+            category: .webhookCall,
+            requestBody: "POST Living Room Light (Power)",
+            responseBody: "HTTP 200 OK"
         )
     ]
 
@@ -109,7 +149,8 @@ enum PreviewData {
 
     static var logViewModel: LogViewModel {
         let loggingService = LoggingService()
-        let vm = LogViewModel(loggingService: loggingService)
+        let storage = StorageService()
+        let vm = LogViewModel(loggingService: loggingService, storage: storage)
         
         // Manually set published properties for preview
         let calendar = Calendar.current
@@ -145,7 +186,7 @@ enum PreviewData {
         let configService = DeviceConfigurationService()
         let webhookService = WebhookService(storage: storage, loggingService: loggingService)
         let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storage)
-        let mcpServer = MCPServer(homeKitManager: manager, loggingService: loggingService, configService: configService)
+        let mcpServer = MCPServer(homeKitManager: manager, loggingService: loggingService, configService: configService, storage: storage)
         return SettingsViewModel(storage: storage, webhookService: webhookService, mcpServer: mcpServer, configService: configService)
     }
 }

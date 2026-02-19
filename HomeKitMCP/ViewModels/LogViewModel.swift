@@ -8,6 +8,7 @@ enum LogCategoryFilter: String, CaseIterable, Identifiable {
     case webhookCall = "Webhook Call"
     case webhookError = "Webhook Error"
     case mcpCall = "MCP Call"
+    case restCall = "REST Call"
     case serverError = "Server Error"
 
     var id: String { rawValue }
@@ -20,6 +21,7 @@ enum LogCategoryFilter: String, CaseIterable, Identifiable {
         case .webhookCall: return [.webhookCall]
         case .webhookError: return [.webhookError]
         case .mcpCall: return [.mcpCall]
+        case .restCall: return [.restCall]
         case .serverError: return [.serverError]
         }
     }
@@ -31,6 +33,7 @@ enum LogCategoryFilter: String, CaseIterable, Identifiable {
         case .webhookCall: return "paperplane.circle.fill"
         case .webhookError: return "exclamationmark.triangle.fill"
         case .mcpCall: return "arrow.left.arrow.right.circle.fill"
+        case .restCall: return "globe"
         case .serverError: return "xmark.octagon.fill"
         }
     }
@@ -87,11 +90,17 @@ class LogViewModel: ObservableObject {
     }
 
     private let loggingService: LoggingService
+    private let storage: StorageService
     private var cancellables = Set<AnyCancellable>()
     private var filterTask: Task<Void, Never>?
 
-    init(loggingService: LoggingService) {
+    var detailedLogsEnabled: Bool {
+        storage.readDetailedLogsEnabled()
+    }
+
+    init(loggingService: LoggingService, storage: StorageService) {
         self.loggingService = loggingService
+        self.storage = storage
 
         // Listen to service updates
         loggingService.logsSubject

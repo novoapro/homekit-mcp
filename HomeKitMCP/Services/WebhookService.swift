@@ -81,7 +81,6 @@ actor WebhookService {
 
             statusSubject.send(.lastSuccess(date: Date()))
 
-            // Log successful webhook call
             let logEntry = StateChangeLog(
                 id: UUID(),
                 timestamp: Date(),
@@ -93,8 +92,10 @@ actor WebhookService {
                 oldValue: payload.oldValue,
                 newValue: payload.newValue,
                 category: .webhookCall,
-                requestBody: "POST \(url.absoluteString)",
-                responseBody: "HTTP 2xx OK"
+                requestBody: "POST \(deviceName) (\(payload.characteristicName))",
+                responseBody: "HTTP \(httpResponse.statusCode) OK",
+                detailedRequestBody: detailedPayloadJSON(payload),
+                detailedResponseBody: detailedString("HTTP \(httpResponse.statusCode) to \(url.absoluteString)")
             )
             await loggingService.logEntry(logEntry)
         } catch {
@@ -117,9 +118,11 @@ actor WebhookService {
                     oldValue: payload.oldValue,
                     newValue: payload.newValue,
                     category: .webhookError,
-                    errorDetails: "Webhook failed after \(maxRetries) retries to \(url.absoluteString): \(errorDesc)",
-                    requestBody: "POST \(url.absoluteString)",
-                    responseBody: errorDesc
+                    errorDetails: "Failed after \(maxRetries) retries: \(errorDesc)",
+                    requestBody: "POST \(deviceName) (\(payload.characteristicName))",
+                    responseBody: errorDesc,
+                    detailedRequestBody: detailedPayloadJSON(payload),
+                    detailedResponseBody: detailedString("POST \(url.absoluteString) — \(errorDesc)")
                 )
                 await loggingService.logEntry(logEntry)
             }
@@ -147,8 +150,10 @@ actor WebhookService {
                     newValue: nil,
                     category: .webhookError,
                     errorDetails: "Test webhook failed: \(errorDesc)",
-                    requestBody: "POST \(url.absoluteString)",
-                    responseBody: errorDesc
+                    requestBody: "POST Test Device (Test)",
+                    responseBody: errorDesc,
+                    detailedRequestBody: detailedPayloadJSON(payload),
+                    detailedResponseBody: detailedString("POST \(url.absoluteString) — \(errorDesc)")
                 )
                 await loggingService.logEntry(logEntry)
 
@@ -166,8 +171,10 @@ actor WebhookService {
                 oldValue: nil,
                 newValue: nil,
                 category: .webhookCall,
-                requestBody: "POST \(url.absoluteString)",
-                responseBody: "HTTP 2xx OK"
+                requestBody: "POST Test Device (Test)",
+                responseBody: "HTTP \(httpResponse.statusCode) OK",
+                detailedRequestBody: detailedPayloadJSON(payload),
+                detailedResponseBody: detailedString("HTTP \(httpResponse.statusCode) to \(url.absoluteString)")
             )
             await loggingService.logEntry(logEntry)
 
@@ -186,13 +193,27 @@ actor WebhookService {
                 newValue: nil,
                 category: .webhookError,
                 errorDetails: "Test webhook failed: \(errorDesc)",
-                requestBody: "POST \(url.absoluteString)",
-                responseBody: errorDesc
+                requestBody: "POST Test Device (Test)",
+                responseBody: errorDesc,
+                detailedRequestBody: detailedPayloadJSON(payload),
+                detailedResponseBody: detailedString("POST \(url.absoluteString) — \(errorDesc)")
             )
             await loggingService.logEntry(logEntry)
 
             return false
         }
+    }
+
+    /// Returns JSON-encoded payload string only when detailed logs are enabled.
+    private func detailedPayloadJSON(_ payload: WebhookPayload) -> String? {
+        guard storage.readDetailedLogsEnabled(),
+              let data = try? Self.encoder.encode(payload) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Returns the string only when detailed logs are enabled.
+    private func detailedString(_ value: String) -> String? {
+        storage.readDetailedLogsEnabled() ? value : nil
     }
 
     private func performRequest(url: URL, payload: WebhookPayload) async throws -> (Data, URLResponse) {

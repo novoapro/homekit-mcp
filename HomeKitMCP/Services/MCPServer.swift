@@ -11,6 +11,7 @@ class MCPServer: ObservableObject {
     private var app: Application?
     private let homeKitManager: HomeKitManager
     private let loggingService: LoggingService
+    private let storage: StorageService
     private let port: Int
     private let handler: MCPRequestHandler
     private let connectionTracker = ConnectionTracker()
@@ -27,11 +28,12 @@ class MCPServer: ObservableObject {
         return decoder
     }()
 
-    init(homeKitManager: HomeKitManager, loggingService: LoggingService, configService: DeviceConfigurationService, port: Int = 3000) {
+    init(homeKitManager: HomeKitManager, loggingService: LoggingService, configService: DeviceConfigurationService, storage: StorageService, port: Int = 3000) {
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
+        self.storage = storage
         self.port = port
-        self.handler = MCPRequestHandler(homeKitManager: homeKitManager, loggingService: loggingService, configService: configService)
+        self.handler = MCPRequestHandler(homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, storage: storage)
     }
 
     func start() throws {
@@ -156,32 +158,43 @@ class MCPServer: ObservableObject {
         let allDevices = await MainActor.run { homeKitManager.getAllDevices() }
         let filteredDevices = await handler.filterDevicesByConfig(allDevices)
         let restDevices = filteredDevices.map { RESTDevice.from($0) }
-        
+
         let data = try Self.encoder.encode(restDevices)
+        logRESTCall(method: "GET", path: "/devices", statusCode: 200,
+                    resultSummary: "\(restDevices.count) devices",
+                    fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
+
         var headers = HTTPHeaders()
         headers.add(name: .contentType, value: "application/json")
         return Response(status: .ok, headers: headers, body: .init(data: data))
     }
-    
+
     private func handleRestGetDevice(_ req: Request) async throws -> Response {
         guard let deviceId = req.parameters.get("deviceId") else {
+            logRESTCall(method: "GET", path: "/devices/:id", statusCode: 400, resultSummary: "Bad Request")
             throw Abort(.badRequest)
         }
-        
+
         let device = await MainActor.run { homeKitManager.getDeviceState(id: deviceId) }
-        
+
         guard let device else {
+            logRESTCall(method: "GET", path: "/devices/\(deviceId)", statusCode: 404, resultSummary: "Not Found")
             throw Abort(.notFound, reason: "Device not found")
         }
-        
+
         let filtered = await handler.filterDevicesByConfig([device])
-        
+
         guard let filteredDevice = filtered.first else {
-             throw Abort(.notFound, reason: "Device not found or not exposed")
+            logRESTCall(method: "GET", path: "/devices/\(deviceId)", statusCode: 404, resultSummary: "Not Exposed")
+            throw Abort(.notFound, reason: "Device not found or not exposed")
         }
-        
+
         let restDevice = RESTDevice.from(filteredDevice)
         let data = try Self.encoder.encode(restDevice)
+        logRESTCall(method: "GET", path: "/devices/\(deviceId)", statusCode: 200,
+                    resultSummary: restDevice.name,
+                    fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
+
         var headers = HTTPHeaders()
         headers.add(name: .contentType, value: "application/json")
         return Response(status: .ok, headers: headers, body: .init(data: data))
@@ -397,6 +410,26 @@ class MCPServer: ObservableObject {
             await MainActor.run { [weak self] in
                 self?.connectedClients = count
             }
+        }
+    }
+
+    private func logRESTCall(method: String, path: String, statusCode: UInt,
+                             resultSummary: String, fullResponseBody: String? = nil) {
+        Task {
+            let entry = StateChangeLog(
+                id: UUID(),
+                timestamp: Date(),
+                deviceId: "rest",
+                deviceName: "REST API",
+                characteristicType: "\(method) \(path)",
+                oldValue: nil,
+                newValue: nil,
+                category: .restCall,
+                requestBody: "\(method) \(path)",
+                responseBody: "\(statusCode) \(resultSummary)",
+                detailedResponseBody: fullResponseBody
+            )
+            await loggingService.logEntry(entry)
         }
     }
 

@@ -18,6 +18,11 @@ class SettingsViewModel: ObservableObject {
             storage.hideRoomNameInTheApp = hideRoomNameInTheApp
         }
     }
+    @Published var detailedLogsEnabled: Bool {
+        didSet {
+            storage.detailedLogsEnabled = detailedLogsEnabled
+        }
+    }
 
     let storage: StorageService
     private let webhookService: WebhookService
@@ -32,6 +37,7 @@ class SettingsViewModel: ObservableObject {
         self.configService = configService
         self.webhookEnabled = storage.webhookEnabled
         self.hideRoomNameInTheApp = storage.hideRoomNameInTheApp
+        self.detailedLogsEnabled = storage.detailedLogsEnabled
 
         webhookService.statusSubject
             .receive(on: DispatchQueue.main)

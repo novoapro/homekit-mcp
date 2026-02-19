@@ -7,9 +7,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let configService = DeviceConfigurationService()
     lazy var webhookService = WebhookService(storage: storageService, loggingService: loggingService)
     lazy var homeKitManager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storageService)
-    lazy var mcpServer = MCPServer(homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, port: storageService.mcpServerPort)
+    lazy var mcpServer = MCPServer(homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, storage: storageService, port: storageService.mcpServerPort)
     lazy var homeKitViewModel = HomeKitViewModel(homeKitManager: homeKitManager, configService: configService)
-    lazy var logViewModel = LogViewModel(loggingService: loggingService)
+    lazy var logViewModel = LogViewModel(loggingService: loggingService, storage: storageService)
     lazy var settingsViewModel = SettingsViewModel(storage: storageService, webhookService: webhookService, mcpServer: mcpServer, configService: configService)
 
     private var cancellables = Set<AnyCancellable>()

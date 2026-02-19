@@ -19,6 +19,9 @@ class StorageService: ObservableObject {
     @Published var hideRoomNameInTheApp: Bool {
         didSet { defaults.set(hideRoomNameInTheApp, forKey: Keys.hideRoomNameInTheApp) }
     }
+    @Published var detailedLogsEnabled: Bool {
+        didSet { defaults.set(detailedLogsEnabled, forKey: Keys.detailedLogsEnabled) }
+    }
 
     init() {
         // Register defaults for keys that need non-nil/non-zero initial values
@@ -26,7 +29,8 @@ class StorageService: ObservableObject {
             Keys.mcpServerPort: 3000,
             Keys.webhookEnabled: true,
             Keys.mcpServerEnabled: true,
-            Keys.hideRoomNameInTheApp: true
+            Keys.hideRoomNameInTheApp: true,
+            Keys.detailedLogsEnabled: false
         ])
 
         self.webhookURL = defaults.string(forKey: Keys.webhookURL)
@@ -34,6 +38,7 @@ class StorageService: ObservableObject {
         self.webhookEnabled = defaults.bool(forKey: Keys.webhookEnabled)
         self.mcpServerEnabled = defaults.bool(forKey: Keys.mcpServerEnabled)
         self.hideRoomNameInTheApp = defaults.bool(forKey: Keys.hideRoomNameInTheApp)
+        self.detailedLogsEnabled = defaults.bool(forKey: Keys.detailedLogsEnabled)
     }
 
     func isWebhookConfigured() -> Bool {
@@ -58,11 +63,16 @@ class StorageService: ObservableObject {
         UserDefaults.standard.bool(forKey: Keys.webhookEnabled)
     }
 
+    nonisolated func readDetailedLogsEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.detailedLogsEnabled)
+    }
+
     private enum Keys {
         static let webhookURL = "webhookURL"
         static let mcpServerPort = "mcpServerPort"
         static let webhookEnabled = "webhookEnabled"
         static let mcpServerEnabled = "mcpServerEnabled"
         static let hideRoomNameInTheApp = "hideRoomNameInTheApp"
+        static let detailedLogsEnabled = "detailedLogsEnabled"
     }
 }
