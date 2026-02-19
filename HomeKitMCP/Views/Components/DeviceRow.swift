@@ -3,7 +3,6 @@ import SwiftUI
 struct DeviceRow: View {
     let device: DeviceModel
     @ObservedObject var viewModel: HomeKitViewModel
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var isExpanded = false
     @State private var configs: [String: CharacteristicConfiguration] = [:]
 
@@ -25,11 +24,6 @@ struct DeviceRow: View {
 
     private var deviceWebhookEnabled: Bool {
         viewModel.isWebhookEnabled(for: device)
-    }
-    
-    // Status color based on reachability and activity
-    private var statusColor: Color {
-        device.isReachable ? Theme.Status.active : Theme.Status.error
     }
     
     // Dynamic icon background color
@@ -266,14 +260,17 @@ struct DeviceRow: View {
         }
     }
 
+    /// Loads configs for this device in a single batch actor call.
     private func loadConfigs() async {
+        let allConfigs = await viewModel.getAllConfigs()
+        var deviceConfigs: [String: CharacteristicConfiguration] = [:]
         for service in device.services {
             for char in service.characteristics {
                 let key = configKey(deviceId: device.id, serviceId: service.id, charId: char.id)
-                let config = await viewModel.getConfig(deviceId: device.id, serviceId: service.id, characteristicId: char.id)
-                configs[key] = config
+                deviceConfigs[key] = allConfigs[key] ?? .default
             }
         }
+        configs = deviceConfigs
     }
 
     private func shouldDisplay(_ char: CharacteristicModel) -> Bool {
@@ -341,41 +338,6 @@ struct DeviceRow: View {
 }
 
 // MARK: - Helper Views
-
-struct ControlToggle: View {
-    let title: String
-    let icon: String
-    @Binding var isOn: Bool
-    
-    var body: some View {
-        Button(action: { isOn.toggle() }) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.subheadline)
-                Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(Theme.Text.primary)
-                Spacer()
-                if isOn {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Theme.Tint.main)
-                } else {
-                    Image(systemName: "circle")
-                        .foregroundColor(Theme.Text.secondary)
-                }
-            }
-            .padding(12)
-            .background(Theme.detailBackground.opacity(0.3))
-            .cornerRadius(Theme.CornerRadius.small)
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.CornerRadius.small)
-                    .stroke(isOn ? Theme.Tint.main.opacity(0.3) : Color.clear, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
 
 struct MiniToggle: View {
     @Binding var isOn: Bool

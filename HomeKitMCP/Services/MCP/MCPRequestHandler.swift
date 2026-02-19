@@ -54,17 +54,17 @@ class MCPRequestHandler {
 
     // MARK: - MCP Filtering
     
+    /// Filters devices to only include characteristics with external access enabled.
+    /// Uses a single actor call to fetch all configs at once instead of N individual calls.
     func filterDevicesByConfig(_ devices: [DeviceModel]) async -> [DeviceModel] {
+        let allConfigs = await configService.getAllConfigs()
         var result: [DeviceModel] = []
         for device in devices {
             var filteredServices: [ServiceModel] = []
             for service in device.services {
-                let filteredChars = await service.characteristics.asyncFilter { char in
-                    await configService.isExternalAccessEnabled(
-                        deviceId: device.id,
-                        serviceId: service.id,
-                        characteristicId: char.id
-                    )
+                let filteredChars = service.characteristics.filter { char in
+                    let key = "\(device.id):\(service.id):\(char.id)"
+                    return (allConfigs[key] ?? .default).externalAccessEnabled
                 }
                 if !filteredChars.isEmpty {
                     filteredServices.append(ServiceModel(
@@ -100,7 +100,7 @@ class MCPRequestHandler {
         if let clientInfo {
             let clientName = clientInfo["name"] as? String ?? "unknown"
             let clientVer = clientInfo["version"] as? String ?? "unknown"
-            print("MCP client connected: \(clientName) v\(clientVer), requested protocol: \(clientVersion ?? "none")")
+            AppLogger.server.info("MCP client connected: \(clientName) v\(clientVer), requested protocol: \(clientVersion ?? "none")")
         }
 
         // Negotiate protocol version: pick the client's version if we support it,
@@ -388,24 +388,9 @@ class MCPRequestHandler {
             if let serviceId {
                 message += " (service: \(serviceId))"
             }
-
-            let content: [[String: Any]] = [
-                [
-                    "type": "text",
-                    "text": message
-                ]
-            ]
-            let result: [String: Any] = ["content": content, "isError": false]
-            return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+            return toolResult(text: message, id: id)
         } catch {
-            let content: [[String: Any]] = [
-                [
-                    "type": "text",
-                    "text": "Failed to control device: \(error.localizedDescription)"
-                ]
-            ]
-            let result: [String: Any] = ["content": content, "isError": true]
-            return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+            return toolResult(text: "Failed to control device: \(error.localizedDescription)", isError: true, id: id)
         }
     }
 
@@ -440,9 +425,7 @@ class MCPRequestHandler {
             lines.append("No HomeKit devices found.")
         }
 
-        let content: [[String: Any]] = [["type": "text", "text": lines.joined(separator: "\n")]]
-        let result: [String: Any] = ["content": content, "isError": false]
-        return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+        return toolResult(text: lines.joined(separator: "\n"), id: id)
     }
 
     private func handleListRooms(id: JSONRPCId?) async -> JSONRPCResponse {
@@ -457,9 +440,7 @@ class MCPRequestHandler {
             lines.append("No rooms found.")
         }
 
-        let content: [[String: Any]] = [["type": "text", "text": lines.joined(separator: "\n")]]
-        let result: [String: Any] = ["content": content, "isError": false]
-        return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+        return toolResult(text: lines.joined(separator: "\n"), id: id)
     }
 
     private func handleGetRoomDevices(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
@@ -474,23 +455,11 @@ class MCPRequestHandler {
         let groups = await MainActor.run { homeKitManager.getDevicesGroupedByRoom() }
 
         guard let group = groups.first(where: { $0.roomName.localizedCaseInsensitiveCompare(roomName) == .orderedSame }) else {
-            let content: [[String: Any]] = [["type": "text", "text": "Room not found: \(roomName). Use list_rooms to see available rooms."]]
-            let result: [String: Any] = ["content": content, "isError": true]
-            return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+            return toolResult(text: "Room not found: \(roomName). Use list_rooms to see available rooms.", isError: true, id: id)
         }
 
         let filteredDevices = await filterDevicesByConfig(group.devices)
-
-        guard let jsonData = try? Self.encoder.encode(filteredDevices),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
-            let content: [[String: Any]] = [["type": "text", "text": "Failed to encode device data"]]
-            let result: [String: Any] = ["content": content, "isError": true]
-            return JSONRPCResponse.success(id: id, result: AnyCodable(result))
-        }
-
-        let content: [[String: Any]] = [["type": "text", "text": jsonString]]
-        let result: [String: Any] = ["content": content, "isError": false]
-        return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+        return toolResult(encoding: filteredDevices, id: id)
     }
 
     private func handleGetDevicesInRooms(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
@@ -519,20 +488,15 @@ class MCPRequestHandler {
 
         guard let jsonData = try? Self.encoder.encode(restDevices),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
-            let content: [[String: Any]] = [["type": "text", "text": "Failed to encode device data"]]
-            let result: [String: Any] = ["content": content, "isError": true]
-            return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+            return toolResult(text: "Failed to encode device data", isError: true, id: id)
         }
 
         var responseText = jsonString
         if !missingRooms.isEmpty {
-            let missingMsg = "\n\nNote: The following rooms were not found: \(missingRooms.joined(separator: ", "))"
-            responseText += missingMsg
+            responseText += "\n\nNote: The following rooms were not found: \(missingRooms.joined(separator: ", "))"
         }
 
-        let content: [[String: Any]] = [["type": "text", "text": responseText]]
-        let result: [String: Any] = ["content": content, "isError": false]
-        return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+        return toolResult(text: responseText, id: id)
     }
 
     private func handleGetDevicesByType(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
@@ -558,17 +522,7 @@ class MCPRequestHandler {
 
         let filteredDevices = await filterDevicesByConfig(matchingDevices)
         let restDevices = filteredDevices.map { RESTDevice.from($0) }
-
-        guard let jsonData = try? Self.encoder.encode(restDevices),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
-            let content: [[String: Any]] = [["type": "text", "text": "Failed to encode device data"]]
-            let result: [String: Any] = ["content": content, "isError": true]
-            return JSONRPCResponse.success(id: id, result: AnyCodable(result))
-        }
-
-        let content: [[String: Any]] = [["type": "text", "text": jsonString]]
-        let result: [String: Any] = ["content": content, "isError": false]
-        return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+        return toolResult(encoding: restDevices, id: id)
     }
 
     private func handleGetLogs(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
@@ -598,9 +552,7 @@ class MCPRequestHandler {
             lines.append("No logs found.")
         }
 
-        let content: [[String: Any]] = [["type": "text", "text": lines.joined(separator: "\n")]]
-        let result: [String: Any] = ["content": content, "isError": false]
-        return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+        return toolResult(text: lines.joined(separator: "\n"), id: id)
     }
 
     private func handleGetDevice(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
@@ -615,50 +567,33 @@ class MCPRequestHandler {
         let device = await MainActor.run { homeKitManager.getDeviceState(id: deviceId) }
 
         guard let device else {
-            let content: [[String: Any]] = [
-                [
-                    "type": "text",
-                    "text": "Device not found: \(deviceId)"
-                ]
-            ]
-            let result: [String: Any] = ["content": content, "isError": true]
-            return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+            return toolResult(text: "Device not found: \(deviceId)", isError: true, id: id)
         }
 
         let filtered = await filterDevicesByConfig([device])
 
         guard let filteredDevice = filtered.first else {
-            let content: [[String: Any]] = [
-                [
-                    "type": "text",
-                    "text": "Device not found: \(deviceId)"
-                ]
-            ]
-            let result: [String: Any] = ["content": content, "isError": true]
-            return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+            return toolResult(text: "Device not found: \(deviceId)", isError: true, id: id)
         }
 
         let restDevice = RESTDevice.from(filteredDevice)
-        guard let jsonData = try? Self.encoder.encode(restDevice),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
-            let content: [[String: Any]] = [
-                [
-                    "type": "text",
-                    "text": "Failed to encode device data"
-                ]
-            ]
-            let result: [String: Any] = ["content": content, "isError": true]
-            return JSONRPCResponse.success(id: id, result: AnyCodable(result))
-        }
+        return toolResult(encoding: restDevice, id: id)
+    }
 
-        let content: [[String: Any]] = [
-            [
-                "type": "text",
-                "text": jsonString
-            ]
-        ]
-        let result: [String: Any] = ["content": content, "isError": false]
+    // MARK: - Tool Result Builders
+
+    private func toolResult(text: String, isError: Bool = false, id: JSONRPCId?) -> JSONRPCResponse {
+        let content: [[String: Any]] = [["type": "text", "text": text]]
+        let result: [String: Any] = ["content": content, "isError": isError]
         return JSONRPCResponse.success(id: id, result: AnyCodable(result))
+    }
+
+    private func toolResult<T: Encodable>(encoding value: T, isError: Bool = false, id: JSONRPCId?) -> JSONRPCResponse {
+        guard let jsonData = try? Self.encoder.encode(value),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            return toolResult(text: "Failed to encode response data", isError: true, id: id)
+        }
+        return toolResult(text: jsonString, isError: isError, id: id)
     }
 
     // MARK: - MCP Logging Helpers
@@ -727,16 +662,3 @@ class MCPRequestHandler {
     }
 }
 
-// MARK: - Async Array Filter
-
-private extension Array {
-    func asyncFilter(_ isIncluded: (Element) async -> Bool) async -> [Element] {
-        var result: [Element] = []
-        for element in self {
-            if await isIncluded(element) {
-                result.append(element)
-            }
-        }
-        return result
-    }
-}

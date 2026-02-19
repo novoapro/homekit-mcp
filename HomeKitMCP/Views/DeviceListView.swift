@@ -265,10 +265,10 @@ struct DeviceListView: View {
                 menuRow(title: "All Rooms", isSelected: viewModel.selectedRooms.isEmpty) {
                     withAnimation { viewModel.selectedRooms.removeAll() }
                 }
-                
+
                 Divider()
                     .padding(.vertical, 4)
-                
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(viewModel.availableRooms, id: \.self) { room in
@@ -322,10 +322,10 @@ struct DeviceListView: View {
                 menuRow(title: "All Types", isSelected: viewModel.selectedServiceTypes.isEmpty) {
                     withAnimation { viewModel.selectedServiceTypes.removeAll() }
                 }
-                
+
                 Divider()
                     .padding(.vertical, 4)
-                
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(viewModel.availableServiceTypes, id: \.self) { serviceType in

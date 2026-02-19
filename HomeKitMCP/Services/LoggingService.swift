@@ -93,7 +93,7 @@ actor LoggingService {
             let data = try Self.encoder.encode(logs)
             try data.write(to: fileURL, options: .atomic)
         } catch {
-            print("Failed to save logs: \(error)")
+            AppLogger.general.error("Failed to save logs: \(error)")
         }
     }
 }

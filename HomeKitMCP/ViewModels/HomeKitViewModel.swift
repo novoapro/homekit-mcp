@@ -40,18 +40,8 @@ class HomeKitViewModel: ObservableObject {
         devicesByRoom.reduce(0) { $0 + $1.devices.count }
     }
 
-    var availableRooms: [String] {
-        devicesByRoom.map(\.roomName).sorted()
-    }
-
-    var availableServiceTypes: [String] {
-        let allTypes = devicesByRoom.flatMap { group in
-            group.devices.flatMap { device in
-                device.services.map { ServiceTypes.displayName(for: $0.type) }
-            }
-        }
-        return Array(Set(allTypes)).sorted()
-    }
+    @Published private(set) var availableRooms: [String] = []
+    @Published private(set) var availableServiceTypes: [String] = []
 
     var hasActiveFilters: Bool {
         !selectedRooms.isEmpty || !selectedServiceTypes.isEmpty || mcpFilter != .all || webhookFilter != .all
@@ -157,6 +147,16 @@ class HomeKitViewModel: ObservableObject {
     func refresh() {
         devicesByRoom = homeKitManager.getDevicesGroupedByRoom()
         isLoading = false
+
+        // Update cached filter options
+        availableRooms = devicesByRoom.map(\.roomName).sorted()
+        let allTypes = devicesByRoom.flatMap { group in
+            group.devices.flatMap { device in
+                device.services.map { ServiceTypes.displayName(for: $0.type) }
+            }
+        }
+        availableServiceTypes = Array(Set(allTypes)).sorted()
+
         Task { await refreshConfigCache() }
     }
 
@@ -178,7 +178,9 @@ class HomeKitViewModel: ObservableObject {
     }
 
     /// Builds a device-level config cache from the per-characteristic configs.
+    /// Uses a single actor call to fetch all configs at once instead of N individual calls.
     private func refreshConfigCache() async {
+        let allConfigs = await configService.getAllConfigs()
         var cache: [String: (externalAccessEnabled: Bool, webhookEnabled: Bool)] = [:]
 
         for group in devicesByRoom {
@@ -188,11 +190,8 @@ class HomeKitViewModel: ObservableObject {
 
                 for service in device.services {
                     for char in service.characteristics {
-                        let config = await configService.getConfig(
-                            deviceId: device.id,
-                            serviceId: service.id,
-                            characteristicId: char.id
-                        )
+                        let key = "\(device.id):\(service.id):\(char.id)"
+                        let config = allConfigs[key] ?? .default
                         if config.externalAccessEnabled { anyExternal = true }
                         if config.webhookEnabled { anyWebhook = true }
                     }
@@ -208,8 +207,9 @@ class HomeKitViewModel: ObservableObject {
         }
     }
 
-    func getConfig(deviceId: String, serviceId: String, characteristicId: String) async -> CharacteristicConfiguration {
-        await configService.getConfig(deviceId: deviceId, serviceId: serviceId, characteristicId: characteristicId)
+    /// Returns all configs in a single batch actor call. Used by DeviceRow to preload configs.
+    func getAllConfigs() async -> [String: CharacteristicConfiguration] {
+        await configService.getAllConfigs()
     }
 
     func setConfig(deviceId: String, serviceId: String, characteristicId: String, config: CharacteristicConfiguration) {

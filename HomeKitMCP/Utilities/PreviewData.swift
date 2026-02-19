@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 enum PreviewData {
     // MARK: - Devices
 

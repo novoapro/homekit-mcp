@@ -2,8 +2,6 @@ import SwiftUI
 
 struct LogRow: View {
     let log: StateChangeLog
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @EnvironmentObject var homeKitViewModel: HomeKitViewModel
 
     private var isError: Bool {
         log.category == .webhookError || log.category == .serverError

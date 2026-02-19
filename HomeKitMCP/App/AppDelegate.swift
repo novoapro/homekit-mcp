@@ -74,9 +74,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         guard storageService.mcpServerEnabled else { return }
         do {
             try mcpServer.start()
-            print("MCP Server started on port \(storageService.mcpServerPort)")
+            AppLogger.server.info("MCP Server started on port \(self.storageService.mcpServerPort)")
         } catch {
-            print("Failed to start MCP Server: \(error)")
+            AppLogger.server.error("Failed to start MCP Server: \(error)")
         }
     }
 

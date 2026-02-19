@@ -3,7 +3,7 @@ import Vapor
 import NIOCore
 import Combine
 
-class MCPServer: ObservableObject, @unchecked Sendable {
+class MCPServer: ObservableObject {
     @Published var isRunning = false
     @Published var connectedClients = 0
     @Published var lastError: String?
@@ -13,12 +13,7 @@ class MCPServer: ObservableObject, @unchecked Sendable {
     private let loggingService: LoggingService
     private let port: Int
     private let handler: MCPRequestHandler
-
-    /// Active SSE connections for the legacy transport.
-    private var sseConnections: [UUID: SSEConnection] = [:]
-    /// Active Streamable HTTP sessions (keyed by Mcp-Session-Id).
-    private var activeSessions: Set<String> = []
-    private let lock = NSLock()
+    private let connectionTracker = ConnectionTracker()
 
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -63,7 +58,7 @@ class MCPServer: ObservableObject, @unchecked Sendable {
                     try await app.startup()
                 } catch {
                     let message = "MCP Server failed to start on port \(self.port): \(error.localizedDescription)"
-                    print(message)
+                    AppLogger.server.error("\(message)")
                     self.logServerError(message)
                     await MainActor.run {
                         self.isRunning = false
@@ -72,7 +67,7 @@ class MCPServer: ObservableObject, @unchecked Sendable {
                 }
             } catch {
                 let message = "MCP Server failed to initialize Application: \(error.localizedDescription)"
-                print(message)
+                AppLogger.server.error("\(message)")
                 self.logServerError(message)
                 await MainActor.run {
                     self.isRunning = false
@@ -103,10 +98,7 @@ class MCPServer: ObservableObject, @unchecked Sendable {
     }
 
     private func stopSync() {
-        lock.withLock {
-            sseConnections.removeAll()
-            activeSessions.removeAll()
-        }
+        Task { await connectionTracker.removeAll() }
         app?.shutdown()
         app = nil
     }
@@ -127,7 +119,7 @@ class MCPServer: ObservableObject, @unchecked Sendable {
 
         app.on(.DELETE, "mcp") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
-            return self.handleStreamableDelete(req)
+            return await self.handleStreamableDelete(req)
         }
 
         // Legacy SSE transport (2024-11-05): separate /sse and /messages endpoints
@@ -230,13 +222,12 @@ class MCPServer: ObservableObject, @unchecked Sendable {
         // Session validation: non-initialize requests must carry a valid Mcp-Session-Id.
         if !isInitialize {
             if let sessionId = req.headers.first(name: "Mcp-Session-Id") {
-                let valid = lock.withLock { activeSessions.contains(sessionId) }
+                let valid = await connectionTracker.hasSession(sessionId)
                 if !valid {
                     return Response(status: .notFound)
                 }
             } else {
-                // If there are active sessions, require the header.
-                let hasSessions = lock.withLock { !activeSessions.isEmpty }
+                let hasSessions = await connectionTracker.hasAnySessions()
                 if hasSessions {
                     return Response(status: .badRequest)
                 }
@@ -263,7 +254,7 @@ class MCPServer: ObservableObject, @unchecked Sendable {
             // If this was an initialize request, create a new session
             if request.method == "initialize" {
                 let newSessionId = UUID().uuidString
-                lock.withLock { _ = activeSessions.insert(newSessionId) }
+                await connectionTracker.addSession(newSessionId)
                 sessionIdToAttach = newSessionId
             }
         }
@@ -290,12 +281,12 @@ class MCPServer: ObservableObject, @unchecked Sendable {
         return Response(status: .methodNotAllowed)
     }
 
-    private func handleStreamableDelete(_ req: Request) -> Response {
+    private func handleStreamableDelete(_ req: Request) async -> Response {
         guard let sessionId = req.headers.first(name: "Mcp-Session-Id") else {
             return Response(status: .badRequest)
         }
 
-        let removed = lock.withLock { activeSessions.remove(sessionId) != nil }
+        let removed = await connectionTracker.removeSession(sessionId)
         return removed ? Response(status: .ok) : Response(status: .notFound)
     }
 
@@ -303,10 +294,7 @@ class MCPServer: ObservableObject, @unchecked Sendable {
 
     private func handleLegacySSE(_ req: Request) -> Response {
         let connectionId = UUID()
-        let connection = SSEConnection(id: connectionId)
-
-        lock.withLock { sseConnections[connectionId] = connection }
-        updateClientCount()
+        let tracker = connectionTracker
 
         let host = req.headers.first(name: .host) ?? "127.0.0.1:\(port)"
         let messagesURL = "http://\(host)/messages?sessionId=\(connectionId.uuidString)"
@@ -320,12 +308,13 @@ class MCPServer: ObservableObject, @unchecked Sendable {
             status: .ok,
             headers: headers,
             body: .init(managedAsyncStream: { [weak self] writer in
+                // Register the connection with its writer
+                await tracker.addSSEConnection(id: connectionId, writer: writer)
+                self?.updateClientCount()
+
                 // Send the endpoint event first
                 let endpointEvent = "event: endpoint\ndata: \(messagesURL)\n\n"
                 try await writer.writeBuffer(ByteBuffer(string: endpointEvent))
-
-                // Store writer so message handler can send responses on this stream
-                connection.writer = writer
 
                 // Keep the connection alive with periodic keepalive comments
                 while !Task.isCancelled {
@@ -339,10 +328,8 @@ class MCPServer: ObservableObject, @unchecked Sendable {
                 }
 
                 // Cleanup on disconnect
-                if let self {
-                    self.lock.withLock { _ = self.sseConnections.removeValue(forKey: connectionId) }
-                    self.updateClientCount()
-                }
+                await tracker.removeSSEConnection(id: connectionId)
+                self?.updateClientCount()
             })
         )
 
@@ -355,9 +342,7 @@ class MCPServer: ObservableObject, @unchecked Sendable {
             throw Abort(.badRequest, reason: "Missing or invalid sessionId")
         }
 
-        let connection = lock.withLock { sseConnections[sessionId] }
-
-        guard let connection else {
+        guard let writer = await connectionTracker.getSSEWriter(for: sessionId) else {
             throw Abort(.notFound, reason: "Session not found")
         }
 
@@ -381,12 +366,10 @@ class MCPServer: ObservableObject, @unchecked Sendable {
         let jsonrpcResponse = await handler.handle(jsonrpcRequest)
 
         // Send response on the SSE stream
-        if let writer = connection.writer {
-            let responseData = try Self.encoder.encode(jsonrpcResponse)
-            if let responseString = String(data: responseData, encoding: .utf8) {
-                let sseEvent = "event: message\ndata: \(responseString)\n\n"
-                try? await writer.writeBuffer(ByteBuffer(string: sseEvent))
-            }
+        let responseData = try Self.encoder.encode(jsonrpcResponse)
+        if let responseString = String(data: responseData, encoding: .utf8) {
+            let sseEvent = "event: message\ndata: \(responseString)\n\n"
+            try? await writer.writeBuffer(ByteBuffer(string: sseEvent))
         }
 
         return Response(status: .accepted)
@@ -409,9 +392,11 @@ class MCPServer: ObservableObject, @unchecked Sendable {
     }
 
     private func updateClientCount() {
-        let count = lock.withLock { sseConnections.count }
-        DispatchQueue.main.async { [weak self] in
-            self?.connectedClients = count
+        Task {
+            let count = await connectionTracker.sseConnectionCount
+            await MainActor.run { [weak self] in
+                self?.connectedClients = count
+            }
         }
     }
 
@@ -433,13 +418,50 @@ class MCPServer: ObservableObject, @unchecked Sendable {
     }
 }
 
-// MARK: - SSE Connection
+// MARK: - Connection Tracker
 
-private final class SSEConnection: @unchecked Sendable {
-    let id: UUID
-    var writer: (any AsyncBodyStreamWriter)?
+/// Actor that manages SSE connections and Streamable HTTP sessions,
+/// replacing the previous @unchecked Sendable + NSLock pattern.
+private actor ConnectionTracker {
+    private var sseConnections: [UUID: any AsyncBodyStreamWriter] = [:]
+    private var activeSessions: Set<String> = []
 
-    init(id: UUID) {
-        self.id = id
+    var sseConnectionCount: Int { sseConnections.count }
+
+    // MARK: - SSE Connections
+
+    func addSSEConnection(id: UUID, writer: any AsyncBodyStreamWriter) {
+        sseConnections[id] = writer
+    }
+
+    func removeSSEConnection(id: UUID) {
+        sseConnections.removeValue(forKey: id)
+    }
+
+    func getSSEWriter(for id: UUID) -> (any AsyncBodyStreamWriter)? {
+        sseConnections[id]
+    }
+
+    // MARK: - Streamable HTTP Sessions
+
+    func hasSession(_ sessionId: String) -> Bool {
+        activeSessions.contains(sessionId)
+    }
+
+    func hasAnySessions() -> Bool {
+        !activeSessions.isEmpty
+    }
+
+    func addSession(_ sessionId: String) {
+        activeSessions.insert(sessionId)
+    }
+
+    func removeSession(_ sessionId: String) -> Bool {
+        activeSessions.remove(sessionId) != nil
+    }
+
+    func removeAll() {
+        sseConnections.removeAll()
+        activeSessions.removeAll()
     }
 }

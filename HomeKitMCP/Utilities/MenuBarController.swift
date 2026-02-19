@@ -15,48 +15,48 @@ class MenuBarController {
     }
 
     private func loadPlugin() {
-        print("MenuBarController: Starting plugin load...")
+        AppLogger.menuBar.debug("Starting plugin load...")
         // The plugin bundle is embedded in the app's Resources directory
         guard let bundleURL = Bundle.main.url(forResource: "MenuBarPlugin", withExtension: "bundle") else {
-            print("MenuBarController: Plugin bundle not found in resources")
+            AppLogger.menuBar.error("Plugin bundle not found in resources")
             return
         }
-        print("MenuBarController: Found bundle at \(bundleURL.path)")
+        AppLogger.menuBar.debug("Found bundle at \(bundleURL.path)")
 
         guard let bundle = Bundle(url: bundleURL) else {
-            print("MenuBarController: Could not create bundle from \(bundleURL)")
+            AppLogger.menuBar.error("Could not create bundle from \(bundleURL)")
             return
         }
 
         do {
             try bundle.loadAndReturnError()
-            print("MenuBarController: Bundle loaded successfully")
+            AppLogger.menuBar.debug("Bundle loaded successfully")
         } catch {
-            print("MenuBarController: Failed to load plugin bundle: \(error)")
+            AppLogger.menuBar.error("Failed to load plugin bundle: \(error)")
             return
         }
 
         guard let principalClass = bundle.principalClass as? NSObject.Type else {
-            print("MenuBarController: Could not get principal class from plugin")
+            AppLogger.menuBar.error("Could not get principal class from plugin")
             return
         }
-        print("MenuBarController: Principal class found: \(String(describing: principalClass))")
+        AppLogger.menuBar.debug("Principal class found: \(String(describing: principalClass))")
 
         let instance = principalClass.init()
         self.plugin = instance
-        print("MenuBarController: Plugin instance created")
+        AppLogger.menuBar.debug("Plugin instance created")
 
         // Call setupMenuBar(actionHandler:) via selector to avoid cross-target type dependency
         let selector = NSSelectorFromString("setupMenuBarWithActionHandler:")
         if instance.responds(to: selector) {
-            print("MenuBarController: Configuring menu bar...")
+            AppLogger.menuBar.debug("Configuring menu bar...")
             let handler: @convention(block) (String) -> Void = { [weak self] action in
                 self?.handleAction(action)
             }
             instance.perform(selector, with: handler)
-            print("MenuBarController: Setup call performed")
+            AppLogger.menuBar.debug("Setup call performed")
         } else {
-            print("MenuBarController: Instance does not respond to setup selector")
+            AppLogger.menuBar.warning("Instance does not respond to setup selector")
         }
     }
 
@@ -107,7 +107,7 @@ class MenuBarController {
         if let disconnected = allSessions.first(where: { $0.scene == nil }) {
             UIApplication.shared.requestSceneSessionActivation(
                 disconnected, userActivity: nil, options: nil, errorHandler: { error in
-                    print("Scene reactivation error: \(error)")
+                    AppLogger.menuBar.warning("Scene reactivation error: \(error)")
                     // Fallback: create a brand new session
                     UIApplication.shared.requestSceneSessionActivation(
                         nil, userActivity: nil, options: nil, errorHandler: nil
@@ -120,7 +120,7 @@ class MenuBarController {
         // No sessions at all — create a new one
         UIApplication.shared.requestSceneSessionActivation(
             nil, userActivity: nil, options: nil, errorHandler: { error in
-                print("Scene activation error: \(error)")
+                AppLogger.menuBar.warning("Scene activation error: \(error)")
             }
         )
     }

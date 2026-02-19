@@ -88,6 +88,7 @@ class LogViewModel: ObservableObject {
 
     private let loggingService: LoggingService
     private var cancellables = Set<AnyCancellable>()
+    private var filterTask: Task<Void, Never>?
 
     init(loggingService: LoggingService) {
         self.loggingService = loggingService
@@ -110,7 +111,6 @@ class LogViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Listen to filter changes
         // Listen to filter changes
         $selectedCategories
             .dropFirst()
@@ -147,9 +147,13 @@ class LogViewModel: ObservableObject {
         let devices = self.selectedDevices
         let services = self.selectedServices
 
-        Task.detached(priority: .userInitiated) {
+        // Cancel any in-flight filter task to avoid out-of-order results
+        filterTask?.cancel()
+        filterTask = Task.detached(priority: .userInitiated) {
             let filtered = Self.filterLogs(logs, with: query, categories: categories, devices: devices, services: services)
+            guard !Task.isCancelled else { return }
             let grouped = Self.groupLogs(filtered)
+            guard !Task.isCancelled else { return }
             let count = filtered.count
 
             await MainActor.run {

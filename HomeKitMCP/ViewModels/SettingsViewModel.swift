@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+@MainActor
 class SettingsViewModel: ObservableObject {
     @Published var webhookStatus: WebhookStatus = .idle
     @Published var isSendingTest = false
@@ -69,7 +70,7 @@ class SettingsViewModel: ObservableObject {
             do {
                 try mcpServer.start()
             } catch {
-                print("Failed to start MCP server: \(error)")
+                AppLogger.server.error("Failed to start MCP server: \(error)")
             }
         } else {
             mcpServer.stop()

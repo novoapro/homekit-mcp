@@ -120,20 +120,20 @@ struct LogViewerView: View {
                     }
                     return "line.3.horizontal.decrease.circle"
                 }()
-                
+
                 Image(systemName: iconName)
                     .font(.caption2)
-                
+
                 let text: String = {
                     if viewModel.selectedCategories.isEmpty { return "All Categories" }
                     if viewModel.selectedCategories.count == 1 { return viewModel.selectedCategories.first!.rawValue }
                     return "\(viewModel.selectedCategories.count) Categories"
                 }()
-                
+
                 Text(text)
                     .font(.caption)
                     .fontWeight(.medium)
-                
+
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
             }
@@ -157,9 +157,9 @@ struct LogViewerView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                
+
                 Divider()
-                
+
                 ForEach(LogCategoryFilter.allCases, id: \.self) { category in
                     if category != .all {
                         Button {
@@ -227,9 +227,9 @@ struct LogViewerView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                
+
                 Divider()
-                
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(viewModel.availableDevices, id: \.self) { device in
@@ -306,9 +306,9 @@ struct LogViewerView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                
+
                 Divider()
-                
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(viewModel.availableServices, id: \.self) { service in

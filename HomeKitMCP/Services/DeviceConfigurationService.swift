@@ -67,6 +67,11 @@ actor DeviceConfigurationService {
         debouncedSave()
     }
 
+    /// Returns the entire config map in a single actor call for batch lookups.
+    func getAllConfigs() -> [String: CharacteristicConfiguration] {
+        configs
+    }
+
     func resetAll() {
         configs.removeAll()
         saveNow()
@@ -86,7 +91,7 @@ actor DeviceConfigurationService {
             let data = try Self.encoder.encode(configs)
             try data.write(to: fileURL, options: .atomic)
         } catch {
-            print("Failed to save device config: \(error)")
+            AppLogger.config.error("Failed to save device config: \(error)")
         }
     }
 }

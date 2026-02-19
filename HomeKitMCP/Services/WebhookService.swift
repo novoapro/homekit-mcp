@@ -21,7 +21,8 @@ actor WebhookService {
     }
 
     func sendStateChange(_ change: StateChange) async {
-        let (urlString, webhookEnabled) = await MainActor.run { (storage.webhookURL, storage.webhookEnabled) }
+        let urlString = storage.readWebhookURL()
+        let webhookEnabled = storage.readWebhookEnabled()
         guard webhookEnabled,
               let urlString, !urlString.isEmpty, let url = URL(string: urlString) else { return }
 
@@ -44,7 +45,7 @@ actor WebhookService {
 
     /// Send a test webhook to verify the configured URL works.
     func sendTest() async -> Bool {
-        let urlString = await MainActor.run { storage.webhookURL }
+        let urlString = storage.readWebhookURL()
         guard let urlString, !urlString.isEmpty, let url = URL(string: urlString) else {
             statusSubject.send(.lastFailure(date: Date(), error: "No webhook URL configured"))
             return false

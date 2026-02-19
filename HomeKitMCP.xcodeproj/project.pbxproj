@@ -39,6 +39,7 @@
 		F5A7A31EE689CC912FA08BE7 /* StateChangeLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 610207602B912E193EA7D16F /* StateChangeLog.swift */; };
 		F67157A5309BC6ED5DF42036 /* HomeKitViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6598C98AB6126400BA1270 /* HomeKitViewModel.swift */; };
 		FE6AC26441EC3EDDCA92C523 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88A5A04A534224C9C7A8E939 /* SceneDelegate.swift */; };
+		B7A3F19E2F55A0C30098DE41 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A3F19D2F55A0C30098DE41 /* AppLogger.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -88,6 +89,7 @@
 		F1D8F6B53E65AEF39587984F /* StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageService.swift; sourceTree = "<group>"; };
 		F904B77E53F9A48675AE552B /* CharacteristicTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacteristicTypes.swift; sourceTree = "<group>"; };
 		FD53658669C55DD54D4345B4 /* ServiceTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceTypes.swift; sourceTree = "<group>"; };
+		B7A3F19D2F55A0C30098DE41 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -207,12 +209,13 @@
 		A9B0FCADA61E4A9BE003F07F /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				B7A3F19D2F55A0C30098DE41 /* AppLogger.swift */,
 				F904B77E53F9A48675AE552B /* CharacteristicTypes.swift */,
+				6450326F2F44E0E10056EC31 /* DeviceNameFormatter.swift */,
 				76A1CCA31A2168A2B8D12DD0 /* MenuBarController.swift */,
 				77E7DB8F5E5A2E47859F9BE1 /* PreviewData.swift */,
 				FD53658669C55DD54D4345B4 /* ServiceTypes.swift */,
 				4DEC6F3D579DCC1F32FF60E7 /* Theme.swift */,
-				6450326F2F44E0E10056EC31 /* DeviceNameFormatter.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -344,6 +347,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				604630A1BF390A991532363A /* AnyCodable.swift in Sources */,
+				B7A3F19E2F55A0C30098DE41 /* AppLogger.swift in Sources */,
 				645032702F44E0E10056EC31 /* DeviceNameFormatter.swift in Sources */,
 				E0BEDF233E070FDA10CE289C /* AppDelegate.swift in Sources */,
 				9C2B2547888DD514D726B727 /* CharacteristicTypes.swift in Sources */,

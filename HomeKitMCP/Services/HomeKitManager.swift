@@ -9,6 +9,11 @@ class HomeKitManager: NSObject, ObservableObject {
     @Published var isReady = false
     @Published var isReadingValues = false
 
+    /// Cached device models, rebuilt only when accessories or characteristic values change.
+    @Published private(set) var cachedDevices: [DeviceModel] = []
+    /// O(1) device lookup by ID, rebuilt alongside cachedDevices.
+    private var deviceLookup: [String: DeviceModel] = [:]
+
     private let homeManager = HMHomeManager()
     private let loggingService: LoggingService
     private let webhookService: WebhookService
@@ -26,74 +31,25 @@ class HomeKitManager: NSObject, ObservableObject {
         self.storage = storage
         super.init()
         homeManager.delegate = self
-        
+
         // Forward storage changes to trigger refreshes when settings change
         storage.objectWillChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.objectWillChange.send()
+                self?.rebuildDeviceCache()
             }
             .store(in: &cancellables)
     }
 
+    /// Returns all devices from the cache. The cache is invalidated when accessories
+    /// change or characteristic values are read.
     func getAllDevices() -> [DeviceModel] {
-        return allAccessories.compactMap { accessory in
-            let services = accessory.services.compactMap { service -> ServiceModel? in
-                guard service.serviceType != HMServiceTypeAccessoryInformation else { return nil }
-                // Filter out unknown/unsupported services
-                guard ServiceTypes.isSupported(service.serviceType) else { return nil }
-                let characteristics = service.characteristics.compactMap { char -> CharacteristicModel? in
-                    let type = char.characteristicType
-                    let displayName = CharacteristicTypes.displayName(for: type)
-                    
-                // Filter out unknown/unsupported characteristics.
-                // This ensures we only expose characteristics defined in CharacteristicTypes.
-                guard CharacteristicTypes.isSupported(char.characteristicType) else { return nil }
-
-                    return CharacteristicModel(
-                        id: char.uniqueIdentifier.uuidString,
-                        type: type,
-                        value: char.value.map { AnyCodable($0) },
-                        format: char.metadata?.format ?? "unknown",
-                        permissions: characteristicPermissions(char)
-                    )
-                }
-
-                if characteristics.isEmpty { return nil }
-
-                // Use ServiceTypes.displayName to get a human-readable service name (e.g. "Lightbulb")
-                return ServiceModel(
-                    id: service.uniqueIdentifier.uuidString,
-                    name: service.name,
-                    type: service.serviceType,
-                    characteristics: characteristics
-                )
-            }
-
-            if services.isEmpty { return nil }
-            
-            // Format name based on settings
-            let formattedName = DeviceNameFormatter.format(
-                deviceName: accessory.name,
-                roomName: accessory.room?.name,
-                hideRoomName: storage.hideRoomNameInTheApp
-            )
-
-            return DeviceModel(
-                id: accessory.uniqueIdentifier.uuidString,
-                name: formattedName,
-                roomName: accessory.room?.name,
-                categoryType: accessory.category.categoryType,
-                services: services,
-                isReachable: accessory.isReachable
-            )
-        }
+        cachedDevices
     }
 
     /// Returns devices grouped by room name. Devices without a room go under "Other".
     func getDevicesGroupedByRoom() -> [(roomName: String, devices: [DeviceModel])] {
-        let allDevices = getAllDevices()
-        let grouped = Dictionary(grouping: allDevices) { $0.roomName ?? "Other" }
+        let grouped = Dictionary(grouping: cachedDevices) { $0.roomName ?? "Other" }
         return grouped
             .sorted { $0.key < $1.key }
             .map { (roomName: $0.key, devices: $0.value) }
@@ -128,20 +84,79 @@ class HomeKitManager: NSObject, ObservableObject {
         throw HomeKitError.characteristicNotFound
     }
 
+    /// O(1) device lookup by ID using the cached dictionary.
     func getDeviceState(id: String) -> DeviceModel? {
-        return getAllDevices().first { $0.id == id }
+        deviceLookup[id]
     }
 
-    /// Coalesced UI update — waits for a brief quiet period before sending objectWillChange.
+    // MARK: - Device Cache
+
+    /// Rebuilds the device model cache from the current HMAccessory list.
+    /// Called when accessories change, characteristic values are read, or settings change.
+    private func rebuildDeviceCache() {
+        let devices = allAccessories.compactMap { accessory -> DeviceModel? in
+            let services = accessory.services.compactMap { service -> ServiceModel? in
+                guard service.serviceType != HMServiceTypeAccessoryInformation else { return nil }
+                guard ServiceTypes.isSupported(service.serviceType) else { return nil }
+                let characteristics = service.characteristics.compactMap { char -> CharacteristicModel? in
+                    guard CharacteristicTypes.isSupported(char.characteristicType) else { return nil }
+
+                    return CharacteristicModel(
+                        id: char.uniqueIdentifier.uuidString,
+                        type: char.characteristicType,
+                        value: char.value.map { AnyCodable($0) },
+                        format: char.metadata?.format ?? "unknown",
+                        permissions: characteristicPermissions(char)
+                    )
+                }
+
+                if characteristics.isEmpty { return nil }
+
+                return ServiceModel(
+                    id: service.uniqueIdentifier.uuidString,
+                    name: service.name,
+                    type: service.serviceType,
+                    characteristics: characteristics
+                )
+            }
+
+            if services.isEmpty { return nil }
+
+            let formattedName = DeviceNameFormatter.format(
+                deviceName: accessory.name,
+                roomName: accessory.room?.name,
+                hideRoomName: storage.readHideRoomName()
+            )
+
+            return DeviceModel(
+                id: accessory.uniqueIdentifier.uuidString,
+                name: formattedName,
+                roomName: accessory.room?.name,
+                categoryType: accessory.category.categoryType,
+                services: services,
+                isReachable: accessory.isReachable
+            )
+        }
+
+        cachedDevices = devices
+        deviceLookup = Dictionary(uniqueKeysWithValues: devices.map { ($0.id, $0) })
+        objectWillChange.send()
+    }
+
+    // MARK: - UI Update Coalescing
+
+    /// Coalesced UI update — waits for a brief quiet period before rebuilding the cache.
     /// This prevents hundreds of individual updates from each characteristic read.
     private func scheduleUIUpdate() {
         uiUpdateWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
-            self?.objectWillChange.send()
+            self?.rebuildDeviceCache()
         }
         uiUpdateWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
     }
+
+    // MARK: - Helpers
 
     private func characteristicPermissions(_ characteristic: HMCharacteristic) -> [String] {
         var perms: [String] = []
@@ -156,16 +171,14 @@ class HomeKitManager: NSObject, ObservableObject {
             for accessory in home.accessories {
                 accessory.delegate = self
                 for service in accessory.services {
-                    // Filter out unknown/unsupported services
                     guard ServiceTypes.isSupported(service.serviceType) else { continue }
                     for characteristic in service.characteristics {
-                        // Filter out unknown characteristics
                         guard CharacteristicTypes.isSupported(characteristic.characteristicType) else { continue }
 
                         if characteristic.properties.contains(HMCharacteristicPropertySupportsEventNotification) {
                             characteristic.enableNotification(true) { error in
                                 if let error = error {
-                                    print("Failed to enable notification for \(characteristic.characteristicType): \(error)")
+                                    AppLogger.homeKit.warning("Failed to enable notification for \(characteristic.characteristicType): \(error)")
                                 }
                             }
                         }
@@ -182,13 +195,10 @@ class HomeKitManager: NSObject, ObservableObject {
         var completedReads = 0
         let lock = NSLock()
 
-        // Count how many reads we need
         for accessory in allAccessories where accessory.isReachable {
             for service in accessory.services {
-                // Filter out unknown/unsupported services
                 guard ServiceTypes.isSupported(service.serviceType) else { continue }
                 for characteristic in service.characteristics {
-                    // Filter out unknown characteristics
                     guard CharacteristicTypes.isSupported(characteristic.characteristicType) else { continue }
 
                     if characteristic.properties.contains(HMCharacteristicPropertyReadable) {
@@ -201,26 +211,26 @@ class HomeKitManager: NSObject, ObservableObject {
         guard totalReads > 0 else {
             isReadingValues = false
             isReady = true
+            rebuildDeviceCache()
             return
         }
 
         isReadingValues = true
-        // Show device list immediately with stale/nil values while reads happen
         isReady = true
+        // Build initial cache with stale/nil values while reads happen
+        rebuildDeviceCache()
 
         for accessory in allAccessories where accessory.isReachable {
             for service in accessory.services {
-                // Filter out unknown/unsupported services
                 guard ServiceTypes.isSupported(service.serviceType) else { continue }
                 for characteristic in service.characteristics {
-                    // Filter out unknown characteristics
                     guard CharacteristicTypes.isSupported(characteristic.characteristicType) else { continue }
 
                     if characteristic.properties.contains(HMCharacteristicPropertyReadable) {
                         characteristic.readValue { [weak self] error in
                             guard let self else { return }
                             if let error = error {
-                                print("Failed to read \(characteristic.characteristicType) on \(accessory.name): \(error)")
+                                AppLogger.homeKit.warning("Failed to read \(characteristic.characteristicType) on \(accessory.name): \(error)")
                             }
 
                             lock.lock()
@@ -228,7 +238,7 @@ class HomeKitManager: NSObject, ObservableObject {
                             let allDone = completedReads >= totalReads
                             lock.unlock()
 
-                            // Coalesce UI updates — don't fire for every single read
+                            // Coalesce cache rebuilds — don't fire for every single read
                             self.scheduleUIUpdate()
 
                             if allDone {
@@ -299,25 +309,25 @@ extension HomeKitManager: HMHomeDelegate {
 
     func home(_ home: HMHome, didUpdate room: HMRoom, for accessory: HMAccessory) {
         DispatchQueue.main.async {
-            self.objectWillChange.send()
+            self.rebuildDeviceCache()
         }
     }
 
     func home(_ home: HMHome, didAdd room: HMRoom) {
         DispatchQueue.main.async {
-            self.objectWillChange.send()
+            self.rebuildDeviceCache()
         }
     }
 
     func home(_ home: HMHome, didRemove room: HMRoom) {
         DispatchQueue.main.async {
-            self.objectWillChange.send()
+            self.rebuildDeviceCache()
         }
     }
 
     func home(_ home: HMHome, didUpdateNameFor room: HMRoom) {
         DispatchQueue.main.async {
-            self.objectWillChange.send()
+            self.rebuildDeviceCache()
         }
     }
 }
@@ -327,34 +337,27 @@ extension HomeKitManager: HMAccessoryDelegate {
     func accessory(_ accessory: HMAccessory, service: HMService, didUpdateValueFor characteristic: HMCharacteristic) {
         let deviceId = accessory.uniqueIdentifier.uuidString
         let serviceId = service.uniqueIdentifier.uuidString
-        
-        // Filter out unknown/unsupported services
+
         guard ServiceTypes.isSupported(service.serviceType) else { return }
-        
+
         let charId = characteristic.uniqueIdentifier.uuidString
         let serviceName = ServiceTypes.displayName(for: service.serviceType)
-        
-        // Filter out unknown/unsupported characteristics
+
         guard CharacteristicTypes.isSupported(characteristic.characteristicType) else { return }
 
         Task {
-            // Check configuration for this specific characteristic
             let config = await configService.getConfig(
                 deviceId: deviceId,
                 serviceId: serviceId,
                 characteristicId: charId
             )
-            
-            // If neither MCP nor Webhook is enabled, discard the event entirely
-            // guard config.mcpEnabled || config.webhookEnabled else { return }
 
             let value = characteristic.value
-        
-            // Format name for logs
+
             let formattedName = DeviceNameFormatter.format(
                 deviceName: accessory.name,
                 roomName: accessory.room?.name,
-                hideRoomName: storage.hideRoomNameInTheApp
+                hideRoomName: storage.readHideRoomName()
             )
 
             let logEntry = StateChangeLog(
@@ -364,14 +367,14 @@ extension HomeKitManager: HMAccessoryDelegate {
                 deviceName: formattedName,
                 serviceName: ServiceTypes.displayName(for: service.serviceType),
                 characteristicType: characteristic.characteristicType,
-                oldValue: nil, // We don't easily have the old value here without caching
+                oldValue: nil,
                 newValue: value.map { AnyCodable($0) },
                 category: .stateChange
             )
 
             let change = StateChange(
                 deviceId: deviceId,
-                deviceName: formattedName, // Use formatted name for the change object too
+                deviceName: formattedName,
                 serviceId: serviceId,
                 serviceName: serviceName,
                 characteristicType: characteristic.characteristicType,
@@ -379,22 +382,20 @@ extension HomeKitManager: HMAccessoryDelegate {
                 newValue: value
             )
 
-            // Only log state changes and send webhooks for webhook-enabled characteristics.
-            // MCP calls already produce their own log entries via mcpCall.
             if config.webhookEnabled {
-                await loggingService.logEntry(logEntry) // Log the new logEntry
+                await loggingService.logEntry(logEntry)
                 await webhookService.sendStateChange(change)
             }
-            
+
             await MainActor.run {
-                self.objectWillChange.send()
+                self.rebuildDeviceCache()
             }
         }
     }
 
     func accessoryDidUpdateReachability(_ accessory: HMAccessory) {
         DispatchQueue.main.async {
-            self.objectWillChange.send()
+            self.rebuildDeviceCache()
         }
     }
 }
