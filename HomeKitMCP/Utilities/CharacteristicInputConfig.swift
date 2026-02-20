@@ -2,22 +2,22 @@ import Foundation
 import HomeKit
 
 /// Determines the best input control type for a characteristic based on its metadata.
-enum InputControlType {
+public enum InputControlType {
     case toggle
     case slider(min: Double, max: Double, step: Double, unit: String?)
     case picker(options: [(label: String, value: String)])
     case textField(inputType: TextFieldInputType)
 }
 
-enum TextFieldInputType {
+public enum TextFieldInputType {
     case decimal
     case number
     case text
 }
 
-struct CharacteristicInputConfig {
+public struct CharacteristicInputConfig {
     /// Determines the input control type for a characteristic.
-    static func getInputType(
+    public static func getInputType(
         for characteristicType: String,
         format: String,
         minValue: Double?,
