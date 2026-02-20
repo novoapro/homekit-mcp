@@ -14,73 +14,88 @@ struct ValueEditor: View {
 
     private var format: String? { characteristic?.format }
 
+    private var inputControlType: InputControlType {
+        guard let char = characteristic else {
+            return .textField(inputType: .text)
+        }
+        return CharacteristicInputConfig.getInputType(
+            for: characteristicType,
+            format: char.format,
+            minValue: char.minValue,
+            maxValue: char.maxValue,
+            validValues: char.validValues
+        )
+    }
+
     var body: some View {
-        switch format {
-        case "bool":
+        switch inputControlType {
+        case .toggle:
             Toggle("Value", isOn: boolBinding)
                 .tint(Theme.Tint.main)
-        case "uint8", "int", "uint16", "uint32", "uint64", "float":
-            if let minVal = characteristic?.minValue, let maxVal = characteristic?.maxValue, minVal < maxVal {
-                sliderEditor(min: minVal, max: maxVal, step: characteristic?.stepValue ?? 1)
-            } else {
-                numericTextField(isDecimal: format == "float")
+
+        case let .slider(min, max, step, unit):
+            VStack(spacing: 4) {
+                HStack {
+                    Text("Value")
+                    Spacer()
+                    Text("\(Int(doubleValue))\(unit ?? "")")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(Theme.Text.secondary)
+                }
+                Slider(
+                    value: doubleBinding,
+                    in: min...max,
+                    step: step
+                )
+                .tint(Theme.Tint.main)
             }
-        default:
+
+        case let .picker(options):
             HStack {
                 Text("Value")
                 Spacer()
-                TextField("Value", text: $value)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 120)
-                    .textFieldStyle(.roundedBorder)
+                Menu {
+                    ForEach(options, id: \.value) { option in
+                        Button(option.label) {
+                            value = option.value
+                        }
+                    }
+                } label: {
+                    Text(currentPickerLabel(options) ?? "Select...")
+                        .foregroundColor(.primary)
+                }
             }
-        }
-    }
 
-    private func sliderEditor(min: Double, max: Double, step: Double) -> some View {
-        VStack(spacing: 4) {
+        case let .textField(inputType):
             HStack {
                 Text("Value")
                 Spacer()
-                Text(sliderDisplayValue(min: min, max: max))
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(Theme.Text.secondary)
-            }
-            Slider(
-                value: sliderBinding(min: min, max: max),
-                in: min...max,
-                step: step
-            )
-            .tint(Theme.Tint.main)
-        }
-    }
-
-    private func numericTextField(isDecimal: Bool) -> some View {
-        HStack {
-            Text("Value")
-            Spacer()
-            TextField(isDecimal ? "0.0" : "0", text: $value)
-                .keyboardType(isDecimal ? .decimalPad : .numberPad)
+                TextField(
+                    inputType == .decimal ? "0.0" : "0",
+                    text: $value
+                )
+                .keyboardType(keyboardType(for: inputType))
                 .multilineTextAlignment(.trailing)
                 .frame(width: 80)
                 .textFieldStyle(.roundedBorder)
+            }
         }
     }
 
-    private func sliderDisplayValue(min: Double, max: Double) -> String {
-        let numVal = Double(value) ?? min
-        if max == 100 && min == 0 {
-            return "\(Int(numVal))%"
-        }
-        if numVal == numVal.rounded() {
-            return "\(Int(numVal))"
-        }
-        return String(format: "%.1f", numVal)
-    }
-
-    private func sliderBinding(min: Double, max: Double) -> Binding<Double> {
+    private var boolBinding: Binding<Bool> {
         Binding(
-            get: { Double(value) ?? min },
+            get: { value.lowercased() == "true" || value == "1" },
+            set: { value = $0 ? "true" : "false" }
+        )
+    }
+
+    private var doubleValue: Double {
+        Double(value) ?? 0
+    }
+
+    private var doubleBinding: Binding<Double> {
+        Binding(
+            get: { Double(value) ?? 0 },
             set: { newVal in
                 if newVal == newVal.rounded() {
                     value = "\(Int(newVal))"
@@ -91,10 +106,18 @@ struct ValueEditor: View {
         )
     }
 
-    private var boolBinding: Binding<Bool> {
-        Binding(
-            get: { value.lowercased() == "true" || value == "1" },
-            set: { value = $0 ? "true" : "false" }
-        )
+    private func currentPickerLabel(_ options: [(label: String, value: String)]) -> String? {
+        options.first(where: { $0.value == value })?.label
+    }
+
+    private func keyboardType(for inputType: TextFieldInputType) -> UIKeyboardType {
+        switch inputType {
+        case .decimal:
+            return .decimalPad
+        case .number:
+            return .numberPad
+        case .text:
+            return .default
+        }
     }
 }

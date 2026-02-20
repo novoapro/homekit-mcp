@@ -30,6 +30,9 @@ struct CharacteristicModel: Identifiable, Codable {
     var minValue: Double?
     var maxValue: Double?
     var stepValue: Double?
+
+    // Enum values for discrete characteristics (door state, lock state, etc.)
+    let validValues: [Int]?
 }
 
 struct CharacteristicConfiguration: Codable, Equatable {

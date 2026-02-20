@@ -112,7 +112,8 @@ class HomeKitManager: NSObject, ObservableObject {
                         permissions: characteristicPermissions(char),
                         minValue: char.metadata?.minimumValue?.doubleValue,
                         maxValue: char.metadata?.maximumValue?.doubleValue,
-                        stepValue: char.metadata?.stepValue?.doubleValue
+                        stepValue: char.metadata?.stepValue?.doubleValue,
+                        validValues: extractValidValues(for: char.characteristicType)
                     )
                 }
 
@@ -170,6 +171,31 @@ class HomeKitManager: NSObject, ObservableObject {
         if characteristic.properties.contains(HMCharacteristicPropertyWritable) { perms.append("write") }
         if characteristic.properties.contains(HMCharacteristicPropertySupportsEventNotification) { perms.append("notify") }
         return perms
+    }
+
+    /// Extracts valid values for discrete characteristics (door state, lock state, etc.)
+    /// Returns nil if the characteristic doesn't have defined discrete values.
+    private func extractValidValues(for characteristicType: String) -> [Int]? {
+        switch characteristicType {
+        case HMCharacteristicTypeCurrentDoorState,
+             HMCharacteristicTypeTargetDoorState:
+            return [0, 1, 2, 3, 4]  // Open, Closed, Opening, Closing, Stopped
+
+        case HMCharacteristicTypeCurrentLockMechanismState,
+             HMCharacteristicTypeTargetLockMechanismState:
+            return [0, 1, 2, 3]  // Unsecured, Secured, Jammed, Unknown
+
+        case HMCharacteristicTypeCurrentHeatingCooling,
+             HMCharacteristicTypeTargetHeatingCooling:
+            return [0, 1, 2, 3]  // Off, Heat, Cool, Auto
+
+        case HMCharacteristicTypeCurrentFanState,
+             HMCharacteristicTypeTargetFanState:
+            return [0, 1, 2]  // Inactive, Active, Jammed
+
+        default:
+            return nil
+        }
     }
 
     private func registerForNotifications() {
