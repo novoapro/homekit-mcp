@@ -117,7 +117,7 @@ class MCPServer: ObservableObject {
         if let app = self.app {
             self.app = nil
             do {
-                try await app.shutdown()
+                try await app.asyncShutdown()
             } catch {
                 AppLogger.server.error("Error shutting down app: \(error)")
             }
