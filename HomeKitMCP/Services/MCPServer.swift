@@ -50,7 +50,9 @@ class MCPServer: ObservableObject {
     func start() throws {
         // Stop any existing instance first
         if app != nil {
-            stopSync()
+            Task {
+                await stopAsync()
+            }
         }
 
         let env = Environment(name: "production", arguments: ["serve"])
