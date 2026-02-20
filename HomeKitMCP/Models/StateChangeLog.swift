@@ -7,6 +7,8 @@ enum LogCategory: String, Codable {
     case serverError = "server_error"
     case mcpCall = "mcp_call"
     case restCall = "rest_call"
+    case workflowExecution = "workflow_execution"
+    case workflowError = "workflow_error"
 }
 
 struct StateChangeLog: Identifiable, Codable {

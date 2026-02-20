@@ -5,12 +5,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let storageService = StorageService()
     let loggingService = LoggingService()
     let configService = DeviceConfigurationService()
+    let workflowStorageService = WorkflowStorageService()
+    let workflowExecutionLogService = WorkflowExecutionLogService()
     lazy var webhookService = WebhookService(storage: storageService, loggingService: loggingService)
     lazy var homeKitManager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storageService)
+    lazy var workflowEngine: WorkflowEngine = {
+        let engine = WorkflowEngine(
+            storageService: workflowStorageService,
+            homeKitManager: homeKitManager,
+            loggingService: loggingService,
+            executionLogService: workflowExecutionLogService
+        )
+        return engine
+    }()
     lazy var mcpServer = MCPServer(homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, storage: storageService, port: storageService.mcpServerPort)
     lazy var homeKitViewModel = HomeKitViewModel(homeKitManager: homeKitManager, configService: configService)
     lazy var logViewModel = LogViewModel(loggingService: loggingService, storage: storageService)
     lazy var settingsViewModel = SettingsViewModel(storage: storageService, webhookService: webhookService, mcpServer: mcpServer, configService: configService)
+    lazy var workflowViewModel = WorkflowViewModel(storageService: workflowStorageService, executionLogService: workflowExecutionLogService, workflowEngine: workflowEngine)
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -23,6 +35,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         installSignalHandlers()
+        setupWorkflowEngine()
         startMCPServerIfEnabled()
 
         #if targetEnvironment(macCatalyst)
@@ -68,6 +81,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
         signal(SIGTERM, handler)
         signal(SIGINT, handler)
+    }
+
+    private func setupWorkflowEngine() {
+        homeKitManager.workflowEngine = workflowEngine
+        Task {
+            await workflowEngine.registerEvaluator(DeviceStateChangeTriggerEvaluator())
+        }
     }
 
     private func startMCPServerIfEnabled() {

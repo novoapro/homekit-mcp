@@ -10,6 +10,7 @@ struct HomeKitMCPApp: App {
                 .environmentObject(appDelegate.homeKitViewModel)
                 .environmentObject(appDelegate.logViewModel)
                 .environmentObject(appDelegate.settingsViewModel)
+                .environmentObject(appDelegate.workflowViewModel)
                 .tint(Theme.Tint.main)
         }
     }
@@ -17,6 +18,7 @@ struct HomeKitMCPApp: App {
 
 enum NavigationItem: String, CaseIterable, Identifiable {
     case devices
+    case workflows
     case logs
     case settings
 
@@ -25,6 +27,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .devices: return "Devices"
+        case .workflows: return "Workflows"
         case .logs: return "Logs"
         case .settings: return "Settings"
         }
@@ -33,6 +36,7 @@ enum NavigationItem: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .devices: return "house.fill"
+        case .workflows: return "bolt.fill"
         case .logs: return "list.bullet.rectangle"
         case .settings: return "gear"
         }
@@ -43,6 +47,7 @@ struct ContentView: View {
     @EnvironmentObject var homeKitViewModel: HomeKitViewModel
     @EnvironmentObject var logViewModel: LogViewModel
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @EnvironmentObject var workflowViewModel: WorkflowViewModel
 
     @State private var selection: NavigationItem = .devices
 
@@ -56,6 +61,15 @@ struct ContentView: View {
             }
             .tag(NavigationItem.devices)
             .badge(homeKitViewModel.totalDeviceCount)
+
+            NavigationStack {
+                WorkflowListView(viewModel: workflowViewModel)
+            }
+            .tabItem {
+                Label(NavigationItem.workflows.label, systemImage: NavigationItem.workflows.icon)
+            }
+            .tag(NavigationItem.workflows)
+            .badge(workflowViewModel.enabledCount)
 
             NavigationStack {
                 LogViewerView(viewModel: logViewModel)
@@ -83,6 +97,7 @@ struct ContentView: View {
         .environmentObject(PreviewData.homeKitViewModel)
         .environmentObject(PreviewData.logViewModel)
         .environmentObject(PreviewData.settingsViewModel)
+        .environmentObject(PreviewData.workflowViewModel)
 }
 
 

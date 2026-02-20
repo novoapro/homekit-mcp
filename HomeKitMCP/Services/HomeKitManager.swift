@@ -21,6 +21,9 @@ class HomeKitManager: NSObject, ObservableObject {
     let configService: DeviceConfigurationService
     private var cancellables = Set<AnyCancellable>()
 
+    /// Workflow engine — set post-init to avoid circular dependency.
+    var workflowEngine: WorkflowEngine?
+
     /// Coalesces rapid objectWillChange signals during bulk reads.
     private var uiUpdateWorkItem: DispatchWorkItem?
 
@@ -386,6 +389,9 @@ extension HomeKitManager: HMAccessoryDelegate {
                 await loggingService.logEntry(logEntry)
                 await webhookService.sendStateChange(change)
             }
+
+            // Process workflows for ALL state changes (not gated by config)
+            await workflowEngine?.processStateChange(change)
 
             await MainActor.run {
                 self.rebuildDeviceCache()

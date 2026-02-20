@@ -102,6 +102,14 @@ struct LogRow: View {
                 .foregroundColor(Theme.Tint.secondary)
         case .stateChange:
             EmptyView()
+        case .workflowExecution:
+            Image(systemName: "bolt.circle.fill")
+                .font(.caption)
+                .foregroundColor(Theme.Status.active)
+        case .workflowError:
+            Image(systemName: "bolt.trianglebadge.exclamationmark")
+                .font(.caption)
+                .foregroundColor(Theme.Status.error)
         }
     }
 
@@ -120,6 +128,10 @@ struct LogRow: View {
             errorContent
         case .stateChange:
             stateChangeContent
+        case .workflowExecution:
+            workflowContent
+        case .workflowError:
+            errorContent
         }
     }
 
@@ -185,6 +197,23 @@ struct LogRow: View {
                     .font(.caption)
                     .foregroundColor(Theme.Status.error)
                     .lineLimit(3)
+            }
+        }
+    }
+
+    private var workflowContent: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let requestBody = log.requestBody {
+                Text(requestBody)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(Theme.Status.active)
+            }
+            if let responseBody = log.responseBody {
+                Text("← \(responseBody)")
+                    .font(.caption)
+                    .foregroundColor(Theme.Text.secondary)
+                    .lineLimit(2)
             }
         }
     }

@@ -10,6 +10,8 @@ enum LogCategoryFilter: String, CaseIterable, Identifiable {
     case mcpCall = "MCP Call"
     case restCall = "REST Call"
     case serverError = "Server Error"
+    case workflowExecution = "Workflow"
+    case workflowError = "Workflow Error"
 
     var id: String { rawValue }
 
@@ -23,6 +25,8 @@ enum LogCategoryFilter: String, CaseIterable, Identifiable {
         case .mcpCall: return [.mcpCall]
         case .restCall: return [.restCall]
         case .serverError: return [.serverError]
+        case .workflowExecution: return [.workflowExecution]
+        case .workflowError: return [.workflowError]
         }
     }
 
@@ -35,6 +39,8 @@ enum LogCategoryFilter: String, CaseIterable, Identifiable {
         case .mcpCall: return "arrow.left.arrow.right.circle.fill"
         case .restCall: return "globe"
         case .serverError: return "xmark.octagon.fill"
+        case .workflowExecution: return "bolt.circle.fill"
+        case .workflowError: return "bolt.trianglebadge.exclamationmark"
         }
     }
 }
