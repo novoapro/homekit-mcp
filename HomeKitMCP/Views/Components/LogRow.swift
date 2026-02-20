@@ -131,7 +131,7 @@ struct LogRow: View {
         case .workflowExecution:
             workflowContent
         case .workflowError:
-            errorContent
+            workflowContent
         }
     }
 
@@ -201,19 +201,24 @@ struct LogRow: View {
         }
     }
 
+    private var isWorkflowError: Bool {
+        log.category == .workflowError
+    }
+
     private var workflowContent: some View {
         VStack(alignment: .leading, spacing: 2) {
             if let requestBody = log.requestBody {
+                // requestBody now may be multi-line: trigger info, failure location, error
                 Text(requestBody)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(Theme.Status.active)
+                    .font(.caption)
+                    .foregroundColor(isWorkflowError ? Theme.Status.error : Theme.Text.secondary)
+                    .lineLimit(3)
             }
             if let responseBody = log.responseBody {
-                Text("← \(responseBody)")
+                Text(responseBody)
                     .font(.caption)
-                    .foregroundColor(Theme.Text.secondary)
-                    .lineLimit(2)
+                    .fontWeight(.medium)
+                    .foregroundColor(isWorkflowError ? Theme.Status.error.opacity(0.8) : Theme.Status.active)
             }
         }
     }

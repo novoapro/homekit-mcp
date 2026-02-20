@@ -2,10 +2,11 @@ import Foundation
 
 /// Core workflow engine that evaluates triggers, checks conditions, and executes blocks.
 actor WorkflowEngine {
-    private let storageService: WorkflowStorageService
+    private let workflowStorageService: WorkflowStorageService
     private let homeKitManager: HomeKitManager
     private let loggingService: LoggingService
     private let executionLogService: WorkflowExecutionLogService
+    private let storage: StorageService
     private let conditionEvaluator: ConditionEvaluator
     private var evaluators: [TriggerEvaluator] = []
 
@@ -20,12 +21,14 @@ actor WorkflowEngine {
         storageService: WorkflowStorageService,
         homeKitManager: HomeKitManager,
         loggingService: LoggingService,
-        executionLogService: WorkflowExecutionLogService
+        executionLogService: WorkflowExecutionLogService,
+        storage: StorageService
     ) {
-        self.storageService = storageService
+        self.workflowStorageService = storageService
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
         self.executionLogService = executionLogService
+        self.storage = storage
         self.conditionEvaluator = ConditionEvaluator(homeKitManager: homeKitManager)
     }
 
@@ -40,7 +43,7 @@ actor WorkflowEngine {
         // Notify any waitForState waiters first
         notifyStateWaiters(change)
 
-        let workflows = await storageService.getEnabledWorkflows()
+        let workflows = await workflowStorageService.getEnabledWorkflows()
         let context = TriggerContext.stateChange(change)
 
         for workflow in workflows {
@@ -64,7 +67,7 @@ actor WorkflowEngine {
 
     /// Manual trigger for testing.
     func triggerWorkflow(id: UUID) async -> WorkflowExecutionLog? {
-        guard let workflow = await storageService.getWorkflow(id: id) else { return nil }
+        guard let workflow = await workflowStorageService.getWorkflow(id: id) else { return nil }
         guard !runningWorkflows.contains(id) else { return nil }
 
         runningWorkflows.insert(id)
@@ -155,7 +158,7 @@ actor WorkflowEngine {
         await executionLogService.log(execLog)
 
         // Update workflow metadata
-        await storageService.updateMetadata(
+        await workflowStorageService.updateMetadata(
             id: workflow.id,
             lastTriggered: execLog.triggeredAt,
             incrementExecutions: true,
@@ -163,23 +166,87 @@ actor WorkflowEngine {
         )
 
         if !succeeded && execLog.status != .conditionNotMet {
-            await storageService.incrementFailures(id: workflow.id)
+            await workflowStorageService.incrementFailures(id: workflow.id)
         }
 
-        // Log to main logging service
+        // Build rich log entry for main logging service
         let category: LogCategory = succeeded ? .workflowExecution : .workflowError
+        let durationMs: Int = {
+            guard let completed = execLog.completedAt else { return 0 }
+            return Int(completed.timeIntervalSince(execLog.triggeredAt) * 1000)
+        }()
+
+        // requestBody: trigger info + error location (if any)
+        var requestParts: [String] = []
+        if let trigger = execLog.triggerEvent {
+            let oldStr = trigger.oldValue.map { stringFromAny($0.value) } ?? "nil"
+            let newStr = trigger.newValue.map { stringFromAny($0.value) } ?? "nil"
+            let charName = CharacteristicTypes.displayName(for: trigger.characteristicType)
+            requestParts.append("Trigger: \(trigger.deviceName) \(charName) \(oldStr) → \(newStr)")
+        } else {
+            requestParts.append("Trigger: manual")
+        }
+
+        if !succeeded, let failedBlock = execLog.blockResults.first(where: { $0.status == .failure }) {
+            let blockLabel = failedBlock.blockName ?? "\(failedBlock.blockKind).\(failedBlock.blockType)"
+            requestParts.append("Failed at block \(failedBlock.blockIndex): \(blockLabel)")
+            if let errMsg = failedBlock.errorMessage {
+                requestParts.append(errMsg)
+            }
+        }
+        let requestBody = requestParts.joined(separator: "\n")
+
+        // responseBody: status + duration + block count
+        let blockCount = execLog.blockResults.count
+        let responseBody = "\(execLog.status.rawValue) | \(durationMs)ms | \(blockCount) block\(blockCount == 1 ? "" : "s")"
+
+        // Detailed logs (gated by setting)
+        var detailedRequest: String?
+        var detailedResponse: String?
+        if storage.readDetailedLogsEnabled() {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+
+            // Detailed request: trigger event + condition results
+            var detailedReqDict: [String: AnyCodable] = [:]
+            if let trigger = execLog.triggerEvent {
+                detailedReqDict["trigger"] = AnyCodable([
+                    "deviceId": AnyCodable(trigger.deviceId),
+                    "deviceName": AnyCodable(trigger.deviceName),
+                    "characteristicType": AnyCodable(trigger.characteristicType),
+                    "oldValue": trigger.oldValue ?? AnyCodable("nil"),
+                    "newValue": trigger.newValue ?? AnyCodable("nil")
+                ] as [String: AnyCodable])
+            }
+            if let condResults = execLog.conditionResults {
+                detailedReqDict["conditions"] = AnyCodable(condResults.map { AnyCodable(["description": AnyCodable($0.conditionDescription), "passed": AnyCodable($0.passed)] as [String: AnyCodable]) })
+            }
+            if let data = try? encoder.encode(detailedReqDict), let json = String(data: data, encoding: .utf8) {
+                detailedRequest = json
+            }
+
+            // Detailed response: full block results tree
+            if let data = try? encoder.encode(execLog.blockResults), let json = String(data: data, encoding: .utf8) {
+                detailedResponse = json
+            }
+        }
+
         let logEntry = StateChangeLog(
             id: UUID(),
             timestamp: Date(),
             deviceId: workflow.id.uuidString,
             deviceName: workflow.name,
+            serviceName: execLog.triggerEvent?.deviceName,
             characteristicType: "workflow",
             oldValue: nil,
             newValue: AnyCodable(execLog.status.rawValue),
             category: category,
             errorDetails: execLog.errorMessage,
-            requestBody: "Workflow \(succeeded ? "completed" : "failed"): \(workflow.name)",
-            responseBody: execLog.status.rawValue
+            requestBody: requestBody,
+            responseBody: responseBody,
+            detailedRequestBody: detailedRequest,
+            detailedResponseBody: detailedResponse
         )
         await loggingService.logEntry(logEntry)
     }
@@ -198,7 +265,14 @@ actor WorkflowEngine {
     // MARK: - Action Execution
 
     private func executeAction(_ action: WorkflowAction, index: Int, context: ExecutionContext) async -> BlockResult {
-        var result = BlockResult(blockIndex: index, blockKind: "action", blockType: action.displayType)
+        let actionName: String? = {
+            switch action {
+            case .controlDevice(let a): return a.name
+            case .webhook(let a): return a.name
+            case .log(let a): return a.name
+            }
+        }()
+        var result = BlockResult(blockIndex: index, blockKind: "action", blockType: action.displayType, blockName: actionName)
 
         do {
             try await withTimeout(seconds: blockTimeout) {
@@ -267,7 +341,17 @@ actor WorkflowEngine {
     // MARK: - Flow Control Execution
 
     private func executeFlowControl(_ flowControl: FlowControlBlock, index: Int, context: ExecutionContext) async -> BlockResult {
-        var result = BlockResult(blockIndex: index, blockKind: "flowControl", blockType: flowControl.displayType)
+        let fcName: String? = {
+            switch flowControl {
+            case .delay(let b): return b.name
+            case .waitForState(let b): return b.name
+            case .conditional(let b): return b.name
+            case .repeat(let b): return b.name
+            case .repeatWhile(let b): return b.name
+            case .group(let b): return b.name
+            }
+        }()
+        var result = BlockResult(blockIndex: index, blockKind: "flowControl", blockType: flowControl.displayType, blockName: fcName)
 
         do {
             switch flowControl {

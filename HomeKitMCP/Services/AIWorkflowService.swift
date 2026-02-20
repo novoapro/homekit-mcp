@@ -294,6 +294,7 @@ actor AIWorkflowService {
               "triggers": [
                 {
                   "type": "deviceStateChange",
+                  "name": "optional human-readable name",
                   "deviceId": "device-uuid",
                   "characteristicType": "characteristic-name-or-uuid",
                   "condition": { "type": "equals|notEquals|changed|greaterThan|lessThan|transitioned", "value": ... }
@@ -308,15 +309,15 @@ actor AIWorkflowService {
                 }
               ],
               "blocks": [
-                { "block": "action", "type": "controlDevice", "deviceId": "...", "characteristicType": "...", "value": ... },
-                { "block": "action", "type": "webhook", "url": "...", "method": "POST" },
-                { "block": "action", "type": "log", "message": "..." },
-                { "block": "flowControl", "type": "delay", "seconds": 5.0 },
-                { "block": "flowControl", "type": "waitForState", "deviceId": "...", "characteristicType": "...", "condition": {...}, "timeoutSeconds": 60 },
-                { "block": "flowControl", "type": "conditional", "condition": {...}, "thenBlocks": [...], "elseBlocks": [...] },
-                { "block": "flowControl", "type": "repeat", "count": 3, "blocks": [...] },
-                { "block": "flowControl", "type": "repeatWhile", "condition": {...}, "blocks": [...], "maxIterations": 10 },
-                { "block": "flowControl", "type": "group", "label": "...", "blocks": [...] }
+                { "block": "action", "type": "controlDevice", "name": "optional name", "deviceId": "...", "characteristicType": "...", "value": ... },
+                { "block": "action", "type": "webhook", "name": "optional name", "url": "...", "method": "POST" },
+                { "block": "action", "type": "log", "name": "optional name", "message": "..." },
+                { "block": "flowControl", "type": "delay", "name": "optional name", "seconds": 5.0 },
+                { "block": "flowControl", "type": "waitForState", "name": "optional name", "deviceId": "...", "characteristicType": "...", "condition": {...}, "timeoutSeconds": 60 },
+                { "block": "flowControl", "type": "conditional", "name": "optional name", "condition": {...}, "thenBlocks": [...], "elseBlocks": [...] },
+                { "block": "flowControl", "type": "repeat", "name": "optional name", "count": 3, "blocks": [...] },
+                { "block": "flowControl", "type": "repeatWhile", "name": "optional name", "condition": {...}, "blocks": [...], "maxIterations": 10 },
+                { "block": "flowControl", "type": "group", "name": "optional name", "label": "...", "blocks": [...] }
               ]
             }
             ```
@@ -341,6 +342,8 @@ actor AIWorkflowService {
             - For percentage characteristics like Brightness, use 0-100
             - Always include at least one trigger and one block
             - Generate a descriptive name for the workflow
+            - Blocks and triggers can optionally include a "name" field for readability in logs and the UI. \
+            Use short, descriptive names like "Turn on lamp", "Wait for door", "Check temperature"
 
             ## Available Devices
 

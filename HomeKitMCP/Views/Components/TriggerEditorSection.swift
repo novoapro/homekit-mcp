@@ -26,6 +26,8 @@ struct TriggerEditorSection: View {
 
     private func triggerRow(index: Int) -> some View {
         DisclosureGroup {
+            TextField("Trigger Name (optional)", text: $triggers[index].name)
+
             DeviceCharacteristicPicker(
                 devices: devices,
                 selectedDeviceId: $triggers[index].deviceId,
@@ -83,7 +85,20 @@ struct TriggerEditorSection: View {
             Image(systemName: "bolt.fill")
                 .font(.caption)
                 .foregroundColor(Theme.Tint.main)
-            if trigger.deviceId.isEmpty {
+            if !trigger.name.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(trigger.name)
+                        .lineLimit(1)
+                    if !trigger.deviceId.isEmpty {
+                        let deviceName = devices.first(where: { $0.id == trigger.deviceId })?.name ?? "Unknown"
+                        let charName = trigger.characteristicType.isEmpty ? "..." : CharacteristicTypes.displayName(for: trigger.characteristicType)
+                        Text("\(deviceName) › \(charName)")
+                            .font(.caption)
+                            .foregroundColor(Theme.Text.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            } else if trigger.deviceId.isEmpty {
                 Text("New Trigger")
                     .foregroundColor(Theme.Text.secondary)
             } else {
