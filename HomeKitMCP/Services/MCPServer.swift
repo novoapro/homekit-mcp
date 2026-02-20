@@ -103,17 +103,21 @@ class MCPServer: ObservableObject {
     }
 
     func stop() {
-        stopSync()
-        DispatchQueue.main.async {
-            self.isRunning = false
-            self.connectedClients = 0
+        Task {
+            await stopAsync()
+            DispatchQueue.main.async {
+                self.isRunning = false
+                self.connectedClients = 0
+            }
         }
     }
 
-    private func stopSync() {
-        Task { await connectionTracker.removeAll() }
-        app?.shutdown()
-        app = nil
+    private func stopAsync() async {
+        await connectionTracker.removeAll()
+        if let app = app {
+            await app.shutdown()
+        }
+        self.app = nil
     }
 
     // MARK: - Route Configuration
