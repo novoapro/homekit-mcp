@@ -334,7 +334,7 @@ private struct WorkflowBuilderTriggerRow: View {
                     Image(systemName: "bolt.fill")
                         .font(.caption)
                         .foregroundColor(Theme.Tint.main)
-                    Text("Device State Change")
+                    Text(t.name ?? "Device State Change")
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
@@ -355,7 +355,7 @@ private struct WorkflowBuilderTriggerRow: View {
                     Image(systemName: "arrow.triangle.branch")
                         .font(.caption)
                         .foregroundColor(Theme.Tint.main)
-                    Text("Compound (\(t.logicOperator.rawValue.uppercased()))")
+                    Text(t.name ?? "Compound (\(t.logicOperator.rawValue.uppercased()))")
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
@@ -468,9 +468,9 @@ private struct BuilderActionBlockRow: View {
 
     private var actionTitle: String {
         switch action {
-        case .controlDevice: return "Control Device"
-        case .webhook: return "Webhook"
-        case .log: return "Log Message"
+        case .controlDevice(let a): return a.name ?? "Control Device"
+        case .webhook(let a): return a.name ?? "Webhook"
+        case .log(let a): return a.name ?? "Log Message"
         }
     }
 
@@ -530,13 +530,13 @@ private struct BuilderFlowControlBlockRow: View {
 
     private var flowControlTitle: String {
         switch flowControl {
-        case .delay(let b): return "Delay \(b.seconds)s"
+        case .delay(let b): return b.name ?? "Delay \(b.seconds)s"
         case .waitForState(let b):
-            return "Wait for \(CharacteristicTypes.displayName(for: b.characteristicType)) \(ConditionEvaluator.comparisonDescription(b.condition))"
-        case .conditional: return "If/Else"
-        case .repeat(let b): return "Repeat \(b.count) times"
-        case .repeatWhile(let b): return "Repeat while (max \(b.maxIterations))"
-        case .group(let b): return b.label ?? "Group"
+            return b.name ?? "Wait for \(CharacteristicTypes.displayName(for: b.characteristicType)) \(ConditionEvaluator.comparisonDescription(b.condition))"
+        case .conditional(let b): return b.name ?? "If/Else"
+        case .repeat(let b): return b.name ?? "Repeat \(b.count) times"
+        case .repeatWhile(let b): return b.name ?? "Repeat while (max \(b.maxIterations))"
+        case .group(let b): return b.name ?? b.label ?? "Group"
         }
     }
 

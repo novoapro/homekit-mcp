@@ -111,7 +111,7 @@ enum WorkflowAction: Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case type
+        case type, name
         case deviceId, serviceId, characteristicType, value
         case url, method, headers, body
         case message
@@ -120,24 +120,28 @@ enum WorkflowAction: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(ActionType.self, forKey: .type)
+        let name = try container.decodeIfPresent(String.self, forKey: .name)
         switch type {
         case .controlDevice:
             self = .controlDevice(ControlDeviceAction(
                 deviceId: try container.decode(String.self, forKey: .deviceId),
                 serviceId: try container.decodeIfPresent(String.self, forKey: .serviceId),
                 characteristicType: try container.decode(String.self, forKey: .characteristicType),
-                value: try container.decode(AnyCodable.self, forKey: .value)
+                value: try container.decode(AnyCodable.self, forKey: .value),
+                name: name
             ))
         case .webhook:
             self = .webhook(WebhookActionConfig(
                 url: try container.decode(String.self, forKey: .url),
                 method: try container.decode(String.self, forKey: .method),
                 headers: try container.decodeIfPresent([String: String].self, forKey: .headers),
-                body: try container.decodeIfPresent(AnyCodable.self, forKey: .body)
+                body: try container.decodeIfPresent(AnyCodable.self, forKey: .body),
+                name: name
             ))
         case .log:
             self = .log(LogAction(
-                message: try container.decode(String.self, forKey: .message)
+                message: try container.decode(String.self, forKey: .message),
+                name: name
             ))
         }
     }
@@ -147,18 +151,21 @@ enum WorkflowAction: Codable {
         switch self {
         case .controlDevice(let action):
             try container.encode(ActionType.controlDevice, forKey: .type)
+            try container.encodeIfPresent(action.name, forKey: .name)
             try container.encode(action.deviceId, forKey: .deviceId)
             try container.encodeIfPresent(action.serviceId, forKey: .serviceId)
             try container.encode(action.characteristicType, forKey: .characteristicType)
             try container.encode(action.value, forKey: .value)
         case .webhook(let action):
             try container.encode(ActionType.webhook, forKey: .type)
+            try container.encodeIfPresent(action.name, forKey: .name)
             try container.encode(action.url, forKey: .url)
             try container.encode(action.method, forKey: .method)
             try container.encodeIfPresent(action.headers, forKey: .headers)
             try container.encodeIfPresent(action.body, forKey: .body)
         case .log(let action):
             try container.encode(ActionType.log, forKey: .type)
+            try container.encodeIfPresent(action.name, forKey: .name)
             try container.encode(action.message, forKey: .message)
         }
     }
@@ -177,6 +184,15 @@ struct ControlDeviceAction {
     let serviceId: String?
     let characteristicType: String
     let value: AnyCodable
+    let name: String?
+
+    init(deviceId: String, serviceId: String? = nil, characteristicType: String, value: AnyCodable, name: String? = nil) {
+        self.deviceId = deviceId
+        self.serviceId = serviceId
+        self.characteristicType = characteristicType
+        self.value = value
+        self.name = name
+    }
 }
 
 struct WebhookActionConfig {
@@ -184,10 +200,25 @@ struct WebhookActionConfig {
     let method: String
     let headers: [String: String]?
     let body: AnyCodable?
+    let name: String?
+
+    init(url: String, method: String, headers: [String: String]? = nil, body: AnyCodable? = nil, name: String? = nil) {
+        self.url = url
+        self.method = method
+        self.headers = headers
+        self.body = body
+        self.name = name
+    }
 }
 
 struct LogAction {
     let message: String
+    let name: String?
+
+    init(message: String, name: String? = nil) {
+        self.message = message
+        self.name = name
+    }
 }
 
 // MARK: - Flow Control Blocks (Structural Nodes)
@@ -210,7 +241,7 @@ enum FlowControlBlock: Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case type
+        case type, name
         case seconds
         case deviceId, serviceId, characteristicType, condition, timeoutSeconds
         case thenBlocks, elseBlocks
@@ -222,10 +253,12 @@ enum FlowControlBlock: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(FlowControlType.self, forKey: .type)
+        let name = try container.decodeIfPresent(String.self, forKey: .name)
         switch type {
         case .delay:
             self = .delay(DelayBlock(
-                seconds: try container.decode(Double.self, forKey: .seconds)
+                seconds: try container.decode(Double.self, forKey: .seconds),
+                name: name
             ))
         case .waitForState:
             self = .waitForState(WaitForStateBlock(
@@ -233,31 +266,36 @@ enum FlowControlBlock: Codable {
                 serviceId: try container.decodeIfPresent(String.self, forKey: .serviceId),
                 characteristicType: try container.decode(String.self, forKey: .characteristicType),
                 condition: try container.decode(ComparisonOperator.self, forKey: .condition),
-                timeoutSeconds: try container.decode(Double.self, forKey: .timeoutSeconds)
+                timeoutSeconds: try container.decode(Double.self, forKey: .timeoutSeconds),
+                name: name
             ))
         case .conditional:
             self = .conditional(ConditionalBlock(
                 condition: try container.decode(WorkflowCondition.self, forKey: .condition),
                 thenBlocks: try container.decode([WorkflowBlock].self, forKey: .thenBlocks),
-                elseBlocks: try container.decodeIfPresent([WorkflowBlock].self, forKey: .elseBlocks)
+                elseBlocks: try container.decodeIfPresent([WorkflowBlock].self, forKey: .elseBlocks),
+                name: name
             ))
         case .repeat:
             self = .repeat(RepeatBlock(
                 count: try container.decode(Int.self, forKey: .count),
                 blocks: try container.decode([WorkflowBlock].self, forKey: .blocks),
-                delayBetweenSeconds: try container.decodeIfPresent(Double.self, forKey: .delayBetweenSeconds)
+                delayBetweenSeconds: try container.decodeIfPresent(Double.self, forKey: .delayBetweenSeconds),
+                name: name
             ))
         case .repeatWhile:
             self = .repeatWhile(RepeatWhileBlock(
                 condition: try container.decode(WorkflowCondition.self, forKey: .condition),
                 blocks: try container.decode([WorkflowBlock].self, forKey: .blocks),
                 maxIterations: try container.decodeIfPresent(Int.self, forKey: .maxIterations) ?? 100,
-                delayBetweenSeconds: try container.decodeIfPresent(Double.self, forKey: .delayBetweenSeconds)
+                delayBetweenSeconds: try container.decodeIfPresent(Double.self, forKey: .delayBetweenSeconds),
+                name: name
             ))
         case .group:
             self = .group(GroupBlock(
                 label: try container.decodeIfPresent(String.self, forKey: .label),
-                blocks: try container.decode([WorkflowBlock].self, forKey: .blocks)
+                blocks: try container.decode([WorkflowBlock].self, forKey: .blocks),
+                name: name
             ))
         }
     }
@@ -267,9 +305,11 @@ enum FlowControlBlock: Codable {
         switch self {
         case .delay(let block):
             try container.encode(FlowControlType.delay, forKey: .type)
+            try container.encodeIfPresent(block.name, forKey: .name)
             try container.encode(block.seconds, forKey: .seconds)
         case .waitForState(let block):
             try container.encode(FlowControlType.waitForState, forKey: .type)
+            try container.encodeIfPresent(block.name, forKey: .name)
             try container.encode(block.deviceId, forKey: .deviceId)
             try container.encodeIfPresent(block.serviceId, forKey: .serviceId)
             try container.encode(block.characteristicType, forKey: .characteristicType)
@@ -277,22 +317,26 @@ enum FlowControlBlock: Codable {
             try container.encode(block.timeoutSeconds, forKey: .timeoutSeconds)
         case .conditional(let block):
             try container.encode(FlowControlType.conditional, forKey: .type)
+            try container.encodeIfPresent(block.name, forKey: .name)
             try container.encode(block.condition, forKey: .condition)
             try container.encode(block.thenBlocks, forKey: .thenBlocks)
             try container.encodeIfPresent(block.elseBlocks, forKey: .elseBlocks)
         case .repeat(let block):
             try container.encode(FlowControlType.repeat, forKey: .type)
+            try container.encodeIfPresent(block.name, forKey: .name)
             try container.encode(block.count, forKey: .count)
             try container.encode(block.blocks, forKey: .blocks)
             try container.encodeIfPresent(block.delayBetweenSeconds, forKey: .delayBetweenSeconds)
         case .repeatWhile(let block):
             try container.encode(FlowControlType.repeatWhile, forKey: .type)
+            try container.encodeIfPresent(block.name, forKey: .name)
             try container.encode(block.condition, forKey: .condition)
             try container.encode(block.blocks, forKey: .blocks)
             try container.encode(block.maxIterations, forKey: .maxIterations)
             try container.encodeIfPresent(block.delayBetweenSeconds, forKey: .delayBetweenSeconds)
         case .group(let block):
             try container.encode(FlowControlType.group, forKey: .type)
+            try container.encodeIfPresent(block.name, forKey: .name)
             try container.encodeIfPresent(block.label, forKey: .label)
             try container.encode(block.blocks, forKey: .blocks)
         }
@@ -312,6 +356,12 @@ enum FlowControlBlock: Codable {
 
 struct DelayBlock {
     let seconds: Double
+    let name: String?
+
+    init(seconds: Double, name: String? = nil) {
+        self.seconds = seconds
+        self.name = name
+    }
 }
 
 struct WaitForStateBlock {
@@ -320,18 +370,44 @@ struct WaitForStateBlock {
     let characteristicType: String
     let condition: ComparisonOperator
     let timeoutSeconds: Double
+    let name: String?
+
+    init(deviceId: String, serviceId: String? = nil, characteristicType: String, condition: ComparisonOperator, timeoutSeconds: Double, name: String? = nil) {
+        self.deviceId = deviceId
+        self.serviceId = serviceId
+        self.characteristicType = characteristicType
+        self.condition = condition
+        self.timeoutSeconds = timeoutSeconds
+        self.name = name
+    }
 }
 
 struct ConditionalBlock {
     let condition: WorkflowCondition
     let thenBlocks: [WorkflowBlock]
     let elseBlocks: [WorkflowBlock]?
+    let name: String?
+
+    init(condition: WorkflowCondition, thenBlocks: [WorkflowBlock], elseBlocks: [WorkflowBlock]? = nil, name: String? = nil) {
+        self.condition = condition
+        self.thenBlocks = thenBlocks
+        self.elseBlocks = elseBlocks
+        self.name = name
+    }
 }
 
 struct RepeatBlock {
     let count: Int
     let blocks: [WorkflowBlock]
     let delayBetweenSeconds: Double?
+    let name: String?
+
+    init(count: Int, blocks: [WorkflowBlock], delayBetweenSeconds: Double? = nil, name: String? = nil) {
+        self.count = count
+        self.blocks = blocks
+        self.delayBetweenSeconds = delayBetweenSeconds
+        self.name = name
+    }
 }
 
 struct RepeatWhileBlock {
@@ -339,18 +415,27 @@ struct RepeatWhileBlock {
     let blocks: [WorkflowBlock]
     let maxIterations: Int
     let delayBetweenSeconds: Double?
+    let name: String?
 
-    init(condition: WorkflowCondition, blocks: [WorkflowBlock], maxIterations: Int = 100, delayBetweenSeconds: Double? = nil) {
+    init(condition: WorkflowCondition, blocks: [WorkflowBlock], maxIterations: Int = 100, delayBetweenSeconds: Double? = nil, name: String? = nil) {
         self.condition = condition
         self.blocks = blocks
         self.maxIterations = maxIterations
         self.delayBetweenSeconds = delayBetweenSeconds
+        self.name = name
     }
 }
 
 struct GroupBlock {
     let label: String?
     let blocks: [WorkflowBlock]
+    let name: String?
+
+    init(label: String? = nil, blocks: [WorkflowBlock], name: String? = nil) {
+        self.label = label
+        self.blocks = blocks
+        self.name = name
+    }
 }
 
 // MARK: - Trigger System
@@ -365,7 +450,7 @@ indirect enum WorkflowTrigger: Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case type
+        case type, name
         case deviceId, serviceId, characteristicType, condition
         case logicOperator = "operator"
         case triggers
@@ -374,18 +459,21 @@ indirect enum WorkflowTrigger: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(TriggerType.self, forKey: .type)
+        let name = try container.decodeIfPresent(String.self, forKey: .name)
         switch type {
         case .deviceStateChange:
             self = .deviceStateChange(DeviceStateTrigger(
                 deviceId: try container.decode(String.self, forKey: .deviceId),
                 serviceId: try container.decodeIfPresent(String.self, forKey: .serviceId),
                 characteristicType: try container.decode(String.self, forKey: .characteristicType),
-                condition: try container.decode(TriggerCondition.self, forKey: .condition)
+                condition: try container.decode(TriggerCondition.self, forKey: .condition),
+                name: name
             ))
         case .compound:
             self = .compound(CompoundTrigger(
                 logicOperator: try container.decode(LogicOperator.self, forKey: .logicOperator),
-                triggers: try container.decode([WorkflowTrigger].self, forKey: .triggers)
+                triggers: try container.decode([WorkflowTrigger].self, forKey: .triggers),
+                name: name
             ))
         }
     }
@@ -395,12 +483,14 @@ indirect enum WorkflowTrigger: Codable {
         switch self {
         case .deviceStateChange(let trigger):
             try container.encode(TriggerType.deviceStateChange, forKey: .type)
+            try container.encodeIfPresent(trigger.name, forKey: .name)
             try container.encode(trigger.deviceId, forKey: .deviceId)
             try container.encodeIfPresent(trigger.serviceId, forKey: .serviceId)
             try container.encode(trigger.characteristicType, forKey: .characteristicType)
             try container.encode(trigger.condition, forKey: .condition)
         case .compound(let trigger):
             try container.encode(TriggerType.compound, forKey: .type)
+            try container.encodeIfPresent(trigger.name, forKey: .name)
             try container.encode(trigger.logicOperator, forKey: .logicOperator)
             try container.encode(trigger.triggers, forKey: .triggers)
         }
@@ -412,11 +502,27 @@ struct DeviceStateTrigger {
     let serviceId: String?
     let characteristicType: String
     let condition: TriggerCondition
+    let name: String?
+
+    init(deviceId: String, serviceId: String? = nil, characteristicType: String, condition: TriggerCondition, name: String? = nil) {
+        self.deviceId = deviceId
+        self.serviceId = serviceId
+        self.characteristicType = characteristicType
+        self.condition = condition
+        self.name = name
+    }
 }
 
 struct CompoundTrigger {
     let logicOperator: LogicOperator
     let triggers: [WorkflowTrigger]
+    let name: String?
+
+    init(logicOperator: LogicOperator, triggers: [WorkflowTrigger], name: String? = nil) {
+        self.logicOperator = logicOperator
+        self.triggers = triggers
+        self.name = name
+    }
 }
 
 enum LogicOperator: String, Codable {
@@ -712,6 +818,7 @@ struct BlockResult: Codable {
     let blockIndex: Int
     let blockKind: String
     let blockType: String
+    let blockName: String?
     var status: ExecutionStatus
     let startedAt: Date
     var completedAt: Date?
@@ -723,6 +830,7 @@ struct BlockResult: Codable {
         blockIndex: Int,
         blockKind: String,
         blockType: String,
+        blockName: String? = nil,
         status: ExecutionStatus = .running,
         startedAt: Date = Date(),
         completedAt: Date? = nil,
@@ -733,6 +841,7 @@ struct BlockResult: Codable {
         self.blockIndex = blockIndex
         self.blockKind = blockKind
         self.blockType = blockType
+        self.blockName = blockName
         self.status = status
         self.startedAt = startedAt
         self.completedAt = completedAt

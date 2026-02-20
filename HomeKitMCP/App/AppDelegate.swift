@@ -15,7 +15,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             storageService: workflowStorageService,
             homeKitManager: homeKitManager,
             loggingService: loggingService,
-            executionLogService: workflowExecutionLogService
+            executionLogService: workflowExecutionLogService,
+            storage: storageService
         )
         return engine
     }()

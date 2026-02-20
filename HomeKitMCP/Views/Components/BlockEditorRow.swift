@@ -29,9 +29,30 @@ struct BlockEditorRow: View {
             Image(systemName: block.blockType.icon)
                 .font(.caption)
                 .foregroundColor(block.blockType.isFlowControl ? .indigo : Theme.Tint.main)
-            Text(block.blockType.displayName)
-                .font(.subheadline)
-                .fontWeight(.medium)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(block.blockType.displayName)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                if let name = blockName, !name.isEmpty {
+                    Text(name)
+                        .font(.caption)
+                        .foregroundColor(Theme.Text.secondary)
+                }
+            }
+        }
+    }
+
+    private var blockName: String? {
+        switch block.blockType {
+        case .controlDevice(let d): return d.name.isEmpty ? nil : d.name
+        case .webhook(let d): return d.name.isEmpty ? nil : d.name
+        case .log(let d): return d.name.isEmpty ? nil : d.name
+        case .delay(let d): return d.name.isEmpty ? nil : d.name
+        case .waitForState(let d): return d.name.isEmpty ? nil : d.name
+        case .conditional(let d): return d.name.isEmpty ? nil : d.name
+        case .repeatBlock(let d): return d.name.isEmpty ? nil : d.name
+        case .repeatWhile(let d): return d.name.isEmpty ? nil : d.name
+        case .group(let d): return d.name.isEmpty ? nil : d.name
         }
     }
 
@@ -122,6 +143,8 @@ private struct ControlDeviceEditor: View {
     }
 
     var body: some View {
+        TextField("Block Name (optional)", text: draft.name)
+
         DeviceCharacteristicPicker(
             devices: devices,
             selectedDeviceId: draft.deviceId,
@@ -153,6 +176,8 @@ private struct WebhookEditor: View {
     }
 
     var body: some View {
+        TextField("Block Name (optional)", text: draft.name)
+
         TextField("URL", text: draft.url)
             .keyboardType(.URL)
             .autocapitalization(.none)
@@ -185,6 +210,7 @@ private struct LogEditor: View {
     }
 
     var body: some View {
+        TextField("Block Name (optional)", text: draft.name)
         TextField("Log message", text: draft.message)
     }
 }
@@ -205,6 +231,8 @@ private struct DelayEditor: View {
     }
 
     var body: some View {
+        TextField("Block Name (optional)", text: draft.name)
+
         HStack {
             Text("Seconds")
             Spacer()
@@ -234,6 +262,8 @@ private struct WaitForStateEditor: View {
     }
 
     var body: some View {
+        TextField("Block Name (optional)", text: draft.name)
+
         DeviceCharacteristicPicker(
             devices: devices,
             selectedDeviceId: draft.deviceId,
@@ -285,6 +315,8 @@ private struct ConditionalEditor: View {
     }
 
     var body: some View {
+        TextField("Block Name (optional)", text: draft.name)
+
         Text("Condition")
             .font(.caption)
             .foregroundColor(Theme.Text.secondary)
@@ -363,6 +395,8 @@ private struct RepeatEditor: View {
     }
 
     var body: some View {
+        TextField("Block Name (optional)", text: draft.name)
+
         Stepper("Count: \(draft.wrappedValue.count)", value: draft.count, in: 1...1000)
 
         HStack {
@@ -413,6 +447,8 @@ private struct RepeatWhileEditor: View {
     }
 
     var body: some View {
+        TextField("Block Name (optional)", text: draft.name)
+
         Text("While Condition")
             .font(.caption)
             .foregroundColor(Theme.Text.secondary)
@@ -486,6 +522,7 @@ private struct GroupEditor: View {
     }
 
     var body: some View {
+        TextField("Block Name (optional)", text: draft.name)
         TextField("Group Label (optional)", text: draft.label)
 
         if allowNesting {

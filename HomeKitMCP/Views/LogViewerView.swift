@@ -101,6 +101,9 @@ struct LogViewerView: View {
                         Label("Clear", systemImage: "xmark.circle.fill")
                             .font(.caption)
                             .foregroundColor(Theme.Status.error)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .transition(.opacity)

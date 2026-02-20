@@ -84,6 +84,7 @@ struct WorkflowDraft {
 
 struct TriggerDraft: Identifiable {
     let id: UUID
+    var name: String = ""
     var deviceId: String
     var serviceId: String?
     var characteristicType: String
@@ -94,6 +95,7 @@ struct TriggerDraft: Identifiable {
     static func empty() -> TriggerDraft {
         TriggerDraft(
             id: UUID(),
+            name: "",
             deviceId: "",
             serviceId: nil,
             characteristicType: "",
@@ -218,6 +220,7 @@ enum BlockDraftType {
 // MARK: - Block Type-Specific Drafts
 
 struct ControlDeviceDraft {
+    var name: String = ""
     var deviceId: String = ""
     var serviceId: String?
     var characteristicType: String = ""
@@ -225,20 +228,24 @@ struct ControlDeviceDraft {
 }
 
 struct WebhookDraft {
+    var name: String = ""
     var url: String = ""
     var method: String = "POST"
     var body: String = ""
 }
 
 struct LogDraft {
+    var name: String = ""
     var message: String = ""
 }
 
 struct DelayDraft {
+    var name: String = ""
     var seconds: Double = 1.0
 }
 
 struct WaitForStateDraft {
+    var name: String = ""
     var deviceId: String = ""
     var serviceId: String?
     var characteristicType: String = ""
@@ -248,6 +255,7 @@ struct WaitForStateDraft {
 }
 
 struct ConditionalDraft {
+    var name: String = ""
     var conditionDeviceId: String = ""
     var conditionServiceId: String?
     var conditionCharacteristicType: String = ""
@@ -258,12 +266,14 @@ struct ConditionalDraft {
 }
 
 struct RepeatDraft {
+    var name: String = ""
     var count: Int = 3
     var delayBetweenSeconds: Double = 0
     var blocks: [BlockDraft] = []
 }
 
 struct RepeatWhileDraft {
+    var name: String = ""
     var conditionDeviceId: String = ""
     var conditionServiceId: String?
     var conditionCharacteristicType: String = ""
@@ -275,6 +285,7 @@ struct RepeatWhileDraft {
 }
 
 struct GroupDraft {
+    var name: String = ""
     var label: String = ""
     var blocks: [BlockDraft] = []
 }
@@ -330,6 +341,7 @@ extension WorkflowDraft {
             let (condType, condValue, condFrom) = convertTriggerCondition(t.condition)
             return TriggerDraft(
                 id: UUID(),
+                name: t.name ?? "",
                 deviceId: t.deviceId,
                 serviceId: t.serviceId,
                 characteristicType: t.characteristicType,
@@ -406,6 +418,7 @@ extension WorkflowDraft {
         switch action {
         case .controlDevice(let a):
             return BlockDraft(id: UUID(), blockType: .controlDevice(ControlDeviceDraft(
+                name: a.name ?? "",
                 deviceId: a.deviceId,
                 serviceId: a.serviceId,
                 characteristicType: a.characteristicType,
@@ -413,22 +426,24 @@ extension WorkflowDraft {
             )))
         case .webhook(let a):
             return BlockDraft(id: UUID(), blockType: .webhook(WebhookDraft(
+                name: a.name ?? "",
                 url: a.url,
                 method: a.method,
                 body: a.body.map { stringFromAny($0.value) } ?? ""
             )))
         case .log(let a):
-            return BlockDraft(id: UUID(), blockType: .log(LogDraft(message: a.message)))
+            return BlockDraft(id: UUID(), blockType: .log(LogDraft(name: a.name ?? "", message: a.message)))
         }
     }
 
     private static func convertFlowControl(_ fc: FlowControlBlock) -> BlockDraft {
         switch fc {
         case .delay(let b):
-            return BlockDraft(id: UUID(), blockType: .delay(DelayDraft(seconds: b.seconds)))
+            return BlockDraft(id: UUID(), blockType: .delay(DelayDraft(name: b.name ?? "", seconds: b.seconds)))
         case .waitForState(let b):
             let (compType, compValue) = convertComparison(b.condition)
             return BlockDraft(id: UUID(), blockType: .waitForState(WaitForStateDraft(
+                name: b.name ?? "",
                 deviceId: b.deviceId,
                 serviceId: b.serviceId,
                 characteristicType: b.characteristicType,
@@ -439,6 +454,7 @@ extension WorkflowDraft {
         case .conditional(let b):
             let (devId, svcId, charType, compType, compValue) = extractDeviceCondition(b.condition)
             return BlockDraft(id: UUID(), blockType: .conditional(ConditionalDraft(
+                name: b.name ?? "",
                 conditionDeviceId: devId,
                 conditionServiceId: svcId,
                 conditionCharacteristicType: charType,
@@ -449,6 +465,7 @@ extension WorkflowDraft {
             )))
         case .repeat(let b):
             return BlockDraft(id: UUID(), blockType: .repeatBlock(RepeatDraft(
+                name: b.name ?? "",
                 count: b.count,
                 delayBetweenSeconds: b.delayBetweenSeconds ?? 0,
                 blocks: b.blocks.map { convertBlock($0) }
@@ -456,6 +473,7 @@ extension WorkflowDraft {
         case .repeatWhile(let b):
             let (devId, svcId, charType, compType, compValue) = extractDeviceCondition(b.condition)
             return BlockDraft(id: UUID(), blockType: .repeatWhile(RepeatWhileDraft(
+                name: b.name ?? "",
                 conditionDeviceId: devId,
                 conditionServiceId: svcId,
                 conditionCharacteristicType: charType,
@@ -467,6 +485,7 @@ extension WorkflowDraft {
             )))
         case .group(let b):
             return BlockDraft(id: UUID(), blockType: .group(GroupDraft(
+                name: b.name ?? "",
                 label: b.label ?? "",
                 blocks: b.blocks.map { convertBlock($0) }
             )))
@@ -510,7 +529,8 @@ extension TriggerDraft {
             deviceId: deviceId,
             serviceId: serviceId,
             characteristicType: characteristicType,
-            condition: toTriggerCondition()
+            condition: toTriggerCondition(),
+            name: name.isEmpty ? nil : name
         ))
     }
 
@@ -573,26 +593,29 @@ extension BlockDraft {
                 deviceId: d.deviceId,
                 serviceId: d.serviceId,
                 characteristicType: d.characteristicType,
-                value: parseValue(d.value)
+                value: parseValue(d.value),
+                name: d.name.isEmpty ? nil : d.name
             )))
         case .webhook(let d):
             return .action(.webhook(WebhookActionConfig(
                 url: d.url,
                 method: d.method,
                 headers: nil,
-                body: d.body.isEmpty ? nil : AnyCodable(d.body)
+                body: d.body.isEmpty ? nil : AnyCodable(d.body),
+                name: d.name.isEmpty ? nil : d.name
             )))
         case .log(let d):
-            return .action(.log(LogAction(message: d.message)))
+            return .action(.log(LogAction(message: d.message, name: d.name.isEmpty ? nil : d.name)))
         case .delay(let d):
-            return .flowControl(.delay(DelayBlock(seconds: d.seconds)))
+            return .flowControl(.delay(DelayBlock(seconds: d.seconds, name: d.name.isEmpty ? nil : d.name)))
         case .waitForState(let d):
             return .flowControl(.waitForState(WaitForStateBlock(
                 deviceId: d.deviceId,
                 serviceId: d.serviceId,
                 characteristicType: d.characteristicType,
                 condition: d.comparisonType.toOperator(value: d.comparisonValue),
-                timeoutSeconds: d.timeoutSeconds
+                timeoutSeconds: d.timeoutSeconds,
+                name: d.name.isEmpty ? nil : d.name
             )))
         case .conditional(let d):
             return .flowControl(.conditional(ConditionalBlock(
@@ -603,13 +626,15 @@ extension BlockDraft {
                     comparison: d.comparisonType.toOperator(value: d.comparisonValue)
                 )),
                 thenBlocks: d.thenBlocks.map { $0.toBlock() },
-                elseBlocks: d.elseBlocks.isEmpty ? nil : d.elseBlocks.map { $0.toBlock() }
+                elseBlocks: d.elseBlocks.isEmpty ? nil : d.elseBlocks.map { $0.toBlock() },
+                name: d.name.isEmpty ? nil : d.name
             )))
         case .repeatBlock(let d):
             return .flowControl(.repeat(RepeatBlock(
                 count: d.count,
                 blocks: d.blocks.map { $0.toBlock() },
-                delayBetweenSeconds: d.delayBetweenSeconds > 0 ? d.delayBetweenSeconds : nil
+                delayBetweenSeconds: d.delayBetweenSeconds > 0 ? d.delayBetweenSeconds : nil,
+                name: d.name.isEmpty ? nil : d.name
             )))
         case .repeatWhile(let d):
             return .flowControl(.repeatWhile(RepeatWhileBlock(
@@ -621,12 +646,14 @@ extension BlockDraft {
                 )),
                 blocks: d.blocks.map { $0.toBlock() },
                 maxIterations: d.maxIterations,
-                delayBetweenSeconds: d.delayBetweenSeconds > 0 ? d.delayBetweenSeconds : nil
+                delayBetweenSeconds: d.delayBetweenSeconds > 0 ? d.delayBetweenSeconds : nil,
+                name: d.name.isEmpty ? nil : d.name
             )))
         case .group(let d):
             return .flowControl(.group(GroupBlock(
                 label: d.label.isEmpty ? nil : d.label,
-                blocks: d.blocks.map { $0.toBlock() }
+                blocks: d.blocks.map { $0.toBlock() },
+                name: d.name.isEmpty ? nil : d.name
             )))
         }
     }

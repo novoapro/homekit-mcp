@@ -6,9 +6,13 @@ struct BlockEditorSection: View {
     var allowNesting: Bool = true
 
     @State private var showingBlockTypePicker = false
-    @State private var showingNestedSheet = false
-    @State private var nestedParentBlockIndex: Int = 0
-    @State private var nestedLabel: String = ""
+    @State private var nestedEditState: NestedEditState?
+
+    struct NestedEditState: Identifiable {
+        let id = UUID()
+        let parentBlockId: UUID
+        let label: String
+    }
 
     var body: some View {
         Section {
@@ -18,9 +22,7 @@ struct BlockEditorSection: View {
                     devices: devices,
                     allowNesting: allowNesting,
                     onEditNestedBlocks: allowNesting ? { label, _ in
-                        nestedParentBlockIndex = index
-                        nestedLabel = label
-                        showingNestedSheet = true
+                        nestedEditState = NestedEditState(parentBlockId: blocks[index].id, label: label)
                     } : nil,
                     onDelete: { blocks.remove(at: index) }
                 )
@@ -60,29 +62,30 @@ struct BlockEditorSection: View {
             }
         }
         .listRowBackground(Theme.contentBackground)
-        .sheet(isPresented: $showingNestedSheet) {
+        .sheet(item: $nestedEditState) { state in
             NestedBlockEditorSheet(
-                title: nestedSheetTitle(),
-                blocks: nestedBlocksBinding(),
+                title: nestedSheetTitle(for: state),
+                blocks: nestedBlocksBinding(for: state),
                 devices: devices
             )
         }
     }
 
-    private func nestedSheetTitle() -> String {
-        let blockName = blocks[safe: nestedParentBlockIndex]?.blockType.displayName ?? "Block"
-        return "\(blockName) — \(nestedLabel.capitalized) Blocks"
+    private func nestedSheetTitle(for state: NestedEditState) -> String {
+        let block = blocks.first(where: { $0.id == state.parentBlockId })
+        let blockName = block?.blockType.displayName ?? "Block"
+        return "\(blockName) — \(state.label.capitalized) Blocks"
     }
 
-    private func nestedBlocksBinding() -> Binding<[BlockDraft]> {
+    private func nestedBlocksBinding(for state: NestedEditState) -> Binding<[BlockDraft]> {
         Binding(
             get: {
-                guard let block = blocks[safe: nestedParentBlockIndex] else { return [] }
-                return getNestedBlocks(from: block, label: nestedLabel)
+                guard let block = blocks.first(where: { $0.id == state.parentBlockId }) else { return [] }
+                return getNestedBlocks(from: block, label: state.label)
             },
             set: { newBlocks in
-                guard nestedParentBlockIndex < blocks.count else { return }
-                setNestedBlocks(on: &blocks[nestedParentBlockIndex], label: nestedLabel, blocks: newBlocks)
+                guard let index = blocks.firstIndex(where: { $0.id == state.parentBlockId }) else { return }
+                setNestedBlocks(on: &blocks[index], label: state.label, blocks: newBlocks)
             }
         )
     }
@@ -146,13 +149,5 @@ struct NestedBlockEditorSheet: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Safe Array Access
-
-private extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }
