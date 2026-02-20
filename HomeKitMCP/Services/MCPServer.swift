@@ -15,6 +15,9 @@ class MCPServer: ObservableObject {
     private let port: Int
     private let handler: MCPRequestHandler
     private let connectionTracker = ConnectionTracker()
+    private let workflowStorageService: WorkflowStorageService
+    private let workflowEngine: WorkflowEngine
+    private let workflowExecutionLogService: WorkflowExecutionLogService
 
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -28,12 +31,20 @@ class MCPServer: ObservableObject {
         return decoder
     }()
 
-    init(homeKitManager: HomeKitManager, loggingService: LoggingService, configService: DeviceConfigurationService, storage: StorageService, port: Int = 3000) {
+    init(homeKitManager: HomeKitManager, loggingService: LoggingService, configService: DeviceConfigurationService, storage: StorageService,
+         workflowStorageService: WorkflowStorageService, workflowEngine: WorkflowEngine, workflowExecutionLogService: WorkflowExecutionLogService,
+         port: Int = 3000) {
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
         self.storage = storage
         self.port = port
-        self.handler = MCPRequestHandler(homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, storage: storage)
+        self.workflowStorageService = workflowStorageService
+        self.workflowEngine = workflowEngine
+        self.workflowExecutionLogService = workflowExecutionLogService
+        self.handler = MCPRequestHandler(
+            homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, storage: storage,
+            workflowStorageService: workflowStorageService, workflowEngine: workflowEngine, workflowExecutionLogService: workflowExecutionLogService
+        )
     }
 
     func start() throws {
@@ -146,6 +157,42 @@ class MCPServer: ObservableObject {
             return try await self.handleRestGetDevice(req)
         }
 
+        // Workflow REST Endpoints
+        app.on(.GET, "workflows") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            return try await self.handleRestGetWorkflows(req)
+        }
+
+        app.on(.GET, "workflows", ":workflowId") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            return try await self.handleRestGetWorkflow(req)
+        }
+
+        app.on(.POST, "workflows", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            return try await self.handleRestCreateWorkflow(req)
+        }
+
+        app.on(.PUT, "workflows", ":workflowId", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            return try await self.handleRestUpdateWorkflow(req)
+        }
+
+        app.on(.DELETE, "workflows", ":workflowId") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            return try await self.handleRestDeleteWorkflow(req)
+        }
+
+        app.on(.POST, "workflows", ":workflowId", "trigger") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            return try await self.handleRestTriggerWorkflow(req)
+        }
+
+        app.on(.GET, "workflows", ":workflowId", "logs") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            return try await self.handleRestGetWorkflowLogs(req)
+        }
+
         // Health check
         app.on(.GET, "health") { _ -> String in
             return "ok"
@@ -193,6 +240,226 @@ class MCPServer: ObservableObject {
         let data = try Self.encoder.encode(restDevice)
         logRESTCall(method: "GET", path: "/devices/\(deviceId)", statusCode: 200,
                     resultSummary: restDevice.name,
+                    fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
+
+        var headers = HTTPHeaders()
+        headers.add(name: .contentType, value: "application/json")
+        return Response(status: .ok, headers: headers, body: .init(data: data))
+    }
+
+    // MARK: - Workflow REST Handlers
+
+    private func handleRestGetWorkflows(_ req: Request) async throws -> Response {
+        let workflows = await workflowStorageService.getAllWorkflows()
+        let data = try Self.encoder.encode(workflows)
+        logRESTCall(method: "GET", path: "/workflows", statusCode: 200,
+                    resultSummary: "\(workflows.count) workflows",
+                    fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
+
+        var headers = HTTPHeaders()
+        headers.add(name: .contentType, value: "application/json")
+        return Response(status: .ok, headers: headers, body: .init(data: data))
+    }
+
+    private func handleRestGetWorkflow(_ req: Request) async throws -> Response {
+        guard let idStr = req.parameters.get("workflowId"),
+              let workflowId = UUID(uuidString: idStr) else {
+            logRESTCall(method: "GET", path: "/workflows/:id", statusCode: 400, resultSummary: "Bad Request")
+            throw Abort(.badRequest, reason: "Invalid workflow ID")
+        }
+
+        guard let workflow = await workflowStorageService.getWorkflow(id: workflowId) else {
+            logRESTCall(method: "GET", path: "/workflows/\(idStr)", statusCode: 404, resultSummary: "Not Found")
+            throw Abort(.notFound, reason: "Workflow not found")
+        }
+
+        let data = try Self.encoder.encode(workflow)
+        logRESTCall(method: "GET", path: "/workflows/\(idStr)", statusCode: 200,
+                    resultSummary: workflow.name,
+                    fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
+
+        var headers = HTTPHeaders()
+        headers.add(name: .contentType, value: "application/json")
+        return Response(status: .ok, headers: headers, body: .init(data: data))
+    }
+
+    private func handleRestCreateWorkflow(_ req: Request) async throws -> Response {
+        guard let body = req.body.data,
+              let bodyData = body.getData(at: body.readerIndex, length: body.readableBytes) else {
+            throw Abort(.badRequest, reason: "Missing request body")
+        }
+
+        let workflow: Workflow
+        do {
+            // Try direct decode first
+            var dict = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any] ?? [:]
+
+            // Set defaults
+            if dict["id"] == nil { dict["id"] = UUID().uuidString }
+            if dict["isEnabled"] == nil {
+                if let enabled = dict["enabled"] as? Bool {
+                    dict["isEnabled"] = enabled
+                    dict.removeValue(forKey: "enabled")
+                } else {
+                    dict["isEnabled"] = true
+                }
+            }
+            if dict["continueOnError"] == nil { dict["continueOnError"] = false }
+            if dict["triggers"] == nil { dict["triggers"] = [] as [Any] }
+            if dict["blocks"] == nil { dict["blocks"] = [] as [Any] }
+            let now = ISO8601DateFormatter().string(from: Date())
+            if dict["createdAt"] == nil { dict["createdAt"] = now }
+            if dict["updatedAt"] == nil { dict["updatedAt"] = now }
+            if dict["metadata"] == nil {
+                dict["metadata"] = ["totalExecutions": 0, "consecutiveFailures": 0] as [String: Any]
+            }
+
+            let normalizedData = try JSONSerialization.data(withJSONObject: dict)
+            workflow = try Self.decoder.decode(Workflow.self, from: normalizedData)
+        } catch {
+            logRESTCall(method: "POST", path: "/workflows", statusCode: 400, resultSummary: "Parse Error: \(error.localizedDescription)")
+            throw Abort(.badRequest, reason: "Invalid workflow JSON: \(error.localizedDescription)")
+        }
+
+        let created = await workflowStorageService.createWorkflow(workflow)
+        let data = try Self.encoder.encode(created)
+        logRESTCall(method: "POST", path: "/workflows", statusCode: 201,
+                    resultSummary: "Created: \(created.name)",
+                    fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
+
+        var headers = HTTPHeaders()
+        headers.add(name: .contentType, value: "application/json")
+        return Response(status: .created, headers: headers, body: .init(data: data))
+    }
+
+    private func handleRestUpdateWorkflow(_ req: Request) async throws -> Response {
+        guard let idStr = req.parameters.get("workflowId"),
+              let workflowId = UUID(uuidString: idStr) else {
+            logRESTCall(method: "PUT", path: "/workflows/:id", statusCode: 400, resultSummary: "Bad Request")
+            throw Abort(.badRequest, reason: "Invalid workflow ID")
+        }
+
+        guard let body = req.body.data,
+              let bodyData = body.getData(at: body.readerIndex, length: body.readableBytes) else {
+            throw Abort(.badRequest, reason: "Missing request body")
+        }
+
+        guard await workflowStorageService.getWorkflow(id: workflowId) != nil else {
+            logRESTCall(method: "PUT", path: "/workflows/\(idStr)", statusCode: 404, resultSummary: "Not Found")
+            throw Abort(.notFound, reason: "Workflow not found")
+        }
+
+        let updates: [String: Any]
+        do {
+            updates = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any] ?? [:]
+        } catch {
+            throw Abort(.badRequest, reason: "Invalid JSON")
+        }
+
+        do {
+            // Parse partial updates for triggers/conditions/blocks
+            var parsedTriggers: [WorkflowTrigger]?
+            var parsedConditions: [WorkflowCondition]?
+            var parsedBlocks: [WorkflowBlock]?
+
+            if let triggersArray = updates["triggers"] {
+                let data = try JSONSerialization.data(withJSONObject: triggersArray)
+                parsedTriggers = try Self.decoder.decode([WorkflowTrigger].self, from: data)
+            }
+            if let conditionsArray = updates["conditions"] {
+                let data = try JSONSerialization.data(withJSONObject: conditionsArray)
+                parsedConditions = try Self.decoder.decode([WorkflowCondition].self, from: data)
+            }
+            if let blocksArray = updates["blocks"] {
+                let data = try JSONSerialization.data(withJSONObject: blocksArray)
+                parsedBlocks = try Self.decoder.decode([WorkflowBlock].self, from: data)
+            }
+
+            let updated = await workflowStorageService.updateWorkflow(id: workflowId) { workflow in
+                if let name = updates["name"] as? String { workflow.name = name }
+                if let desc = updates["description"] as? String { workflow.description = desc }
+                if let enabled = updates["isEnabled"] as? Bool { workflow.isEnabled = enabled }
+                if let coe = updates["continueOnError"] as? Bool { workflow.continueOnError = coe }
+                if let triggers = parsedTriggers { workflow.triggers = triggers }
+                if let conditions = parsedConditions { workflow.conditions = conditions }
+                if let blocks = parsedBlocks { workflow.blocks = blocks }
+            }
+
+            guard let updated else {
+                throw Abort(.internalServerError, reason: "Failed to update workflow")
+            }
+
+            let data = try Self.encoder.encode(updated)
+            logRESTCall(method: "PUT", path: "/workflows/\(idStr)", statusCode: 200,
+                        resultSummary: "Updated: \(updated.name)",
+                        fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
+
+            var headers = HTTPHeaders()
+            headers.add(name: .contentType, value: "application/json")
+            return Response(status: .ok, headers: headers, body: .init(data: data))
+        } catch let error as Abort {
+            throw error
+        } catch {
+            logRESTCall(method: "PUT", path: "/workflows/\(idStr)", statusCode: 400, resultSummary: "Parse Error")
+            throw Abort(.badRequest, reason: "Failed to parse workflow update: \(error.localizedDescription)")
+        }
+    }
+
+    private func handleRestDeleteWorkflow(_ req: Request) async throws -> Response {
+        guard let idStr = req.parameters.get("workflowId"),
+              let workflowId = UUID(uuidString: idStr) else {
+            logRESTCall(method: "DELETE", path: "/workflows/:id", statusCode: 400, resultSummary: "Bad Request")
+            throw Abort(.badRequest, reason: "Invalid workflow ID")
+        }
+
+        let deleted = await workflowStorageService.deleteWorkflow(id: workflowId)
+        if deleted {
+            logRESTCall(method: "DELETE", path: "/workflows/\(idStr)", statusCode: 200, resultSummary: "Deleted")
+            return Response(status: .ok, body: .init(string: "{\"deleted\": true}"))
+        } else {
+            logRESTCall(method: "DELETE", path: "/workflows/\(idStr)", statusCode: 404, resultSummary: "Not Found")
+            throw Abort(.notFound, reason: "Workflow not found")
+        }
+    }
+
+    private func handleRestTriggerWorkflow(_ req: Request) async throws -> Response {
+        guard let idStr = req.parameters.get("workflowId"),
+              let workflowId = UUID(uuidString: idStr) else {
+            logRESTCall(method: "POST", path: "/workflows/:id/trigger", statusCode: 400, resultSummary: "Bad Request")
+            throw Abort(.badRequest, reason: "Invalid workflow ID")
+        }
+
+        let result = await workflowEngine.triggerWorkflow(id: workflowId)
+
+        guard let result else {
+            logRESTCall(method: "POST", path: "/workflows/\(idStr)/trigger", statusCode: 404, resultSummary: "Not Found or Running")
+            throw Abort(.notFound, reason: "Workflow not found or already running")
+        }
+
+        let data = try Self.encoder.encode(result)
+        logRESTCall(method: "POST", path: "/workflows/\(idStr)/trigger", statusCode: 200,
+                    resultSummary: "\(result.status.rawValue)",
+                    fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
+
+        var headers = HTTPHeaders()
+        headers.add(name: .contentType, value: "application/json")
+        return Response(status: .ok, headers: headers, body: .init(data: data))
+    }
+
+    private func handleRestGetWorkflowLogs(_ req: Request) async throws -> Response {
+        guard let idStr = req.parameters.get("workflowId"),
+              let workflowId = UUID(uuidString: idStr) else {
+            logRESTCall(method: "GET", path: "/workflows/:id/logs", statusCode: 400, resultSummary: "Bad Request")
+            throw Abort(.badRequest, reason: "Invalid workflow ID")
+        }
+
+        let limit = req.query[Int.self, at: "limit"] ?? 50
+        var logs = await workflowExecutionLogService.getLogs(forWorkflow: workflowId)
+        logs = Array(logs.prefix(limit))
+
+        let data = try Self.encoder.encode(logs)
+        logRESTCall(method: "GET", path: "/workflows/\(idStr)/logs", statusCode: 200,
+                    resultSummary: "\(logs.count) logs",
                     fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
 
         var headers = HTTPHeaders()

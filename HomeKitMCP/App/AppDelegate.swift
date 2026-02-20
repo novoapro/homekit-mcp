@@ -18,7 +18,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         )
         return engine
     }()
-    lazy var mcpServer = MCPServer(homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, storage: storageService, port: storageService.mcpServerPort)
+    lazy var mcpServer = MCPServer(
+        homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, storage: storageService,
+        workflowStorageService: workflowStorageService, workflowEngine: workflowEngine, workflowExecutionLogService: workflowExecutionLogService,
+        port: storageService.mcpServerPort
+    )
     lazy var homeKitViewModel = HomeKitViewModel(homeKitManager: homeKitManager, configService: configService)
     lazy var logViewModel = LogViewModel(loggingService: loggingService, storage: storageService)
     lazy var settingsViewModel = SettingsViewModel(storage: storageService, webhookService: webhookService, mcpServer: mcpServer, configService: configService)

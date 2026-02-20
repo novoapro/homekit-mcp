@@ -70,7 +70,7 @@ enum MCPConstants {
     static let serverName = "HomeKitMCP"
     static let serverVersion = "1.0.0"
     static let serverInstructions = """
-        This MCP server exposes Apple HomeKit smart home devices. \
+        This MCP server exposes Apple HomeKit smart home devices and automation workflows. \
         Use 'list_devices' to discover all devices and their current states, \
         'get_device' to inspect a specific device, 'control_device' to change \
         device characteristics (power, brightness, temperature, etc.), \
@@ -79,7 +79,14 @@ enum MCPConstants {
         Some devices have multiple components (e.g. a ceiling fan with both \
         a fan and a light). These appear as separate services, each with their \
         own service_id. When controlling such devices, use the service_id \
-        parameter in 'control_device' to target the correct component.
+        parameter in 'control_device' to target the correct component. \
+        For automation, use 'list_workflows' to see existing workflows, \
+        'create_workflow' to define new automations with triggers, conditions, \
+        and action blocks, 'update_workflow' to modify them, 'enable_workflow' \
+        to toggle them on/off, 'trigger_workflow' for manual testing, and \
+        'get_workflow_logs' to review execution history. Workflows can react \
+        to device state changes and execute sequences of device controls, \
+        webhooks, delays, conditionals, and loops.
         """
 }
 

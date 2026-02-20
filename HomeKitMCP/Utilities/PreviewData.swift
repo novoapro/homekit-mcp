@@ -186,7 +186,13 @@ enum PreviewData {
         let configService = DeviceConfigurationService()
         let webhookService = WebhookService(storage: storage, loggingService: loggingService)
         let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storage)
-        let mcpServer = MCPServer(homeKitManager: manager, loggingService: loggingService, configService: configService, storage: storage)
+        let workflowStorage = WorkflowStorageService()
+        let workflowLogService = WorkflowExecutionLogService()
+        let workflowEngine = WorkflowEngine(storageService: workflowStorage, homeKitManager: manager, loggingService: loggingService, executionLogService: workflowLogService)
+        let mcpServer = MCPServer(
+            homeKitManager: manager, loggingService: loggingService, configService: configService, storage: storage,
+            workflowStorageService: workflowStorage, workflowEngine: workflowEngine, workflowExecutionLogService: workflowLogService
+        )
         return SettingsViewModel(storage: storage, webhookService: webhookService, mcpServer: mcpServer, configService: configService)
     }
 

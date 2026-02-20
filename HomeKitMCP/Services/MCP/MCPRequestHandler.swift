@@ -6,6 +6,9 @@ class MCPRequestHandler {
     private let loggingService: LoggingService
     private let configService: DeviceConfigurationService
     private let storage: StorageService
+    private let workflowStorageService: WorkflowStorageService
+    private let workflowEngine: WorkflowEngine
+    private let workflowExecutionLogService: WorkflowExecutionLogService
 
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -13,11 +16,21 @@ class MCPRequestHandler {
         return encoder
     }()
 
-    init(homeKitManager: HomeKitManager, loggingService: LoggingService, configService: DeviceConfigurationService, storage: StorageService) {
+    private static let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+
+    init(homeKitManager: HomeKitManager, loggingService: LoggingService, configService: DeviceConfigurationService, storage: StorageService,
+         workflowStorageService: WorkflowStorageService, workflowEngine: WorkflowEngine, workflowExecutionLogService: WorkflowExecutionLogService) {
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
         self.configService = configService
         self.storage = storage
+        self.workflowStorageService = workflowStorageService
+        self.workflowEngine = workflowEngine
+        self.workflowExecutionLogService = workflowExecutionLogService
     }
 
     func handle(_ request: JSONRPCRequest) async -> JSONRPCResponse {
@@ -316,6 +329,131 @@ class MCPRequestHandler {
                     ] as [String: Any],
                     "required": ["types"]
                 ] as [String: Any]
+            ],
+            // Workflow tools
+            [
+                "name": "list_workflows",
+                "description": "List all automation workflows with their status, trigger count, and execution statistics.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [:] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "name": "get_workflow",
+                "description": "Get the full definition of a specific workflow including triggers, conditions, blocks, and metadata.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workflow_id": [
+                            "type": "string",
+                            "description": "UUID of the workflow"
+                        ]
+                    ] as [String: Any],
+                    "required": ["workflow_id"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "create_workflow",
+                "description": """
+                    Create a new automation workflow from a JSON definition. The workflow JSON should include: \
+                    name (required), description, triggers (array of trigger objects), conditions (optional array of guard conditions), \
+                    blocks (array of action/flow-control block objects), continueOnError (bool, default false), enabled (bool, default true). \
+                    Triggers use type 'deviceStateChange' with deviceId, characteristicType, and condition. \
+                    Blocks use 'block' discriminator ('action' or 'flowControl') and 'type' for the specific kind. \
+                    Action types: controlDevice, webhook, log. Flow control types: delay, waitForState, conditional, repeat, repeatWhile, group.
+                    """,
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workflow": [
+                            "type": "object",
+                            "description": "Complete workflow JSON definition matching the Workflow schema"
+                        ]
+                    ] as [String: Any],
+                    "required": ["workflow"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "update_workflow",
+                "description": "Update an existing workflow. Provide the workflow_id and a partial or full workflow JSON. Only provided fields are updated; omitted fields remain unchanged.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workflow_id": [
+                            "type": "string",
+                            "description": "UUID of the workflow to update"
+                        ],
+                        "workflow": [
+                            "type": "object",
+                            "description": "Partial or full workflow JSON with fields to update (name, description, triggers, conditions, blocks, continueOnError, isEnabled)"
+                        ]
+                    ] as [String: Any],
+                    "required": ["workflow_id", "workflow"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "delete_workflow",
+                "description": "Permanently delete a workflow by its ID.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workflow_id": [
+                            "type": "string",
+                            "description": "UUID of the workflow to delete"
+                        ]
+                    ] as [String: Any],
+                    "required": ["workflow_id"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "enable_workflow",
+                "description": "Enable or disable a workflow.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workflow_id": [
+                            "type": "string",
+                            "description": "UUID of the workflow"
+                        ],
+                        "enabled": [
+                            "type": "boolean",
+                            "description": "Whether the workflow should be enabled (true) or disabled (false)"
+                        ]
+                    ] as [String: Any],
+                    "required": ["workflow_id", "enabled"]
+                ] as [String: Any]
+            ],
+            [
+                "name": "get_workflow_logs",
+                "description": "Get execution history logs for workflows. Optionally filter by workflow ID and limit the number of results.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workflow_id": [
+                            "type": "string",
+                            "description": "Optional UUID of a specific workflow to get logs for"
+                        ],
+                        "limit": [
+                            "type": "integer",
+                            "description": "Maximum number of log entries to return (default 20)"
+                        ]
+                    ] as [String: Any]
+                ] as [String: Any]
+            ],
+            [
+                "name": "trigger_workflow",
+                "description": "Manually trigger a workflow execution immediately, bypassing its normal triggers. Useful for testing.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workflow_id": [
+                            "type": "string",
+                            "description": "UUID of the workflow to trigger"
+                        ]
+                    ] as [String: Any],
+                    "required": ["workflow_id"]
+                ] as [String: Any]
             ]
         ]
         let result: [String: Any] = ["tools": tools]
@@ -351,6 +489,22 @@ class MCPRequestHandler {
             return await handleGetDevicesInRooms(id: id, arguments: arguments)
         case "get_devices_by_type":
             return await handleGetDevicesByType(id: id, arguments: arguments)
+        case "list_workflows":
+            return await handleListWorkflows(id: id)
+        case "get_workflow":
+            return await handleGetWorkflow(id: id, arguments: arguments)
+        case "create_workflow":
+            return await handleCreateWorkflow(id: id, arguments: arguments)
+        case "update_workflow":
+            return await handleUpdateWorkflow(id: id, arguments: arguments)
+        case "delete_workflow":
+            return await handleDeleteWorkflow(id: id, arguments: arguments)
+        case "enable_workflow":
+            return await handleEnableWorkflow(id: id, arguments: arguments)
+        case "get_workflow_logs":
+            return await handleGetWorkflowLogs(id: id, arguments: arguments)
+        case "trigger_workflow":
+            return await handleTriggerWorkflow(id: id, arguments: arguments)
         default:
             return JSONRPCResponse.error(
                 id: id,
@@ -581,6 +735,292 @@ class MCPRequestHandler {
 
         let restDevice = RESTDevice.from(filteredDevice)
         return toolResult(encoding: restDevice, id: id)
+    }
+
+    // MARK: - Workflow Tool Handlers
+
+    private func handleListWorkflows(id: JSONRPCId?) async -> JSONRPCResponse {
+        let workflows = await workflowStorageService.getAllWorkflows()
+
+        if workflows.isEmpty {
+            return toolResult(text: "No workflows found. Use create_workflow to create one.", id: id)
+        }
+
+        var lines: [String] = []
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+
+        for workflow in workflows {
+            let status = workflow.isEnabled ? "✓ enabled" : "✗ disabled"
+            let triggers = "\(workflow.triggers.count) trigger\(workflow.triggers.count == 1 ? "" : "s")"
+            let blocks = "\(workflow.blocks.count) block\(workflow.blocks.count == 1 ? "" : "s")"
+            let execs = "executions: \(workflow.metadata.totalExecutions)"
+            let lastTriggered = workflow.metadata.lastTriggeredAt.map { "last: \(formatter.string(from: $0))" } ?? "never triggered"
+            let failures = workflow.metadata.consecutiveFailures > 0 ? " ⚠ \(workflow.metadata.consecutiveFailures) consecutive failures" : ""
+
+            lines.append("- **\(workflow.name)** [\(status)] (id: \(workflow.id.uuidString))")
+            if let desc = workflow.description {
+                lines.append("  \(desc)")
+            }
+            lines.append("  \(triggers), \(blocks) | \(execs), \(lastTriggered)\(failures)")
+            lines.append("")
+        }
+
+        return toolResult(text: lines.joined(separator: "\n"), id: id)
+    }
+
+    private func handleGetWorkflow(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let workflowIdStr = arguments["workflow_id"] as? String,
+              let workflowId = UUID(uuidString: workflowIdStr) else {
+            return JSONRPCResponse.error(id: id, code: MCPErrorCode.invalidParams, message: "Missing or invalid workflow_id (must be a UUID)")
+        }
+
+        guard let workflow = await workflowStorageService.getWorkflow(id: workflowId) else {
+            return toolResult(text: "Workflow not found: \(workflowIdStr)", isError: true, id: id)
+        }
+
+        return toolResult(encoding: workflow, id: id)
+    }
+
+    private func handleCreateWorkflow(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let workflowDict = arguments["workflow"] as? [String: Any] else {
+            return JSONRPCResponse.error(id: id, code: MCPErrorCode.invalidParams, message: "Missing required argument: workflow (JSON object)")
+        }
+
+        do {
+            let workflow = try parseWorkflowFromDict(workflowDict)
+            let created = await workflowStorageService.createWorkflow(workflow)
+            return toolResult(text: "Workflow created successfully.\nID: \(created.id.uuidString)\nName: \(created.name)", id: id)
+        } catch {
+            return toolResult(text: "Failed to create workflow: \(error.localizedDescription)", isError: true, id: id)
+        }
+    }
+
+    private func handleUpdateWorkflow(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let workflowIdStr = arguments["workflow_id"] as? String,
+              let workflowId = UUID(uuidString: workflowIdStr) else {
+            return JSONRPCResponse.error(id: id, code: MCPErrorCode.invalidParams, message: "Missing or invalid workflow_id (must be a UUID)")
+        }
+
+        guard let updates = arguments["workflow"] as? [String: Any] else {
+            return JSONRPCResponse.error(id: id, code: MCPErrorCode.invalidParams, message: "Missing required argument: workflow (JSON object)")
+        }
+
+        guard let existing = await workflowStorageService.getWorkflow(id: workflowId) else {
+            return toolResult(text: "Workflow not found: \(workflowIdStr)", isError: true, id: id)
+        }
+
+        do {
+            // Merge: start from existing, apply updates
+            var merged = existing
+            if let name = updates["name"] as? String { merged.name = name }
+            if let desc = updates["description"] as? String { merged.description = desc }
+            if let enabled = updates["isEnabled"] as? Bool { merged.isEnabled = enabled }
+            if let coe = updates["continueOnError"] as? Bool { merged.continueOnError = coe }
+
+            // For triggers/conditions/blocks, re-parse from JSON if provided
+            if let triggersArray = updates["triggers"] {
+                let data = try JSONSerialization.data(withJSONObject: triggersArray)
+                merged.triggers = try Self.decoder.decode([WorkflowTrigger].self, from: data)
+            }
+            if let conditionsArray = updates["conditions"] {
+                let data = try JSONSerialization.data(withJSONObject: conditionsArray)
+                merged.conditions = try Self.decoder.decode([WorkflowCondition].self, from: data)
+            }
+            if let blocksArray = updates["blocks"] {
+                let data = try JSONSerialization.data(withJSONObject: blocksArray)
+                merged.blocks = try Self.decoder.decode([WorkflowBlock].self, from: data)
+            }
+
+            let updated = await workflowStorageService.updateWorkflow(id: workflowId) { workflow in
+                workflow.name = merged.name
+                workflow.description = merged.description
+                workflow.isEnabled = merged.isEnabled
+                workflow.continueOnError = merged.continueOnError
+                workflow.triggers = merged.triggers
+                workflow.conditions = merged.conditions
+                workflow.blocks = merged.blocks
+            }
+
+            if let updated {
+                return toolResult(text: "Workflow updated successfully.\nID: \(updated.id.uuidString)\nName: \(updated.name)", id: id)
+            } else {
+                return toolResult(text: "Failed to update workflow", isError: true, id: id)
+            }
+        } catch {
+            return toolResult(text: "Failed to parse workflow update: \(error.localizedDescription)", isError: true, id: id)
+        }
+    }
+
+    private func handleDeleteWorkflow(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let workflowIdStr = arguments["workflow_id"] as? String,
+              let workflowId = UUID(uuidString: workflowIdStr) else {
+            return JSONRPCResponse.error(id: id, code: MCPErrorCode.invalidParams, message: "Missing or invalid workflow_id (must be a UUID)")
+        }
+
+        let deleted = await workflowStorageService.deleteWorkflow(id: workflowId)
+        if deleted {
+            return toolResult(text: "Workflow deleted: \(workflowIdStr)", id: id)
+        } else {
+            return toolResult(text: "Workflow not found: \(workflowIdStr)", isError: true, id: id)
+        }
+    }
+
+    private func handleEnableWorkflow(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let workflowIdStr = arguments["workflow_id"] as? String,
+              let workflowId = UUID(uuidString: workflowIdStr) else {
+            return JSONRPCResponse.error(id: id, code: MCPErrorCode.invalidParams, message: "Missing or invalid workflow_id (must be a UUID)")
+        }
+
+        guard let enabled = arguments["enabled"] as? Bool else {
+            return JSONRPCResponse.error(id: id, code: MCPErrorCode.invalidParams, message: "Missing required argument: enabled (boolean)")
+        }
+
+        let updated = await workflowStorageService.updateWorkflow(id: workflowId) { workflow in
+            workflow.isEnabled = enabled
+        }
+
+        if let updated {
+            return toolResult(text: "Workflow '\(updated.name)' is now \(enabled ? "enabled" : "disabled")", id: id)
+        } else {
+            return toolResult(text: "Workflow not found: \(workflowIdStr)", isError: true, id: id)
+        }
+    }
+
+    private func handleGetWorkflowLogs(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        let limit = arguments["limit"] as? Int ?? 20
+
+        var logs: [WorkflowExecutionLog]
+        if let workflowIdStr = arguments["workflow_id"] as? String,
+           let workflowId = UUID(uuidString: workflowIdStr) {
+            logs = await workflowExecutionLogService.getLogs(forWorkflow: workflowId)
+        } else {
+            logs = await workflowExecutionLogService.getLogs()
+        }
+
+        logs = Array(logs.prefix(limit))
+
+        if logs.isEmpty {
+            return toolResult(text: "No workflow execution logs found.", id: id)
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .medium
+
+        var lines: [String] = []
+        for log in logs {
+            let duration: String
+            if let completed = log.completedAt {
+                let ms = completed.timeIntervalSince(log.triggeredAt) * 1000
+                duration = String(format: "%.0fms", ms)
+            } else {
+                duration = "running"
+            }
+
+            lines.append("[\(formatter.string(from: log.triggeredAt))] \(log.workflowName) — \(log.status.rawValue) (\(duration))")
+
+            if let trigger = log.triggerEvent {
+                lines.append("  Trigger: \(trigger.deviceName ?? trigger.deviceId) \(trigger.characteristicType)")
+            }
+
+            if let error = log.errorMessage {
+                lines.append("  Error: \(error)")
+            }
+
+            let blockSummary = log.blockResults.map { "\($0.blockType):\($0.status.rawValue)" }.joined(separator: ", ")
+            if !blockSummary.isEmpty {
+                lines.append("  Blocks: \(blockSummary)")
+            }
+            lines.append("")
+        }
+
+        return toolResult(text: lines.joined(separator: "\n"), id: id)
+    }
+
+    private func handleTriggerWorkflow(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let workflowIdStr = arguments["workflow_id"] as? String,
+              let workflowId = UUID(uuidString: workflowIdStr) else {
+            return JSONRPCResponse.error(id: id, code: MCPErrorCode.invalidParams, message: "Missing or invalid workflow_id (must be a UUID)")
+        }
+
+        let result = await workflowEngine.triggerWorkflow(id: workflowId)
+
+        guard let result else {
+            return toolResult(text: "Workflow not found or already running: \(workflowIdStr)", isError: true, id: id)
+        }
+
+        let duration: String
+        if let completed = result.completedAt {
+            let ms = completed.timeIntervalSince(result.triggeredAt) * 1000
+            duration = String(format: "%.0fms", ms)
+        } else {
+            duration = "unknown"
+        }
+
+        var lines = ["Workflow triggered: \(result.workflowName)", "Status: \(result.status.rawValue)", "Duration: \(duration)"]
+
+        if let error = result.errorMessage {
+            lines.append("Error: \(error)")
+        }
+
+        for br in result.blockResults {
+            let detail = br.detail ?? br.blockType
+            lines.append("  [\(br.status.rawValue)] \(detail)")
+        }
+
+        return toolResult(text: lines.joined(separator: "\n"), id: id)
+    }
+
+    // MARK: - Workflow JSON Parser
+
+    /// Parses a raw [String: Any] dictionary into a Workflow struct by serializing to JSON and decoding.
+    private func parseWorkflowFromDict(_ dict: [String: Any]) throws -> Workflow {
+        // Build a complete workflow dict with defaults
+        var workflowDict = dict
+
+        // Set defaults if not provided
+        if workflowDict["id"] == nil {
+            workflowDict["id"] = UUID().uuidString
+        }
+        if workflowDict["isEnabled"] == nil {
+            // Check for "enabled" alias
+            if let enabled = workflowDict["enabled"] as? Bool {
+                workflowDict["isEnabled"] = enabled
+                workflowDict.removeValue(forKey: "enabled")
+            } else {
+                workflowDict["isEnabled"] = true
+            }
+        }
+        if workflowDict["continueOnError"] == nil {
+            workflowDict["continueOnError"] = false
+        }
+        if workflowDict["triggers"] == nil {
+            workflowDict["triggers"] = [] as [[String: Any]]
+        }
+        if workflowDict["blocks"] == nil {
+            workflowDict["blocks"] = [] as [[String: Any]]
+        }
+
+        let now = ISO8601DateFormatter().string(from: Date())
+        if workflowDict["createdAt"] == nil {
+            workflowDict["createdAt"] = now
+        }
+        if workflowDict["updatedAt"] == nil {
+            workflowDict["updatedAt"] = now
+        }
+
+        // Provide default metadata if not present
+        if workflowDict["metadata"] == nil {
+            workflowDict["metadata"] = [
+                "totalExecutions": 0,
+                "consecutiveFailures": 0
+            ] as [String: Any]
+        }
+
+        let jsonData = try JSONSerialization.data(withJSONObject: workflowDict, options: [])
+        return try Self.decoder.decode(Workflow.self, from: jsonData)
     }
 
     // MARK: - Tool Result Builders
