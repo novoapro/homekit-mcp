@@ -95,12 +95,14 @@ struct ValueEditor: View {
 
     private var doubleBinding: Binding<Double> {
         Binding(
-            get: { Double(value) ?? 0 },
+            get: {
+                Double(self.value) ?? 0
+            },
             set: { newVal in
                 if newVal == newVal.rounded() {
-                    value = "\(Int(newVal))"
+                    self.value = "\(Int(newVal))"
                 } else {
-                    value = String(format: "%.1f", newVal)
+                    self.value = String(format: "%.1f", newVal)
                 }
             }
         )
