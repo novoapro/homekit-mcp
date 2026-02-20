@@ -7,6 +7,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let configService = DeviceConfigurationService()
     let workflowStorageService = WorkflowStorageService()
     let workflowExecutionLogService = WorkflowExecutionLogService()
+    let keychainService = KeychainService()
     lazy var webhookService = WebhookService(storage: storageService, loggingService: loggingService)
     lazy var homeKitManager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storageService)
     lazy var workflowEngine: WorkflowEngine = {
@@ -18,6 +19,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         )
         return engine
     }()
+    lazy var aiWorkflowService = AIWorkflowService(storage: storageService, homeKitManager: homeKitManager, keychainService: keychainService)
     lazy var mcpServer = MCPServer(
         homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, storage: storageService,
         workflowStorageService: workflowStorageService, workflowEngine: workflowEngine, workflowExecutionLogService: workflowExecutionLogService,
@@ -25,7 +27,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     )
     lazy var homeKitViewModel = HomeKitViewModel(homeKitManager: homeKitManager, configService: configService)
     lazy var logViewModel = LogViewModel(loggingService: loggingService, storage: storageService)
-    lazy var settingsViewModel = SettingsViewModel(storage: storageService, webhookService: webhookService, mcpServer: mcpServer, configService: configService)
+    lazy var settingsViewModel = SettingsViewModel(
+        storage: storageService, webhookService: webhookService, mcpServer: mcpServer, configService: configService,
+        keychainService: keychainService, aiWorkflowService: aiWorkflowService
+    )
     lazy var workflowViewModel = WorkflowViewModel(storageService: workflowStorageService, executionLogService: workflowExecutionLogService, workflowEngine: workflowEngine, homeKitManager: homeKitManager)
 
     private var cancellables = Set<AnyCancellable>()

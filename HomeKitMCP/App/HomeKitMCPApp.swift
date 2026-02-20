@@ -63,7 +63,11 @@ struct ContentView: View {
             .badge(homeKitViewModel.totalDeviceCount)
 
             NavigationStack {
-                WorkflowListView(viewModel: workflowViewModel)
+                WorkflowListView(
+                    viewModel: workflowViewModel,
+                    aiWorkflowService: settingsViewModel.aiWorkflowService,
+                    aiEnabled: settingsViewModel.aiEnabled && settingsViewModel.aiApiKeyConfigured
+                )
             }
             .tabItem {
                 Label(NavigationItem.workflows.label, systemImage: NavigationItem.workflows.icon)

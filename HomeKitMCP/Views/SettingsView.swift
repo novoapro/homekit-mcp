@@ -6,6 +6,8 @@ struct SettingsView: View {
     @State private var showingSaveAlert = false
     @State private var hasEdited = false
     @State private var showingResetConfirmation = false
+    @State private var aiApiKeyInput = ""
+    @State private var showingAIApiKey = false
 
     private var urlIsValid: Bool {
         webhookURL.isEmpty || viewModel.isValidURL(webhookURL)
@@ -21,6 +23,8 @@ struct SettingsView: View {
                 Toggle("Hide Room Name in App", isOn: $viewModel.hideRoomNameInTheApp)
             }
             loggingSection
+                .listRowBackground(Theme.contentBackground)
+            aiAssistantSection
                 .listRowBackground(Theme.contentBackground)
             webhookSection
                 .listRowBackground(Theme.contentBackground)
@@ -63,6 +67,119 @@ struct SettingsView: View {
             Text("Logging")
         } footer: {
             Text("When enabled, full request and response data is captured for MCP, REST, and webhook logs. Tap a log entry to expand details.")
+        }
+    }
+
+    // MARK: - AI Assistant Section
+
+    private var aiAssistantSection: some View {
+        Section {
+            Toggle("Enable AI Workflow Builder", isOn: $viewModel.aiEnabled)
+
+            Group {
+                Picker("Provider", selection: $viewModel.aiProvider) {
+                    ForEach(AIProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+
+                // API Key
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        if showingAIApiKey {
+                            TextField("API Key", text: $aiApiKeyInput)
+                                .textFieldStyle(.roundedBorder)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        } else {
+                            SecureField("API Key", text: $aiApiKeyInput)
+                                .textFieldStyle(.roundedBorder)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        }
+
+                        Button {
+                            showingAIApiKey.toggle()
+                        } label: {
+                            Image(systemName: showingAIApiKey ? "eye.slash" : "eye")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    HStack {
+                        Button("Save Key") {
+                            viewModel.saveAIApiKey(aiApiKeyInput)
+                            aiApiKeyInput = ""
+                        }
+                        .disabled(aiApiKeyInput.isEmpty)
+
+                        if viewModel.aiApiKeyConfigured {
+                            Spacer()
+                            Button("Clear Key", role: .destructive) {
+                                viewModel.clearAIApiKey()
+                                aiApiKeyInput = ""
+                            }
+                            .font(.subheadline)
+                        }
+                    }
+
+                    if viewModel.aiApiKeyConfigured {
+                        Label("API key configured", systemImage: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.caption)
+                    }
+                }
+
+                // Model Override
+                VStack(alignment: .leading, spacing: 4) {
+                    TextField("Model ID (optional)", text: $viewModel.aiModelId)
+                        .textFieldStyle(.roundedBorder)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                    Text("Default: \(viewModel.aiProvider.defaultModel)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                // Test Connection
+                HStack {
+                    Button {
+                        viewModel.testAIConnection()
+                    } label: {
+                        HStack {
+                            if viewModel.isTestingAI {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text("Test Connection")
+                        }
+                    }
+                    .disabled(!viewModel.aiApiKeyConfigured || viewModel.isTestingAI)
+
+                    Spacer()
+
+                    if let result = viewModel.aiTestResult {
+                        switch result {
+                        case .success:
+                            Label("Connected", systemImage: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.caption)
+                        case .failure(let error):
+                            Label(error, systemImage: "xmark.circle.fill")
+                                .foregroundColor(.red)
+                                .font(.caption)
+                                .lineLimit(2)
+                        }
+                    }
+                }
+            }
+            .disabled(!viewModel.aiEnabled)
+            .opacity(viewModel.aiEnabled ? 1 : 0.5)
+        } header: {
+            Text("AI Assistant")
+        } footer: {
+            Text("Configure an LLM provider to create workflows from natural language descriptions.")
         }
     }
 

@@ -2,7 +2,11 @@ import SwiftUI
 
 struct WorkflowListView: View {
     @ObservedObject var viewModel: WorkflowViewModel
+    var aiWorkflowService: AIWorkflowService?
+    var aiEnabled: Bool = false
+
     @State private var showingEditor = false
+    @State private var showingAIBuilder = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,7 +34,15 @@ struct WorkflowListView: View {
         .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer, prompt: "Search workflows")
         .navigationTitle("Workflows (\(viewModel.workflows.count))")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                if aiEnabled, aiWorkflowService != nil {
+                    Button {
+                        showingAIBuilder = true
+                    } label: {
+                        Image(systemName: "sparkles")
+                    }
+                }
+
                 Button {
                     showingEditor = true
                 } label: {
@@ -46,6 +58,17 @@ struct WorkflowListView: View {
                     viewModel.createWorkflow(from: draft)
                 }
             )
+        }
+        .sheet(isPresented: $showingAIBuilder) {
+            if let service = aiWorkflowService {
+                WorkflowBuilderView(
+                    aiWorkflowService: service,
+                    devices: viewModel.devices,
+                    onSave: { workflow in
+                        viewModel.saveGeneratedWorkflow(workflow)
+                    }
+                )
+            }
         }
         .navigationDestination(for: UUID.self) { workflowId in
             if let workflow = viewModel.workflows.first(where: { $0.id == workflowId }) {
@@ -72,10 +95,17 @@ struct WorkflowListView: View {
                     .foregroundColor(.secondary)
                 Text("No workflows yet")
                     .font(.headline)
-                Text("Tap + to create a workflow, or use an AI agent via MCP.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
+                if aiEnabled {
+                    Text("Tap + to create a workflow manually, or tap the sparkles icon to use the AI builder.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("Tap + to create a workflow, or use an AI agent via MCP.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)

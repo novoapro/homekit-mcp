@@ -1,6 +1,13 @@
 import Foundation
 import Combine
 
+// MARK: - AI Test Result
+
+enum AITestResult {
+    case success(String)
+    case failure(String)
+}
+
 @MainActor
 class SettingsViewModel: ObservableObject {
     @Published var webhookStatus: WebhookStatus = .idle
@@ -24,20 +31,50 @@ class SettingsViewModel: ObservableObject {
         }
     }
 
+    // MARK: - AI Properties
+
+    @Published var aiEnabled: Bool {
+        didSet { storage.aiEnabled = aiEnabled }
+    }
+    @Published var aiProvider: AIProvider {
+        didSet { storage.aiProvider = aiProvider }
+    }
+    @Published var aiModelId: String {
+        didSet { storage.aiModelId = aiModelId }
+    }
+    @Published var aiApiKeyConfigured: Bool = false
+    @Published var aiTestResult: AITestResult?
+    @Published var isTestingAI = false
+
     let storage: StorageService
     private let webhookService: WebhookService
     private let mcpServer: MCPServer
     let configService: DeviceConfigurationService
+    let keychainService: KeychainService
+    let aiWorkflowService: AIWorkflowService
     private var cancellables = Set<AnyCancellable>()
 
-    init(storage: StorageService, webhookService: WebhookService, mcpServer: MCPServer, configService: DeviceConfigurationService) {
+    init(
+        storage: StorageService,
+        webhookService: WebhookService,
+        mcpServer: MCPServer,
+        configService: DeviceConfigurationService,
+        keychainService: KeychainService,
+        aiWorkflowService: AIWorkflowService
+    ) {
         self.storage = storage
         self.webhookService = webhookService
         self.mcpServer = mcpServer
         self.configService = configService
+        self.keychainService = keychainService
+        self.aiWorkflowService = aiWorkflowService
         self.webhookEnabled = storage.webhookEnabled
         self.hideRoomNameInTheApp = storage.hideRoomNameInTheApp
         self.detailedLogsEnabled = storage.detailedLogsEnabled
+        self.aiEnabled = storage.aiEnabled
+        self.aiProvider = storage.aiProvider
+        self.aiModelId = storage.aiModelId
+        self.aiApiKeyConfigured = keychainService.exists(key: KeychainService.Keys.aiApiKey)
 
         webhookService.statusSubject
             .receive(on: DispatchQueue.main)
@@ -123,5 +160,47 @@ class SettingsViewModel: ObservableObject {
             return false
         }
         return true
+    }
+
+    // MARK: - AI Methods
+
+    func saveAIApiKey(_ key: String) {
+        if key.isEmpty {
+            clearAIApiKey()
+        } else {
+            keychainService.save(key: KeychainService.Keys.aiApiKey, value: key)
+            aiApiKeyConfigured = true
+        }
+    }
+
+    func clearAIApiKey() {
+        keychainService.delete(key: KeychainService.Keys.aiApiKey)
+        aiApiKeyConfigured = false
+        aiTestResult = nil
+    }
+
+    func testAIConnection() {
+        guard aiApiKeyConfigured else {
+            aiTestResult = .failure("No API key configured")
+            return
+        }
+
+        isTestingAI = true
+        aiTestResult = nil
+
+        Task {
+            do {
+                let response = try await aiWorkflowService.testConnection()
+                await MainActor.run {
+                    self.aiTestResult = .success(response)
+                    self.isTestingAI = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.aiTestResult = .failure(error.localizedDescription)
+                    self.isTestingAI = false
+                }
+            }
+        }
     }
 }

@@ -101,4 +101,10 @@ class WorkflowViewModel: ObservableObject {
             await storageService.updateWorkflow(id: id) { $0 = workflow }
         }
     }
+
+    func saveGeneratedWorkflow(_ workflow: Workflow) {
+        Task {
+            await storageService.createWorkflow(workflow)
+        }
+    }
 }
