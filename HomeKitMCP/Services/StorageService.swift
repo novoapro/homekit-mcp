@@ -75,6 +75,12 @@ class StorageService: ObservableObject, StorageServiceProtocol {
     @Published var sunEventLongitude: Double {
         didSet { defaults.set(sunEventLongitude, forKey: Keys.sunEventLongitude) }
     }
+    @Published var sunEventZipCode: String {
+        didSet { defaults.set(sunEventZipCode, forKey: Keys.sunEventZipCode) }
+    }
+    @Published var sunEventCityName: String {
+        didSet { defaults.set(sunEventCityName, forKey: Keys.sunEventCityName) }
+    }
     @Published var pollingEnabled: Bool {
         didSet { defaults.set(pollingEnabled, forKey: Keys.pollingEnabled) }
     }
@@ -132,6 +138,8 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         self.mcpServerBindAddress = defaults.string(forKey: Keys.mcpServerBindAddress) ?? "127.0.0.1"
         self.sunEventLatitude = defaults.double(forKey: Keys.sunEventLatitude)
         self.sunEventLongitude = defaults.double(forKey: Keys.sunEventLongitude)
+        self.sunEventZipCode = defaults.string(forKey: Keys.sunEventZipCode) ?? ""
+        self.sunEventCityName = defaults.string(forKey: Keys.sunEventCityName) ?? ""
         self.pollingEnabled = defaults.bool(forKey: Keys.pollingEnabled)
         self.pollingInterval = defaults.integer(forKey: Keys.pollingInterval)
         self.workflowsEnabled = defaults.bool(forKey: Keys.workflowsEnabled)
@@ -189,6 +197,14 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         UserDefaults.standard.double(forKey: Keys.sunEventLongitude)
     }
 
+    nonisolated func readSunEventZipCode() -> String {
+        UserDefaults.standard.string(forKey: Keys.sunEventZipCode) ?? ""
+    }
+
+    nonisolated func readSunEventCityName() -> String {
+        UserDefaults.standard.string(forKey: Keys.sunEventCityName) ?? ""
+    }
+
     nonisolated func readPollingEnabled() -> Bool {
         UserDefaults.standard.bool(forKey: Keys.pollingEnabled)
     }
@@ -219,6 +235,8 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         static let mcpServerBindAddress = "mcpServerBindAddress"
         static let sunEventLatitude = "sunEventLatitude"
         static let sunEventLongitude = "sunEventLongitude"
+        static let sunEventZipCode = "sunEventZipCode"
+        static let sunEventCityName = "sunEventCityName"
         static let pollingEnabled = "pollingEnabled"
         static let pollingInterval = "pollingInterval"
         static let workflowsEnabled = "workflowsEnabled"

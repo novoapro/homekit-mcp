@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CoreLocation
 
 // MARK: - AI Test Result
 
@@ -51,6 +52,14 @@ class SettingsViewModel: ObservableObject {
     @Published var sunEventLongitude: Double {
         didSet { storage.sunEventLongitude = sunEventLongitude }
     }
+    @Published var sunEventZipCode: String {
+        didSet { storage.sunEventZipCode = sunEventZipCode }
+    }
+    @Published var sunEventCityName: String {
+        didSet { storage.sunEventCityName = sunEventCityName }
+    }
+    @Published var isGeocoding = false
+    @Published var geocodingError: String?
 
     var hasValidCoordinates: Bool {
         sunEventLatitude != 0.0 || sunEventLongitude != 0.0
@@ -122,6 +131,8 @@ class SettingsViewModel: ObservableObject {
         self.deviceStateLoggingEnabled = storage.deviceStateLoggingEnabled
         self.sunEventLatitude = storage.sunEventLatitude
         self.sunEventLongitude = storage.sunEventLongitude
+        self.sunEventZipCode = storage.sunEventZipCode
+        self.sunEventCityName = storage.sunEventCityName
         self.aiEnabled = storage.aiEnabled
         self.aiProvider = storage.aiProvider
         self.aiModelId = storage.aiModelId
@@ -263,6 +274,43 @@ class SettingsViewModel: ObservableObject {
                     self.aiTestResult = .failure(error.localizedDescription)
                     self.isTestingAI = false
                 }
+            }
+        }
+    }
+
+    // MARK: - Geocoding
+
+    func geocodeZipCode() {
+        let zip = sunEventZipCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !zip.isEmpty else {
+            geocodingError = "Please enter a zip or postal code."
+            return
+        }
+
+        isGeocoding = true
+        geocodingError = nil
+
+        Task {
+            do {
+                let geocoder = CLGeocoder()
+                let placemarks = try await geocoder.geocodeAddressString(zip)
+                guard let placemark = placemarks.first,
+                      let location = placemark.location else {
+                    geocodingError = "Could not find location for \"\(zip)\"."
+                    isGeocoding = false
+                    return
+                }
+
+                sunEventLatitude = location.coordinate.latitude
+                sunEventLongitude = location.coordinate.longitude
+                sunEventCityName = placemark.locality
+                    ?? placemark.administrativeArea
+                    ?? "Unknown"
+                geocodingError = nil
+                isGeocoding = false
+            } catch {
+                geocodingError = "Geocoding failed: \(error.localizedDescription)"
+                isGeocoding = false
             }
         }
     }

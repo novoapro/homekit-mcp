@@ -31,6 +31,8 @@ struct BackupSettings: Codable {
     let mcpServerBindAddress: String
     let sunEventLatitude: Double
     let sunEventLongitude: Double
+    let sunEventZipCode: String?
+    let sunEventCityName: String?
     let pollingEnabled: Bool
     let pollingInterval: Int
     let workflowsEnabled: Bool

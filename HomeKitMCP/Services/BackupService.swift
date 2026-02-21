@@ -55,6 +55,8 @@ class BackupService: ObservableObject, BackupServiceProtocol {
             mcpServerBindAddress: storage.mcpServerBindAddress,
             sunEventLatitude: storage.sunEventLatitude,
             sunEventLongitude: storage.sunEventLongitude,
+            sunEventZipCode: storage.sunEventZipCode,
+            sunEventCityName: storage.sunEventCityName,
             pollingEnabled: storage.pollingEnabled,
             pollingInterval: storage.pollingInterval,
             workflowsEnabled: storage.workflowsEnabled,
@@ -113,6 +115,8 @@ class BackupService: ObservableObject, BackupServiceProtocol {
         storage.mcpServerBindAddress = s.mcpServerBindAddress
         storage.sunEventLatitude = s.sunEventLatitude
         storage.sunEventLongitude = s.sunEventLongitude
+        storage.sunEventZipCode = s.sunEventZipCode ?? ""
+        storage.sunEventCityName = s.sunEventCityName ?? ""
         storage.pollingEnabled = s.pollingEnabled
         storage.pollingInterval = s.pollingInterval
         storage.workflowsEnabled = s.workflowsEnabled

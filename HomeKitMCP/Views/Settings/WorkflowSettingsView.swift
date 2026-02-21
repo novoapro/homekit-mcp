@@ -15,53 +15,68 @@ struct WorkflowSettingsView: View {
 
             Section {
                 HStack {
-                    Text("Latitude")
-                    Spacer()
-                    TextField("e.g. 37.7749", value: $viewModel.sunEventLatitude, format: .number)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 120)
+                    TextField("Zip / Postal Code", text: $viewModel.sunEventZipCode)
                         .textFieldStyle(.roundedBorder)
-                        .keyboardType(.decimalPad)
-                }
-                HStack {
-                    Text("Longitude")
+                        .frame(maxWidth: 160)
+                        .onSubmit {
+                            viewModel.geocodeZipCode()
+                        }
+
                     Spacer()
-                    TextField("e.g. -122.4194", value: $viewModel.sunEventLongitude, format: .number)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 120)
-                        .textFieldStyle(.roundedBorder)
-                        .keyboardType(.decimalPad)
+
+                    if viewModel.isGeocoding {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Button("Lookup") {
+                            viewModel.geocodeZipCode()
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(viewModel.sunEventZipCode.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
                 }
+
+                if let error = viewModel.geocodingError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
+
                 if viewModel.hasValidCoordinates {
                     HStack {
-                        Label("Sunrise", systemImage: "sunrise.fill")
-                            .foregroundStyle(.orange)
+                        Label(viewModel.sunEventCityName.isEmpty ? "Location set" : viewModel.sunEventCityName,
+                              systemImage: "mappin.and.ellipse")
                         Spacer()
-                        if let sunrise = viewModel.todaySunrise {
-                            Text(sunrise, format: .dateTime.month().day().hour().minute())
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("—")
-                                .foregroundStyle(.secondary)
+
+                        HStack(spacing: 12) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "sunrise.fill")
+                                    .foregroundStyle(.orange)
+                                if let sunrise = viewModel.todaySunrise {
+                                    Text(sunrise, format: .dateTime.hour().minute())
+                                } else {
+                                    Text("—")
+                                }
+                            }
+
+                            HStack(spacing: 4) {
+                                Image(systemName: "sunset.fill")
+                                    .foregroundStyle(.orange)
+                                if let sunset = viewModel.todaySunset {
+                                    Text(sunset, format: .dateTime.hour().minute())
+                                } else {
+                                    Text("—")
+                                }
+                            }
                         }
-                    }
-                    HStack {
-                        Label("Sunset", systemImage: "sunset.fill")
-                            .foregroundStyle(.orange)
-                        Spacer()
-                        if let sunset = viewModel.todaySunset {
-                            Text(sunset, format: .dateTime.month().day().hour().minute())
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("—")
-                                .foregroundStyle(.secondary)
-                        }
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
                     }
                 }
             } header: {
                 Label("Location", systemImage: "location")
             } footer: {
-                Text("Required for sunrise/sunset workflow triggers. Find your coordinates at latlong.net.")
+                Text("Enter your zip or postal code to enable sunrise/sunset workflow triggers.")
             }
         }
         .formStyle(.grouped)
