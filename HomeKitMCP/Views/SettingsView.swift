@@ -2,7 +2,9 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
-    @State private var webhookURL = ""
+    // Observe storage directly so @Published changes (e.g. mcpServerBindAddress) trigger re-renders
+    @ObservedObject private var storage: StorageService
+    @State private var webhookURL: String
     @State private var showingSaveAlert = false
     @State private var hasEdited = false
     @State private var showingResetConfirmation = false
@@ -10,6 +12,14 @@ struct SettingsView: View {
     @State private var showingAIApiKey = false
     @State private var showingApiToken = false
     @State private var showingRegenerateConfirmation = false
+    @State private var showCopiedToast = false
+    @State private var copiedToastTask: Task<Void, Never>?
+
+    init(viewModel: SettingsViewModel) {
+        self.viewModel = viewModel
+        self.storage = viewModel.storage
+        self._webhookURL = State(initialValue: viewModel.storage.webhookURL ?? "")
+    }
 
     private var urlIsValid: Bool {
         webhookURL.isEmpty || viewModel.isValidURL(webhookURL)
@@ -21,8 +31,10 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("UI") {
+            Section {
                 Toggle("Hide Room Name in App", isOn: $viewModel.hideRoomNameInTheApp)
+            } header: {
+                Label("UI", systemImage: "paintbrush")
             }
             loggingSection
                 .listRowBackground(Theme.contentBackground)
@@ -45,6 +57,25 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.mainBackground)
         .navigationTitle("Settings")
+        .overlay(alignment: .bottom) {
+            if showCopiedToast {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Copied to clipboard")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: Capsule())
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .padding(.bottom, 24)
+                .allowsHitTesting(false)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showCopiedToast)
         .alert("Saved", isPresented: $showingSaveAlert) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -60,13 +91,24 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Toast
+
+    private func showCopyToast() {
+        copiedToastTask?.cancel()
+        showCopiedToast = true
+        copiedToastTask = Task {
+            try? await Task.sleep(for: .seconds(2))
+            await MainActor.run { showCopiedToast = false }
+        }
+    }
+
     // MARK: - Sections
 
     private var loggingSection: some View {
         Section {
             Toggle("Detailed Logs", isOn: $viewModel.detailedLogsEnabled)
         } header: {
-            Text("Logging")
+            Label("Logging", systemImage: "doc.text")
         } footer: {
             Text("When enabled, full request and response data is captured for MCP, REST, and webhook logs. Tap a log entry to expand details.")
         }
@@ -87,51 +129,41 @@ struct SettingsView: View {
 
                 // API Key
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        if showingAIApiKey {
-                            TextField("API Key", text: $aiApiKeyInput)
-                                .textFieldStyle(.roundedBorder)
-                                .autocapitalization(.none)
-                                .disableAutocorrection(true)
-                        } else {
-                            SecureField("API Key", text: $aiApiKeyInput)
-                                .textFieldStyle(.roundedBorder)
-                                .autocapitalization(.none)
-                                .disableAutocorrection(true)
-                        }
-
-                        Button {
-                            showingAIApiKey.toggle()
-                        } label: {
-                            Image(systemName: showingAIApiKey ? "eye.slash" : "eye")
+                    if viewModel.aiApiKeyConfigured {
+                        // Key is set — show masked placeholder and clear option only
+                        HStack {
+                            Text(String(repeating: "\u{2022}", count: 32))
+                                .font(.system(.caption, design: .monospaced))
                                 .foregroundColor(.secondary)
+                            Spacer()
+                            Label("Configured", systemImage: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.caption)
                         }
-                        .buttonStyle(.plain)
-                    }
-
-                    HStack {
+                        .allowsHitTesting(false)
+                        Button("Clear Key", role: .destructive) {
+                            viewModel.clearAIApiKey()
+                            aiApiKeyInput = ""
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.subheadline)
+                    } else {
+                        // No key set — show input field and save button
+                        SecureField("API Key", text: $aiApiKeyInput)
+                            .textFieldStyle(.roundedBorder)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
                         Button("Save Key") {
                             viewModel.saveAIApiKey(aiApiKeyInput)
                             aiApiKeyInput = ""
                         }
+                        .buttonStyle(.borderless)
                         .disabled(aiApiKeyInput.isEmpty)
-
-                        if viewModel.aiApiKeyConfigured {
-                            Spacer()
-                            Button("Clear Key", role: .destructive) {
-                                viewModel.clearAIApiKey()
-                                aiApiKeyInput = ""
-                            }
-                            .font(.subheadline)
-                        }
-                    }
-
-                    if viewModel.aiApiKeyConfigured {
-                        Label("API key configured", systemImage: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                            .font(.caption)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { /* absorb row tap so it doesn't fire buttons */ }
 
                 // Model Override
                 VStack(alignment: .leading, spacing: 4) {
@@ -179,7 +211,7 @@ struct SettingsView: View {
             .disabled(!viewModel.aiEnabled)
             .opacity(viewModel.aiEnabled ? 1 : 0.5)
         } header: {
-            Text("AI Assistant")
+            Label("AI Assistant", systemImage: "sparkles")
         } footer: {
             Text("Configure an LLM provider to create workflows from natural language descriptions.")
         }
@@ -236,7 +268,7 @@ struct SettingsView: View {
             .disabled(!viewModel.webhookEnabled)
             .opacity(viewModel.webhookEnabled ? 1 : 0.5)
         } header: {
-            Text("Webhook Configuration")
+            Label("Webhook Configuration", systemImage: "paperplane")
         } footer: {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Configure which devices trigger webhooks in the Devices tab.")
@@ -246,7 +278,7 @@ struct SettingsView: View {
     }
 
     private var webhookStatusSection: some View {
-        Section("Webhook Status") {
+        Section {
             HStack {
                 switch viewModel.webhookStatus {
                 case .idle:
@@ -277,6 +309,8 @@ struct SettingsView: View {
                 }
             }
             .disabled(!viewModel.storage.isWebhookConfigured() || viewModel.isSendingTest)
+        } header: {
+            Label("Webhook Status", systemImage: "antenna.radiowaves.left.and.right")
         }
     }
 
@@ -325,6 +359,15 @@ struct SettingsView: View {
                 .disabled(viewModel.mcpServerRunning)
             }
 
+            Picker("Binding Interface", selection: Binding(
+                get: { viewModel.storage.mcpServerBindAddress },
+                set: { viewModel.storage.mcpServerBindAddress = $0 }
+            )) {
+                Text("127.0.0.1 (Localhost only)").tag("127.0.0.1")
+                Text("0.0.0.0 (All interfaces)").tag("0.0.0.0")
+            }
+            .disabled(viewModel.mcpServerRunning)
+
             // API Token
             VStack(alignment: .leading, spacing: 6) {
                 Text("API Token")
@@ -357,6 +400,7 @@ struct SettingsView: View {
                         #if targetEnvironment(macCatalyst)
                         UIPasteboard.general.string = viewModel.mcpApiToken
                         #endif
+                        showCopyToast()
                     } label: {
                         Image(systemName: "doc.on.doc")
                             .foregroundColor(.secondary)
@@ -380,19 +424,28 @@ struct SettingsView: View {
             } message: {
                 Text("All existing MCP clients will need to be updated with the new token. The server must be restarted for the new token to take effect.")
             }
-        } header: {
-            Text("External Services (MCP & REST)")
-        } footer: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("All endpoints require an Authorization: Bearer <token> header.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.bottom, 2)
-                Text(verbatim: "MCP Streamable: http://127.0.0.1:\(viewModel.storage.mcpServerPort)/mcp")
-                Text(verbatim: "MCP Legacy SSE: http://127.0.0.1:\(viewModel.storage.mcpServerPort)/sse")
-                Text(verbatim: "REST API: http://127.0.0.1:\(viewModel.storage.mcpServerPort)/devices")
+            // Endpoint URLs
+            if viewModel.mcpServerRunning {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Endpoints")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(Theme.Text.secondary)
+
+                    let displayHost = viewModel.storage.mcpServerBindAddress == "0.0.0.0"
+                        ? viewModel.localIPAddress
+                        : viewModel.storage.mcpServerBindAddress
+                    endpointRow(label: "MCP Streamable", url: "http://\(displayHost):\(viewModel.storage.mcpServerPort)/mcp")
+                    endpointRow(label: "MCP Legacy SSE", url: "http://\(displayHost):\(viewModel.storage.mcpServerPort)/sse")
+                    endpointRow(label: "REST API", url: "http://\(displayHost):\(viewModel.storage.mcpServerPort)/devices")
+                }
             }
-            .font(.caption)
+        } header: {
+            Label("External Services (MCP & REST)", systemImage: "server.rack")
+        } footer: {
+            Text("All endpoints require an Authorization: Bearer <token> header.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
 
@@ -402,16 +455,48 @@ struct SettingsView: View {
                 showingResetConfirmation = true
             }
         } header: {
-            Text("Data")
+            Label("Data", systemImage: "externaldrive")
         } footer: {
             Text("Resets all per-device MCP visibility and webhook notification toggles to defaults.")
         }
     }
 
     private var aboutSection: some View {
-        Section("About") {
+        Section {
             LabeledContent("Version", value: "1.0.0")
             LabeledContent("Build", value: "1")
+        } header: {
+            Label("About", systemImage: "info.circle")
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func endpointRow(label: String, url: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.caption)
+                    .foregroundColor(Theme.Text.tertiary)
+                Text(url)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(Theme.Text.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer()
+            Button {
+                #if targetEnvironment(macCatalyst)
+                UIPasteboard.general.string = url
+                #endif
+                showCopyToast()
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.caption)
+                    .foregroundColor(Theme.Tint.main)
+            }
+            .buttonStyle(.plain)
+            .help("Copy URL")
         }
     }
 }

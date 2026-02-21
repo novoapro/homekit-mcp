@@ -28,7 +28,7 @@ struct BlockEditorRow: View {
         HStack {
             Image(systemName: block.blockType.icon)
                 .font(.caption)
-                .foregroundColor(block.blockType.isFlowControl ? .indigo : Theme.Tint.main)
+                .foregroundColor(block.blockType.isFlowControl ? Theme.Tint.secondary : Theme.Tint.main)
             VStack(alignment: .leading, spacing: 2) {
                 Text(block.blockType.displayName)
                     .font(.subheadline)
@@ -332,28 +332,47 @@ private struct ConditionalEditor: View {
     }
 
     private var nestedBlockButtons: some View {
-        VStack(spacing: 8) {
+        // Use .borderless button style so each button gets its own independent
+        // hit-testing rect on Mac Catalyst (plain buttons inside a List row
+        // can merge into a single tap target).
+        VStack(spacing: 0) {
             Button {
                 onEditNestedBlocks?("then", draft.wrappedValue.thenBlocks)
             } label: {
                 HStack {
                     Label("Edit Then Blocks", systemImage: "arrow.right.circle")
+                        .foregroundColor(Theme.Tint.main)
                     Spacer()
                     Text("\(draft.wrappedValue.thenBlocks.count)")
                         .foregroundColor(Theme.Text.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundColor(Theme.Text.tertiary)
                 }
+                .contentShape(Rectangle())
+                .padding(.vertical, 8)
             }
+            .buttonStyle(.borderless)
+
+            Divider()
 
             Button {
                 onEditNestedBlocks?("else", draft.wrappedValue.elseBlocks)
             } label: {
                 HStack {
                     Label("Edit Else Blocks", systemImage: "arrow.uturn.right.circle")
+                        .foregroundColor(Theme.Tint.secondary)
                     Spacer()
                     Text("\(draft.wrappedValue.elseBlocks.count)")
                         .foregroundColor(Theme.Text.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundColor(Theme.Text.tertiary)
                 }
+                .contentShape(Rectangle())
+                .padding(.vertical, 8)
             }
+            .buttonStyle(.borderless)
         }
     }
 }

@@ -89,28 +89,34 @@ struct WorkflowListView: View {
 
     private var emptyState: some View {
         Section {
-            VStack(spacing: 12) {
-                Image(systemName: "bolt.circle")
-                    .font(.largeTitle)
-                    .foregroundColor(.secondary)
-                Text("No workflows yet")
-                    .font(.headline)
-                if aiEnabled {
-                    Text("Tap + to create a workflow manually, or tap the sparkles icon to use the AI builder.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                } else {
-                    Text("Tap + to create a workflow, or use an AI agent via MCP.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
+            VStack(spacing: 16) {
+                EmptyStateView(
+                    icon: "bolt.circle",
+                    title: "No workflows yet",
+                    message: aiEnabled
+                        ? "Create automations with triggers, conditions, and actions to control your HomeKit devices."
+                        : "Create automations with triggers, conditions, and actions, or use an AI agent via MCP.",
+                    actions: emptyStateActions
+                )
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
         }
+    }
+
+    private var emptyStateActions: [EmptyStateAction] {
+        var actions: [EmptyStateAction] = [
+            EmptyStateAction(title: "Create Workflow", icon: "plus.circle.fill") {
+                showingEditor = true
+            }
+        ]
+        if aiEnabled, aiWorkflowService != nil {
+            actions.append(
+                EmptyStateAction(title: "AI Builder", icon: "sparkles", tint: Color.purple) {
+                    showingAIBuilder = true
+                }
+            )
+        }
+        return actions
     }
 }

@@ -16,19 +16,11 @@ struct LogViewerView: View {
             List {
                 if !viewModel.hasLogs {
                     Section {
-                        VStack(spacing: 12) {
-                            Image(systemName: "list.bullet.rectangle")
-                                .font(.largeTitle)
-                                .foregroundColor(.secondary)
-                            Text("No logs yet")
-                                .font(.headline)
-                            Text("Logs will appear here when devices change state or workflows execute.")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
+                        EmptyStateView(
+                            icon: "list.bullet.rectangle",
+                            title: "No logs yet",
+                            message: "Logs will appear here when devices change state or workflows execute."
+                        )
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                     }
@@ -104,7 +96,7 @@ struct LogViewerView: View {
                 // Clear all
                 if viewModel.hasActiveFilters {
                     Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(Theme.Animation.filter) {
                             viewModel.clearFilters()
                         }
                     } label: {
@@ -154,7 +146,7 @@ struct LogViewerView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Color(.systemGray6))
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Theme.Colors.chipInactive)
             )
             .overlay(
                 Capsule()
@@ -224,7 +216,7 @@ struct LogViewerView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Color(.systemGray6))
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Theme.Colors.chipInactive)
             )
             .overlay(
                 Capsule()
@@ -303,7 +295,7 @@ struct LogViewerView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Color(.systemGray6))
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Theme.Colors.chipInactive)
             )
             .overlay(
                 Capsule()

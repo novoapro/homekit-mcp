@@ -11,7 +11,7 @@ struct WorkflowExecutionLogRow: View {
             // Column 1: Status indicator
             Image(systemName: "bolt.horizontal.circle.fill")
                 .font(.caption)
-                .foregroundColor(.black)
+                .foregroundColor(Theme.Text.primary)
                 .frame(width: 16)
 
             // Column 2: Header row + subheader and content rows

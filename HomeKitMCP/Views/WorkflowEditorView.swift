@@ -20,6 +20,8 @@ struct WorkflowEditorView: View {
     @State private var showingDiscardAlert = false
     @State private var showingValidationAlert = false
     @State private var validationErrors: [String] = []
+    @State private var showCopiedToast = false
+    @State private var copiedToastTask: Task<Void, Never>?
 
     /// Nested block sheet state lives here — at a stable level that
     /// does NOT re-render when individual blocks change inside the form.
@@ -41,7 +43,7 @@ struct WorkflowEditorView: View {
         NavigationStack {
             Form {
                 detailsSection
-                TriggerEditorSection(triggers: $draft.triggers, devices: devices)
+                TriggerEditorSection(triggers: $draft.triggers, devices: devices, onCopy: showCopyToast)
                 ConditionEditorSection(conditions: $draft.conditions, devices: devices)
                 BlockEditorSection(
                     blocks: $draft.blocks,
@@ -85,6 +87,34 @@ struct WorkflowEditorView: View {
                     devices: devices
                 )
             }
+            .overlay(alignment: .bottom) {
+                if showCopiedToast {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("URL copied to clipboard")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.regularMaterial, in: Capsule())
+                    .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 24)
+                    .allowsHitTesting(false)
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showCopiedToast)
+        }
+    }
+
+    private func showCopyToast() {
+        copiedToastTask?.cancel()
+        showCopiedToast = true
+        copiedToastTask = Task {
+            try? await Task.sleep(for: .seconds(2))
+            await MainActor.run { showCopiedToast = false }
         }
     }
 

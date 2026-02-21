@@ -6,9 +6,6 @@ struct LogRow: View {
 
     @State private var isExpanded = false
 
-    /// Height of the two-line collapsed content (headline + subheadline)
-    private let collapsedHeight: CGFloat = 40
-
     private var isError: Bool {
         log.category == .webhookError || log.category == .serverError
     }
@@ -29,20 +26,29 @@ struct LogRow: View {
         log.detailedRequestBody != nil || log.detailedResponseBody != nil
     }
 
-    /// Tint color for the log category.
+    /// Tint color for the log category icon background.
     private var categoryColor: Color {
         if isError { return Theme.Status.error }
-        if isMCP { return .teal }
-        if isREST { return .indigo }
+        if isMCP { return Color.teal }
+        if isREST { return Color.indigo }
         if isWebhookCall { return Theme.Tint.secondary }
-        return Theme.Text.primary
+        if log.category == .workflowExecution { return Theme.Status.active }
+        if log.category == .workflowError { return Theme.Status.error }
+        return Theme.Tint.main
     }
 
     var body: some View {
-        HStack(alignment: isExpanded ? .firstTextBaseline : .center, spacing: 8) {
-            // Column 1: Icon indicator
-            categoryIcon
-                .frame(width: 16)
+        HStack(alignment: isExpanded ? .firstTextBaseline : .center, spacing: 10) {
+            // Column 1: Circular icon indicator (28x28, matching Home app style)
+            ZStack {
+                Circle()
+                    .fill(categoryColor.opacity(0.15))
+                    .frame(width: 28, height: 28)
+
+                categoryIconImage
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(categoryColor)
+            }
 
             // Column 2: Header row + subheader and content rows
             VStack(alignment: .leading, spacing: 4) {
@@ -50,7 +56,7 @@ struct LogRow: View {
                 HStack(alignment: .center, spacing: 8) {
                     Text(log.deviceName)
                         .font(.headline)
-                        .foregroundColor(categoryColor)
+                        .foregroundColor(Theme.Text.primary)
 
                     if let serviceName = log.serviceName, !isMCP && !isREST {
                         Text(serviceName)
@@ -92,48 +98,42 @@ struct LogRow: View {
                     .frame(width: 16, height: 1)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
         .contentShape(Rectangle())
         .onTapGesture {
             if detailedLogsEnabled && hasDetailedData {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(Theme.Animation.expand) {
                     isExpanded.toggle()
                 }
+            }
+        }
+        .contextMenu {
+            Button {
+                let text = "\(log.deviceName) — \(log.characteristicType) — \(log.timestamp)"
+                UIPasteboard.general.string = text
+            } label: {
+                Label("Copy Log Entry", systemImage: "doc.on.doc")
             }
         }
     }
 
     @ViewBuilder
-    private var categoryIcon: some View {
+    private var categoryIconImage: some View {
         switch log.category {
         case .webhookError, .serverError:
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.caption)
-                .foregroundColor(Theme.Status.error)
         case .mcpCall:
             Image(systemName: "arrow.left.arrow.right.circle.fill")
-                .font(.caption)
-                .foregroundColor(.teal)
         case .restCall:
             Image(systemName: "link.circle.fill")
-                .font(.caption)
-                .foregroundColor(.indigo)
         case .webhookCall:
             Image(systemName: "paperplane.circle.fill")
-                .font(.caption)
-                .foregroundColor(Theme.Tint.secondary)
         case .stateChange:
             Image(systemName: "bolt.circle.fill")
-                .font(.caption)
-                .foregroundColor(Theme.Tint.main)
         case .workflowExecution:
             Image(systemName: "bolt.circle.fill")
-                .font(.caption)
-                .foregroundColor(Theme.Status.active)
         case .workflowError:
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.caption)
-                .foregroundColor(Theme.Status.error)
         }
     }
 
@@ -181,7 +181,7 @@ struct LogRow: View {
             Text(log.characteristicType)
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundColor(.indigo)
+                .foregroundColor(Color.indigo)
 
             if let responseBody = log.responseBody {
                 Text("← \(responseBody)")
@@ -278,29 +278,51 @@ struct LogRow: View {
         VStack(alignment: .leading, spacing: 6) {
             VStack(alignment: .leading, spacing: 6) {
                 if let detailedReq = log.detailedRequestBody {
-                    Text("Request:")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(Theme.Text.secondary)
+                    HStack {
+                        Text("Request:")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(Theme.Text.secondary)
+                        Spacer()
+                        Button {
+                            UIPasteboard.general.string = detailedReq
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                                .font(.caption2)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(Theme.Tint.main)
+                    }
                     Text(Self.formatJSON(detailedReq))
-                        .font(.system(.caption2, design: .monospaced))
+                        .font(.system(.caption, design: .monospaced))
                         .foregroundColor(Theme.Text.secondary)
                         .textSelection(.enabled)
                 }
                 if let detailedResp = log.detailedResponseBody {
-                    Text("Response:")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(Theme.Text.secondary)
+                    HStack {
+                        Text("Response:")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(Theme.Text.secondary)
+                        Spacer()
+                        Button {
+                            UIPasteboard.general.string = detailedResp
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                                .font(.caption2)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(Theme.Tint.main)
+                    }
                     Text(Self.formatJSON(detailedResp))
-                        .font(.system(.caption2, design: .monospaced))
+                        .font(.system(.caption, design: .monospaced))
                         .foregroundColor(Theme.Text.secondary)
                         .textSelection(.enabled)
                 }
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.systemGray6).opacity(0.5))
+            .background(Color(.systemGray5))
             .cornerRadius(6)
         }
     }

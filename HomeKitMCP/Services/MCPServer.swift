@@ -62,7 +62,7 @@ class MCPServer: ObservableObject {
             guard let self else { return }
             do {
                 let app = try await Application.make(env)
-                app.http.server.configuration.hostname = "127.0.0.1"
+                app.http.server.configuration.hostname = self.storage.readBindAddress()
                 app.http.server.configuration.port = self.port
                 app.http.server.configuration.reuseAddress = true
                 app.logger.logLevel = .warning
@@ -133,27 +133,34 @@ class MCPServer: ObservableObject {
         let apiToken = keychainService.getOrCreateMCPApiToken()
         let authMiddleware = BearerAuthMiddleware(validToken: apiToken)
 
-        // CORS middleware — restrict to localhost origins only
+        // CORS middleware — restrict to the bind address origin for protected routes.
+        // The webhook trigger endpoint is intentionally left outside CORS so external
+        // services can call it regardless of origin.
+        let bindAddr = storage.readBindAddress()
+        let corsOrigin: CORSMiddleware.AllowOriginSetting = bindAddr == "0.0.0.0"
+            ? .all
+            : .custom("http://\(bindAddr):\(port)")
         let corsConfig = CORSMiddleware.Configuration(
-            allowedOrigin: .custom("http://127.0.0.1:\(port)"),
+            allowedOrigin: corsOrigin,
             allowedMethods: [.GET, .POST, .PUT, .DELETE, .OPTIONS],
             allowedHeaders: [.contentType, .authorization, .init("Mcp-Session-Id")]
         )
-        app.middleware.use(CORSMiddleware(configuration: corsConfig))
+        let corsMiddleware = CORSMiddleware(configuration: corsConfig)
 
         // Health check — no auth required
         app.on(.GET, "health") { _ -> String in
             return "ok"
         }
 
-        // Webhook trigger endpoint — uses its own token-based auth, no bearer required
+        // Webhook trigger endpoint — uses its own token-based auth, no bearer required.
+        // CORS is intentionally not applied here so external services can POST freely.
         app.on(.POST, "workflows", "webhook", ":token", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             return try await self.handleRestWebhookTrigger(req)
         }
 
-        // All other routes require bearer token auth
-        let protected = app.grouped(authMiddleware)
+        // All other routes require bearer token auth + CORS
+        let protected = app.grouped(corsMiddleware, authMiddleware)
 
         // Streamable HTTP transport: single endpoint supporting POST, GET, and DELETE
         protected.on(.POST, "mcp", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in

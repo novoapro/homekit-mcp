@@ -16,7 +16,9 @@ struct HomeKitMCPApp: App {
     }
 }
 
-enum NavigationItem: String, CaseIterable, Identifiable {
+// MARK: - Navigation
+
+enum NavigationItem: String, CaseIterable, Identifiable, Hashable {
     case devices
     case workflows
     case logs
@@ -43,25 +45,168 @@ enum NavigationItem: String, CaseIterable, Identifiable {
     }
 }
 
+/// Sidebar items for category-based filtering (matching Apple Home app Categories section)
+enum SidebarCategory: String, CaseIterable, Identifiable, Hashable {
+    case lights
+    case climate
+    case security
+    case fans
+    case switches
+    case sensors
+    case doors
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .lights: return "Lights"
+        case .climate: return "Climate"
+        case .security: return "Security"
+        case .fans: return "Fans"
+        case .switches: return "Switches"
+        case .sensors: return "Sensors"
+        case .doors: return "Doors & Windows"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .lights: return "lightbulb.fill"
+        case .climate: return "thermometer"
+        case .security: return "lock.fill"
+        case .fans: return "fan.fill"
+        case .switches: return "switch.2"
+        case .sensors: return "sensor"
+        case .doors: return "door.left.hand.closed"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .lights: return Theme.Category.light
+        case .climate: return Theme.Category.climate
+        case .security: return Theme.Category.security
+        case .fans: return Theme.Category.fan
+        case .switches: return Theme.Category.switchOutlet
+        case .sensors: return Theme.Category.sensor
+        case .doors: return Theme.Category.door
+        }
+    }
+
+    /// HomeKit category types that match this sidebar category.
+    /// Uses the actual string values returned by HMAccessoryCategory.categoryType at runtime.
+    var matchingCategoryTypes: Set<String> {
+        switch self {
+        case .lights:
+            return ["HMAccessoryCategoryTypeLightbulb"]
+        case .climate:
+            return [
+                "HMAccessoryCategoryTypeThermostat",
+                "HMAccessoryCategoryTypeAirConditioner",
+                "HMAccessoryCategoryTypeAirHeater",
+                "HMAccessoryCategoryTypeAirPurifier",
+                "HMAccessoryCategoryTypeAirHumidifier",
+                "HMAccessoryCategoryTypeAirDehumidifier",
+                "HMAccessoryCategoryTypeFaucet",
+                "HMAccessoryCategoryTypeShowerHead",
+                "HMAccessoryCategoryTypeSprinkler"
+            ]
+        case .security:
+            // Note: HomeKit uses "DoorLock", not "Lock"
+            return ["HMAccessoryCategoryTypeDoorLock", "HMAccessoryCategoryTypeSecuritySystem"]
+        case .fans:
+            return ["HMAccessoryCategoryTypeFan"]
+        case .switches:
+            return ["HMAccessoryCategoryTypeSwitch", "HMAccessoryCategoryTypeProgrammableSwitch", "HMAccessoryCategoryTypeOutlet"]
+        case .sensors:
+            return ["HMAccessoryCategoryTypeSensor"]
+        case .doors:
+            return [
+                "HMAccessoryCategoryTypeDoor",
+                "HMAccessoryCategoryTypeWindow",
+                "HMAccessoryCategoryTypeWindowCovering",
+                "HMAccessoryCategoryTypeGarageDoorOpener"
+            ]
+        }
+    }
+}
+
+/// Represents what the sidebar has selected
+enum SidebarSelection: Hashable {
+    case nav(NavigationItem)
+    case category(SidebarCategory)
+    case room(String)
+}
+
+// MARK: - Content View (Sidebar Navigation)
+
 struct ContentView: View {
     @EnvironmentObject var homeKitViewModel: HomeKitViewModel
     @EnvironmentObject var logViewModel: LogViewModel
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var workflowViewModel: WorkflowViewModel
 
-    @State private var selection: NavigationItem = .devices
+    @State private var selection: SidebarSelection? = .nav(.devices)
 
     var body: some View {
-        TabView(selection: $selection) {
+        NavigationSplitView {
+            sidebar
+        } detail: {
+            detailView
+        }
+        .background(Theme.mainBackground)
+        // Keyboard shortcuts for sidebar navigation (Cmd+1/2/3, Cmd+, for Settings)
+        .background {
+            VStack {
+                Button("") { selection = .nav(.devices) }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("") { selection = .nav(.workflows) }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("") { selection = .nav(.logs) }
+                    .keyboardShortcut("3", modifiers: .command)
+                Button("") { selection = .nav(.settings) }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
+            .hidden()
+        }
+    }
+
+    // MARK: - Sidebar
+
+    private var sidebar: some View {
+        List(selection: $selection) {
+            // Main navigation items
+            Section {
+                ForEach(NavigationItem.allCases) { item in
+                    Label(item.label, systemImage: item.icon)
+                        .tag(SidebarSelection.nav(item))
+                }
+            }
+
+            // Rooms section (matching Home app sidebar)
+            if !homeKitViewModel.availableRooms.isEmpty {
+                Section("Rooms") {
+                    ForEach(homeKitViewModel.availableRooms, id: \.self) { room in
+                        Label(room, systemImage: "house")
+                            .tag(SidebarSelection.room(room))
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("HomeKit MCP")
+    }
+
+    // MARK: - Detail View
+
+    @ViewBuilder
+    private var detailView: some View {
+        switch selection {
+        case .nav(.devices), .none:
             NavigationStack {
                 DeviceListView(viewModel: homeKitViewModel)
             }
-            .tabItem {
-                Label(NavigationItem.devices.label, systemImage: NavigationItem.devices.icon)
-            }
-            .tag(NavigationItem.devices)
-            .badge(homeKitViewModel.totalDeviceCount)
-
+        case .nav(.workflows):
             NavigationStack {
                 WorkflowListView(
                     viewModel: workflowViewModel,
@@ -69,31 +214,35 @@ struct ContentView: View {
                     aiEnabled: settingsViewModel.aiEnabled && settingsViewModel.aiApiKeyConfigured
                 )
             }
-            .tabItem {
-                Label(NavigationItem.workflows.label, systemImage: NavigationItem.workflows.icon)
-            }
-            .tag(NavigationItem.workflows)
-            .badge(workflowViewModel.enabledCount)
-
+        case .nav(.logs):
             NavigationStack {
                 LogViewerView(viewModel: logViewModel)
             }
-            .tabItem {
-                Label(NavigationItem.logs.label, systemImage: NavigationItem.logs.icon)
-            }
-            .tag(NavigationItem.logs)
-            .badge(logViewModel.totalLogCount)
-
+        case .nav(.settings):
             NavigationStack {
                 SettingsView(viewModel: settingsViewModel)
             }
-            .tabItem {
-                Label(NavigationItem.settings.label, systemImage: NavigationItem.settings.icon)
+        case .category(let category):
+            NavigationStack {
+                DeviceListView(
+                    viewModel: homeKitViewModel,
+                    initialCategoryFilter: category,
+                    onFiltersCleared: { selection = .nav(.devices) }
+                )
             }
-            .tag(NavigationItem.settings)
+            .id(category) // Force recreation when category changes
+        case .room(let room):
+            NavigationStack {
+                DeviceListView(
+                    viewModel: homeKitViewModel,
+                    initialRoomFilter: room,
+                    onFiltersCleared: { selection = .nav(.devices) }
+                )
+            }
+            .id(room) // Force recreation when room changes
         }
-        .background(Theme.mainBackground)
     }
+
 }
 
 #Preview {
@@ -103,5 +252,3 @@ struct ContentView: View {
         .environmentObject(PreviewData.settingsViewModel)
         .environmentObject(PreviewData.workflowViewModel)
 }
-
-

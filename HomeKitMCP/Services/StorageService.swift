@@ -66,6 +66,9 @@ class StorageService: ObservableObject {
     @Published var aiModelId: String {
         didSet { defaults.set(aiModelId, forKey: Keys.aiModelId) }
     }
+    @Published var mcpServerBindAddress: String {
+        didSet { defaults.set(mcpServerBindAddress, forKey: Keys.mcpServerBindAddress) }
+    }
 
     init(keychainService: KeychainService = KeychainService()) {
         self.keychainService = keychainService
@@ -79,7 +82,8 @@ class StorageService: ObservableObject {
             Keys.detailedLogsEnabled: false,
             Keys.aiEnabled: false,
             Keys.aiProvider: AIProvider.claude.rawValue,
-            Keys.aiModelId: ""
+            Keys.aiModelId: "",
+            Keys.mcpServerBindAddress: "127.0.0.1"
         ])
 
         // Migrate webhook URL from UserDefaults to Keychain (one-time)
@@ -99,6 +103,7 @@ class StorageService: ObservableObject {
         self.aiEnabled = defaults.bool(forKey: Keys.aiEnabled)
         self.aiProvider = AIProvider(rawValue: defaults.string(forKey: Keys.aiProvider) ?? "") ?? .claude
         self.aiModelId = defaults.string(forKey: Keys.aiModelId) ?? ""
+        self.mcpServerBindAddress = defaults.string(forKey: Keys.mcpServerBindAddress) ?? "127.0.0.1"
     }
 
     func isWebhookConfigured() -> Bool {
@@ -139,6 +144,10 @@ class StorageService: ObservableObject {
         UserDefaults.standard.string(forKey: Keys.aiModelId) ?? ""
     }
 
+    nonisolated func readBindAddress() -> String {
+        UserDefaults.standard.string(forKey: Keys.mcpServerBindAddress) ?? "127.0.0.1"
+    }
+
     private enum Keys {
         static let webhookURL = "webhookURL"
         static let mcpServerPort = "mcpServerPort"
@@ -149,5 +158,6 @@ class StorageService: ObservableObject {
         static let aiEnabled = "aiEnabled"
         static let aiProvider = "aiProvider"
         static let aiModelId = "aiModelId"
+        static let mcpServerBindAddress = "mcpServerBindAddress"
     }
 }

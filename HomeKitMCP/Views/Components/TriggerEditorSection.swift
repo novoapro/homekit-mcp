@@ -3,6 +3,17 @@ import SwiftUI
 struct TriggerEditorSection: View {
     @Binding var triggers: [TriggerDraft]
     let devices: [DeviceModel]
+    var onCopy: (() -> Void)? = nil
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
+
+    /// The host that the MCP server is actually reachable on.
+    /// Shows the LAN IP when bound to all interfaces so the copied URL works from remote devices.
+    private var webhookHost: String {
+        let bind = settingsViewModel.storage.mcpServerBindAddress
+        return bind == "0.0.0.0" ? settingsViewModel.localIPAddress : bind
+    }
+
+    private var webhookPort: Int { settingsViewModel.storage.mcpServerPort }
 
     var body: some View {
         Section {
@@ -207,14 +218,15 @@ struct TriggerEditorSection: View {
         }
 
         LabeledContent("URL") {
-            Text("POST /workflows/webhook/\(String(trigger.wrappedValue.webhookToken.prefix(8)))...")
+            Text("http://\(webhookHost):\(webhookPort)/workflows/webhook/\(String(trigger.wrappedValue.webhookToken.prefix(8)))...")
                 .font(.system(.caption, design: .monospaced))
                 .foregroundColor(Theme.Text.secondary)
                 .lineLimit(1)
         }
 
         Button {
-            UIPasteboard.general.string = "http://localhost:3000/workflows/webhook/\(trigger.wrappedValue.webhookToken)"
+            UIPasteboard.general.string = "http://\(webhookHost):\(webhookPort)/workflows/webhook/\(trigger.wrappedValue.webhookToken)"
+            onCopy?()
         } label: {
             Label("Copy Webhook URL", systemImage: "doc.on.doc")
         }

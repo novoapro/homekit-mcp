@@ -29,6 +29,7 @@
 		5D1DF4EE7848F0AFF3FCD041 /* DeviceNameFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65766D71479AEC864A35E452 /* DeviceNameFormatter.swift */; };
 		5D5A27F1913660BBC8968F85 /* WebhookService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E00EF2581D4A9B75850FF25 /* WebhookService.swift */; };
 		5E6D895157FC47B4A75A4A28 /* DeviceRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918FA14242FE41FBD8F7DF47 /* DeviceRow.swift */; };
+		D2C1B0A9F8E7D6C5B4A3F2E1 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8A9B0C1D2 /* EmptyStateView.swift */; };
 		604138D8F7B166CDADB33EE9 /* DeviceConfigurationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7760FE5637D902D59F614907 /* DeviceConfigurationService.swift */; };
 		604630A1BF390A991532363A /* AnyCodable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8520B3C8169ADBD675E1136B /* AnyCodable.swift */; };
 		6458BBCA2F491D770012FC37 /* CharacteristicInputConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6458BBC92F491D770012FC37 /* CharacteristicInputConfig.swift */; };
@@ -114,6 +115,7 @@
 		8520B3C8169ADBD675E1136B /* AnyCodable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyCodable.swift; sourceTree = "<group>"; };
 		88A5A04A534224C9C7A8E939 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		918FA14242FE41FBD8F7DF47 /* DeviceRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceRow.swift; sourceTree = "<group>"; };
+		E1F2A3B4C5D6E7F8A9B0C1D2 /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		94E00E5E7805C7F145F187EA /* LogRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogRow.swift; sourceTree = "<group>"; };
 		99DEDCA340108084F34C2396 /* LoggingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingService.swift; sourceTree = "<group>"; };
 		A0EDD8CF773B924B5E9F1122 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
@@ -223,6 +225,7 @@
 				BD6C2347887E05C5A346B0E4 /* ConditionEditorSection.swift */,
 				4BBC2F6AA87E4D0C329F2595 /* DeviceCharacteristicPicker.swift */,
 				918FA14242FE41FBD8F7DF47 /* DeviceRow.swift */,
+				E1F2A3B4C5D6E7F8A9B0C1D2 /* EmptyStateView.swift */,
 				94E00E5E7805C7F145F187EA /* LogRow.swift */,
 				6BE5BD70C71A833414ADC790 /* TriggerEditorSection.swift */,
 				AFE6A3FC9762EB4AC08D71D3 /* ValueEditor.swift */,
@@ -443,6 +446,7 @@
 				0AB5E46CEF3A8B68CC454E5E /* DeviceModel.swift in Sources */,
 				5D1DF4EE7848F0AFF3FCD041 /* DeviceNameFormatter.swift in Sources */,
 				5E6D895157FC47B4A75A4A28 /* DeviceRow.swift in Sources */,
+				D2C1B0A9F8E7D6C5B4A3F2E1 /* EmptyStateView.swift in Sources */,
 				7E4ADB80680BA80474D18047 /* DeviceStateChangeTriggerEvaluator.swift in Sources */,
 				97DAC0FF8E443C2BE91E9C0E /* HomeKitMCPApp.swift in Sources */,
 				185DAC0F4CCBE7EADDA71DC1 /* HomeKitManager.swift in Sources */,

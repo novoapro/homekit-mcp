@@ -57,7 +57,7 @@ enum PreviewData {
             id: "device-3",
             name: "Front Door Lock",
             roomName: "Hallway",
-            categoryType: "HMAccessoryCategoryTypeLock",
+            categoryType: "HMAccessoryCategoryTypeDoorLock",
             services: [],
             isReachable: false
         )

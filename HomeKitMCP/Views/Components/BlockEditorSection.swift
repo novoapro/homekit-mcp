@@ -18,8 +18,6 @@ struct BlockEditorSection: View {
     /// When non-nil the parent (WorkflowEditorView) uses this to open the nested-block sheet.
     var onRequestNestedEdit: ((NestedEditState) -> Void)?
 
-    @State private var showingBlockTypePicker = false
-
     var body: some View {
         Section {
             ForEach($blocks) { $block in
@@ -35,28 +33,42 @@ struct BlockEditorSection: View {
             }
             .onDelete { blocks.remove(atOffsets: $0) }
 
-            Button {
-                showingBlockTypePicker = true
-            } label: {
-                Label("Add Block", systemImage: "plus.circle")
-            }
-            .confirmationDialog("Add Block", isPresented: $showingBlockTypePicker) {
-                Group {
-                    Button("Control Device") { blocks.append(.newControlDevice()) }
-                    Button("Webhook") { blocks.append(.newWebhook()) }
-                    Button("Log Message") { blocks.append(.newLog()) }
-                    Button("Delay") { blocks.append(.newDelay()) }
-                    Button("Wait for State") { blocks.append(.newWaitForState()) }
+            // Use a Menu instead of confirmationDialog — works correctly both in
+            // top-level forms and nested sheets on Mac Catalyst.
+            Menu {
+                Button("Control Device", systemImage: "house.fill") {
+                    blocks.append(.newControlDevice())
+                }
+                Button("Webhook", systemImage: "globe") {
+                    blocks.append(.newWebhook())
+                }
+                Button("Log Message", systemImage: "text.bubble") {
+                    blocks.append(.newLog())
+                }
+                Button("Delay", systemImage: "clock") {
+                    blocks.append(.newDelay())
+                }
+                Button("Wait for State", systemImage: "hourglass") {
+                    blocks.append(.newWaitForState())
                 }
                 if allowNesting {
-                    Group {
-                        Button("If/Else") { blocks.append(.newConditional()) }
-                        Button("Repeat") { blocks.append(.newRepeat()) }
-                        Button("Repeat While") { blocks.append(.newRepeatWhile()) }
-                        Button("Group") { blocks.append(.newGroup()) }
+                    Divider()
+                    Button("If/Else", systemImage: "arrow.triangle.branch") {
+                        blocks.append(.newConditional())
+                    }
+                    Button("Repeat", systemImage: "repeat") {
+                        blocks.append(.newRepeat())
+                    }
+                    Button("Repeat While", systemImage: "repeat.circle") {
+                        blocks.append(.newRepeatWhile())
+                    }
+                    Button("Group", systemImage: "folder") {
+                        blocks.append(.newGroup())
                     }
                 }
-                Button("Cancel", role: .cancel) { }
+            } label: {
+                Label("Add Block", systemImage: "plus.circle")
+                    .foregroundColor(Theme.Tint.main)
             }
         } header: {
             Text("Blocks (\(blocks.count))")

@@ -10,8 +10,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if let titlebar = windowScene.titlebar {
             titlebar.toolbarStyle = .unified
         }
-        // Prevent the window from being fully released on close so it can be restored
-        windowScene.sizeRestrictions?.minimumSize = CGSize(width: 480, height: 400)
+        // Sized to accommodate sidebar + content layout (matches Apple Home app proportions)
+        windowScene.sizeRestrictions?.minimumSize = CGSize(width: 800, height: 550)
         #endif
     }
 

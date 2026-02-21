@@ -3,6 +3,13 @@ import SwiftUI
 struct DeviceListView: View {
     @ObservedObject var viewModel: HomeKitViewModel
 
+    /// When set from sidebar category selection, pre-filters the device list
+    var initialCategoryFilter: SidebarCategory?
+    /// When set from sidebar room selection, pre-filters the device list
+    var initialRoomFilter: String?
+    /// Called when the user clears all filters — lets the sidebar know to reset its selection
+    var onFiltersCleared: (() -> Void)?
+
     @State private var showBulkConfirm = false
     @State private var pendingBulkAction: (() -> Void)?
     @State private var bulkConfirmMessage = ""
@@ -14,39 +21,22 @@ struct DeviceListView: View {
     var body: some View {
         Group {
             if let error = viewModel.errorMessage {
-                VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundColor(.orange)
-                    Text("HomeKit Access Required")
-                        .font(.headline)
-                    Text(error)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                EmptyStateView(
+                    icon: "exclamationmark.triangle",
+                    title: "HomeKit Access Required",
+                    message: error,
+                    iconColor: Color.orange
+                )
                 .background(Theme.mainBackground)
             } else if viewModel.isLoading && viewModel.totalDeviceCount == 0 {
                 ProgressView("Discovering devices...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.totalDeviceCount == 0 {
-                VStack(spacing: 12) {
-                    Image(systemName: "house")
-                        .font(.system(size: 50))
-                        .foregroundColor(.secondary.opacity(0.3))
-                        .padding(.bottom, 8)
-                    Text("No HomeKit devices found")
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                    Text("Make sure you have devices set up in the Home app.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                EmptyStateView(
+                    icon: "house",
+                    title: "No HomeKit devices found",
+                    message: "Make sure you have devices set up in the Home app."
+                )
                 .background(Theme.mainBackground)
             } else {
                 VStack(spacing: 0) {
@@ -62,18 +52,21 @@ struct DeviceListView: View {
                                         .font(.title3)
                                         .fontWeight(.bold)
                                         .foregroundColor(Theme.Text.primary)
-                                    Text("(\(group.devices.count))")
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(Theme.Text.tertiary)
+                                    Spacer()
+                                    Text("\(group.devices.count)")
                                         .font(.subheadline)
                                         .fontWeight(.medium)
                                         .foregroundColor(Theme.Text.secondary)
-                                    Spacer()
                                 }
                                 .padding(.top, 5)
                                 .padding(.bottom, 5)
-                                .padding(.horizontal, 20) // Align with inset row content
-                                .background(Theme.mainBackground.opacity(0.95)) // Slightly translucent sticky header
+                                .padding(.horizontal, 20)
+                                .background(Theme.mainBackground.opacity(0.95))
                                 .textCase(nil)
-                                .listRowInsets(EdgeInsets()) // Remove default header padding/insets
+                                .listRowInsets(EdgeInsets())
                             ) {
                                 ForEach(Array(group.devices.enumerated()), id: \.element.id) { index, device in
                                     let isFirst = index == 0
@@ -111,12 +104,64 @@ struct DeviceListView: View {
                 }
             }
         }
-        .navigationTitle("HomeKit Devices (\(filteredDeviceCount))")
+        .navigationTitle(navigationTitle)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if viewModel.isLoading || viewModel.isUpdating {
                     ProgressView()
                         .controlSize(.small)
+                }
+            }
+
+            // Bulk actions moved to toolbar menu
+            if filteredDeviceCount > 0 {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        let allApiEnabled = viewModel.filteredDevicesByRoom.flatMap(\.devices).allSatisfy { viewModel.isExternalAccessEnabled(for: $0) }
+                        let allWebhookEnabled = viewModel.filteredDevicesByRoom.flatMap(\.devices).allSatisfy { viewModel.isWebhookEnabled(for: $0) }
+
+                        Section("API Access") {
+                            Button {
+                                confirmBulkAction(message: "Enable API for \(filteredDeviceCount) devices?") {
+                                    viewModel.setBulkConfig(externalAccessEnabled: true)
+                                }
+                            } label: {
+                                Label("Enable All", systemImage: allApiEnabled ? "checkmark.circle.fill" : "circle")
+                            }
+                            .disabled(allApiEnabled)
+
+                            Button {
+                                confirmBulkAction(message: "Disable API for \(filteredDeviceCount) devices?") {
+                                    viewModel.setBulkConfig(externalAccessEnabled: false)
+                                }
+                            } label: {
+                                Label("Disable All", systemImage: !allApiEnabled ? "xmark.circle" : "circle")
+                            }
+                            .disabled(!allApiEnabled)
+                        }
+
+                        Section("Webhooks") {
+                            Button {
+                                confirmBulkAction(message: "Enable Webhooks for \(filteredDeviceCount) devices?") {
+                                    viewModel.setBulkConfig(webhookEnabled: true)
+                                }
+                            } label: {
+                                Label("Enable All", systemImage: allWebhookEnabled ? "checkmark.circle.fill" : "circle")
+                            }
+                            .disabled(allWebhookEnabled)
+
+                            Button {
+                                confirmBulkAction(message: "Disable Webhooks for \(filteredDeviceCount) devices?") {
+                                    viewModel.setBulkConfig(webhookEnabled: false)
+                                }
+                            } label: {
+                                Label("Disable All", systemImage: !allWebhookEnabled ? "xmark.circle" : "circle")
+                            }
+                            .disabled(!allWebhookEnabled)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
                 }
             }
         }
@@ -132,31 +177,38 @@ struct DeviceListView: View {
         } message: {
             Text(bulkConfirmMessage)
         }
-    }
-
-    // MARK: - Bulk Action Bar
-
-    private func bulkButton(label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 3) {
-                Image(systemName: icon)
-                    .font(.system(size: 9))
-                Text(label)
-                    .font(.caption2)
-                    .fontWeight(.medium)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                Capsule().fill(color.opacity(0.12))
-            )
-            .overlay(
-                Capsule().strokeBorder(color.opacity(0.4), lineWidth: 1)
-            )
-            .foregroundColor(color)
+        .onAppear {
+            applySidebarFilters()
         }
-        .buttonStyle(.plain)
     }
+
+    // MARK: - Navigation Title
+
+    private var navigationTitle: String {
+        if let category = initialCategoryFilter {
+            return "\(category.label) (\(filteredDeviceCount))"
+        } else if let room = initialRoomFilter {
+            return "\(room) (\(filteredDeviceCount))"
+        }
+        return "Devices (\(filteredDeviceCount))"
+    }
+
+    // MARK: - Sidebar Filter Application
+
+    private func applySidebarFilters() {
+        if let category = initialCategoryFilter {
+            // Filter by category type — map to service types that belong to this category
+            let allDevices = viewModel.devicesByRoom.flatMap(\.devices)
+            let matchingTypes = allDevices
+                .filter { category.matchingCategoryTypes.contains($0.categoryType) }
+                .flatMap { $0.services.map { ServiceTypes.displayName(for: $0.type) } }
+            viewModel.selectedServiceTypes = Set(matchingTypes)
+        } else if let room = initialRoomFilter {
+            viewModel.selectedRooms = [room]
+        }
+    }
+
+    // MARK: - Bulk Actions
 
     private func confirmBulkAction(message: String, action: @escaping () -> Void) {
         bulkConfirmMessage = message
@@ -167,66 +219,36 @@ struct DeviceListView: View {
     // MARK: - Filter Bar
 
     private var filterBar: some View {
-        HStack(spacing: 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    // Room filter
-                    roomFilterChip
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // Room filter
+                roomFilterChip
 
-                    // Service type filter
-                    serviceTypeFilterChip
+                // Service type filter
+                serviceTypeFilterChip
 
-                    // EXT filter
-                    extFilterChip
+                // API filter
+                apiFilterChip
 
-                    // Webhook filter
-                    webhookFilterChip
+                // Webhook filter
+                webhookFilterChip
 
-                    // Clear button
-                    if viewModel.hasActiveFilters {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                viewModel.clearFilters()
-                            }
-                        } label: {
-                            Label("Clear", systemImage: "xmark.circle.fill")
-                                .font(.caption)
-                                .foregroundColor(Theme.Status.error)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .contentShape(Rectangle())
+                // Clear button
+                if viewModel.hasActiveFilters {
+                    Button {
+                        withAnimation(Theme.Animation.filter) {
+                            viewModel.clearFilters()
+                            onFiltersCleared?()
                         }
-                        .buttonStyle(.plain)
+                    } label: {
+                        Label("Clear", systemImage: "xmark.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(Theme.Status.error)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
                     }
-                }
-            }
-
-            // Always show CTAs if devices exist
-            if viewModel.filteredDevicesByRoom.count > 0 {
-                Spacer()
-                HStack {
-                    // EXT Toggle
-                    let allExtEnabled = viewModel.filteredDevicesByRoom.flatMap(\.devices).allSatisfy { viewModel.isExternalAccessEnabled(for: $0) }
-
-                    MiniToggle(isOn: Binding(
-                        get: { allExtEnabled },
-                        set: { newValue in
-                            confirmBulkAction(message: newValue ? "Enable EXT for \(filteredDeviceCount) devices?" : "Disable EXT for \(filteredDeviceCount) devices?") {
-                                viewModel.setBulkConfig(externalAccessEnabled: newValue)
-                            }
-                        }
-                    ), label: "EXT")
-
-                    // Webhook Toggle
-                    let allHookEnabled = viewModel.filteredDevicesByRoom.flatMap(\.devices).allSatisfy { viewModel.isWebhookEnabled(for: $0) }
-                    MiniToggle(isOn: Binding(
-                        get: { allHookEnabled },
-                        set: { newValue in
-                            confirmBulkAction(message: newValue ? "Enable Webhooks for \(filteredDeviceCount) devices?" : "Disable Webhooks for \(filteredDeviceCount) devices?") {
-                                viewModel.setBulkConfig(webhookEnabled: newValue)
-                            }
-                        }
-                    ), label: "Hook")
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -253,7 +275,7 @@ struct DeviceListView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : .clear)
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Theme.Colors.chipInactive)
             )
             .overlay(
                 Capsule()
@@ -264,6 +286,7 @@ struct DeviceListView: View {
             VStack(alignment: .leading, spacing: 0) {
                 menuRow(title: "All Rooms", isSelected: viewModel.selectedRooms.isEmpty) {
                     withAnimation { viewModel.selectedRooms.removeAll() }
+                    if initialRoomFilter != nil { onFiltersCleared?() }
                 }
 
                 Divider()
@@ -310,7 +333,7 @@ struct DeviceListView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : .clear)
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Theme.Colors.chipInactive)
             )
             .overlay(
                 Capsule()
@@ -346,13 +369,13 @@ struct DeviceListView: View {
         }
     }
 
-    private var extFilterChip: some View {
+    private var apiFilterChip: some View {
         FilterDropdown {
             let isActive = viewModel.mcpFilter != .all
             HStack(spacing: 4) {
                 Image(systemName: "server.rack")
                     .font(.caption2)
-                Text(isActive ? "EXT: \(viewModel.mcpFilter.rawValue)" : "EXT")
+                Text(isActive ? "API: \(viewModel.mcpFilter.rawValue)" : "API")
                     .font(.caption)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
@@ -362,7 +385,7 @@ struct DeviceListView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : .clear)
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Theme.Colors.chipInactive)
             )
             .overlay(
                 Capsule()
@@ -371,7 +394,6 @@ struct DeviceListView: View {
             .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.primary)
         } content: {
             VStack(alignment: .leading, spacing: 0) {
-                // Filter Options
                 ForEach(TriStateFilter.allCases, id: \.self) { option in
                     menuRow(title: option.rawValue, isSelected: viewModel.mcpFilter == option) {
                         viewModel.mcpFilter = option
@@ -399,7 +421,7 @@ struct DeviceListView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : .clear)
+                    .fill(isActive ? Theme.Tint.main.opacity(0.15) : Theme.Colors.chipInactive)
             )
             .overlay(
                 Capsule()
@@ -408,7 +430,6 @@ struct DeviceListView: View {
             .foregroundColor(isActive ? Theme.Tint.main : Theme.Text.primary)
         } content: {
             VStack(alignment: .leading, spacing: 0) {
-                // Filter Options
                 ForEach(TriStateFilter.allCases, id: \.self) { option in
                     menuRow(title: option.rawValue, isSelected: viewModel.webhookFilter == option) {
                         viewModel.webhookFilter = option
@@ -479,10 +500,7 @@ struct FilterDropdown<Label: View, Content: View>: View {
             VStack(alignment: .leading, spacing: 0) {
                 content()
             }
-            // Removed default padding to allow rows to touch edges
-            // .padding(.vertical, 8)
             .background(Theme.contentBackground)
-            // Ensure a minimum width for usability, but allow it to grow
             .frame(minWidth: 200)
         }
     }

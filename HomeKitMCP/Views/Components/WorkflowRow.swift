@@ -6,6 +6,7 @@ struct WorkflowRow: View {
     let onToggle: () -> Void
 
     @State private var isEnabled: Bool = false
+    @State private var isHovered = false
 
     private var statusColor: Color {
         guard workflow.isEnabled else { return Theme.Status.inactive }
@@ -18,12 +19,29 @@ struct WorkflowRow: View {
         recentLogs.first?.status
     }
 
+    /// Icon and color based on primary trigger type
+    private var triggerIcon: String {
+        guard let firstTrigger = workflow.triggers.first else { return "bolt.fill" }
+        switch firstTrigger {
+        case .deviceStateChange: return "bolt.fill"
+        case .schedule: return "clock.fill"
+        case .webhook: return "arrow.down.circle.fill"
+        case .compound: return "arrow.triangle.branch"
+        }
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            // Status indicator
-            Circle()
-                .fill(statusColor)
-                .frame(width: 8, height: 8)
+            // Circular trigger-type icon (36x36, matching Home app style)
+            ZStack {
+                Circle()
+                    .fill(statusColor.opacity(0.15))
+                    .frame(width: 36, height: 36)
+
+                Image(systemName: triggerIcon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(statusColor)
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -44,6 +62,18 @@ struct WorkflowRow: View {
                 }
 
                 HStack(spacing: 8) {
+                    // Trigger type pill
+                    if let firstTrigger = workflow.triggers.first {
+                        Text(triggerTypeLabel(firstTrigger))
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(statusColor.opacity(0.1))
+                            .foregroundColor(statusColor)
+                            .cornerRadius(4)
+                    }
+
                     // Trigger count
                     Label("\(workflow.triggers.count)", systemImage: "bolt.fill")
                         .font(.caption)
@@ -87,10 +117,30 @@ struct WorkflowRow: View {
                     }
                 }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
         .onAppear { isEnabled = workflow.isEnabled }
         .onChange(of: workflow.isEnabled) { newValue in
             isEnabled = newValue
+        }
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .contextMenu {
+            Button {
+                onToggle()
+            } label: {
+                Label(workflow.isEnabled ? "Disable" : "Enable",
+                      systemImage: workflow.isEnabled ? "pause.circle" : "play.circle")
+            }
+        }
+    }
+
+    private func triggerTypeLabel(_ trigger: WorkflowTrigger) -> String {
+        switch trigger {
+        case .deviceStateChange: return "Device"
+        case .schedule: return "Schedule"
+        case .webhook: return "Webhook"
+        case .compound: return "Compound"
         }
     }
 }

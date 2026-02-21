@@ -451,18 +451,18 @@ private struct FlowControlBlockRow: View {
         HStack(spacing: 4) {
             ForEach(0 ..< depth, id: \.self) { _ in
                 Rectangle()
-                    .fill(Color.indigo.opacity(0.3))
+                    .fill(Theme.Tint.main.opacity(0.3))
                     .frame(width: 3)
                     .cornerRadius(1.5)
             }
 
             Image(systemName: flowControlIcon)
                 .font(.caption)
-                .foregroundColor(.indigo)
+                .foregroundColor(Theme.Tint.secondary)
             Text(flowControlTitle)
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundColor(.indigo)
+                .foregroundColor(Theme.Tint.secondary)
         }
     }
 
