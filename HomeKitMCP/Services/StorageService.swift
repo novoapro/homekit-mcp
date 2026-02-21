@@ -84,6 +84,12 @@ class StorageService: ObservableObject, StorageServiceProtocol {
     @Published var workflowsEnabled: Bool {
         didSet { defaults.set(workflowsEnabled, forKey: Keys.workflowsEnabled) }
     }
+    @Published var autoBackupEnabled: Bool {
+        didSet { defaults.set(autoBackupEnabled, forKey: Keys.autoBackupEnabled) }
+    }
+    @Published var deviceStateLoggingEnabled: Bool {
+        didSet { defaults.set(deviceStateLoggingEnabled, forKey: Keys.deviceStateLoggingEnabled) }
+    }
 
     init(keychainService: KeychainService = KeychainService()) {
         self.keychainService = keychainService
@@ -101,7 +107,9 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             Keys.mcpServerBindAddress: "127.0.0.1",
             Keys.pollingEnabled: false,
             Keys.pollingInterval: 30,
-            Keys.workflowsEnabled: true
+            Keys.workflowsEnabled: true,
+            Keys.autoBackupEnabled: false,
+            Keys.deviceStateLoggingEnabled: true
         ])
 
         // Migrate webhook URL from UserDefaults to Keychain (one-time)
@@ -127,6 +135,8 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         self.pollingEnabled = defaults.bool(forKey: Keys.pollingEnabled)
         self.pollingInterval = defaults.integer(forKey: Keys.pollingInterval)
         self.workflowsEnabled = defaults.bool(forKey: Keys.workflowsEnabled)
+        self.autoBackupEnabled = defaults.bool(forKey: Keys.autoBackupEnabled)
+        self.deviceStateLoggingEnabled = defaults.bool(forKey: Keys.deviceStateLoggingEnabled)
     }
 
     func isWebhookConfigured() -> Bool {
@@ -192,6 +202,10 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         UserDefaults.standard.bool(forKey: Keys.workflowsEnabled)
     }
 
+    nonisolated func readDeviceStateLoggingEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.deviceStateLoggingEnabled)
+    }
+
     private enum Keys {
         static let webhookURL = "webhookURL"
         static let mcpServerPort = "mcpServerPort"
@@ -208,5 +222,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         static let pollingEnabled = "pollingEnabled"
         static let pollingInterval = "pollingInterval"
         static let workflowsEnabled = "workflowsEnabled"
+        static let autoBackupEnabled = "autoBackupEnabled"
+        static let deviceStateLoggingEnabled = "deviceStateLoggingEnabled"
     }
 }

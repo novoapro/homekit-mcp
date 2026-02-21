@@ -9,4 +9,5 @@ protocol DeviceConfigurationServiceProtocol: AnyObject, Sendable {
     func setAllForDevice(deviceId: String, services: [(serviceId: String, characteristicIds: [String])], externalAccessEnabled: Bool?, webhookEnabled: Bool?) async
     func getAllConfigs() async -> [String: CharacteristicConfiguration]
     func resetAll() async
+    func replaceAll(configs: [String: CharacteristicConfiguration]) async
 }

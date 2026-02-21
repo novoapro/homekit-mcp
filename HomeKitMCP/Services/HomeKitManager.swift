@@ -430,8 +430,11 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
                 newValue: newValue
             )
 
-            if config.webhookEnabled {
+            if self.storage.readDeviceStateLoggingEnabled() {
                 await self.loggingService.logEntry(logEntry)
+            }
+
+            if config.webhookEnabled {
                 await self.webhookService.sendStateChange(change)
             }
 
@@ -702,8 +705,11 @@ extension HomeKitManager: HMAccessoryDelegate {
                 newValue: value
             )
 
-            if config.webhookEnabled {
+            if self.storage.readDeviceStateLoggingEnabled() {
                 await loggingService.logEntry(logEntry)
+            }
+
+            if config.webhookEnabled {
                 await webhookService.sendStateChange(change)
             }
 

@@ -28,6 +28,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         installSignalHandlers()
         setupWorkflowEngine()
         startMCPServerIfEnabled()
+        container.appleSignInService.checkExistingCredential()
 
         #if targetEnvironment(macCatalyst)
         setupMenuBar()

@@ -369,9 +369,13 @@ enum PreviewData {
             keychainService: keychainService
         )
         let aiWorkflowService = AIWorkflowService(storage: storage, homeKitManager: manager, keychainService: keychainService)
+        let backupService = BackupService(storage: storage, keychainService: keychainService, configService: configService, workflowStorageService: workflowStorage)
+        let cloudBackupService = CloudBackupService(backupService: backupService, storage: storage, workflowStorageService: workflowStorage)
+        let appleSignInService = AppleSignInService(keychainService: keychainService)
         return SettingsViewModel(
             storage: storage, webhookService: webhookService, mcpServer: mcpServer, configService: configService,
-            keychainService: keychainService, aiWorkflowService: aiWorkflowService
+            keychainService: keychainService, aiWorkflowService: aiWorkflowService,
+            backupService: backupService, cloudBackupService: cloudBackupService, appleSignInService: appleSignInService
         )
     }
 

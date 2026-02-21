@@ -81,6 +81,22 @@
 		BB01CC02DD03EE04FF05AA0D /* WorkflowExecutionLogServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0D /* WorkflowExecutionLogServiceProtocol.swift */; };
 		BB01CC02DD03EE04FF05AA0E /* WorkflowStorageServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0E /* WorkflowStorageServiceProtocol.swift */; };
 		CC11AA22BB33DD44EE55FF66 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DD22BB33CC44EE55FF66AA77 /* Assets.xcassets */; };
+		51A187B90F4E3EDDC080B196 /* BackupModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE15813B56DFFF40650A9AE /* BackupModels.swift */; };
+		51C0DE923950F0CD447D8FB1 /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DACEDBAF625BF4BAAF80017 /* BackupService.swift */; };
+		270032CCF891EEF12CD1B965 /* CloudBackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66671720DD605AA80B6E6774 /* CloudBackupService.swift */; };
+		FE1D3FCC99FC4692577BAD19 /* AppleSignInService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B773CE1932ACD65535B70AED /* AppleSignInService.swift */; };
+		B66E52999861ABD63207F703 /* BackupServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DE9CC6471BBAF3DFDA71FF6 /* BackupServiceProtocol.swift */; };
+		4144EAC841A4ADF62F926C38 /* CloudBackupServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B881E3B1EE83278309A44A13 /* CloudBackupServiceProtocol.swift */; };
+		F08B926D610E7829150DEEBF /* AppleSignInServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0320859C758ADE162CFA36 /* AppleSignInServiceProtocol.swift */; };
+		0EBE725F182AA090F3DB9F03 /* CloudBackupListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DA51E3EF4FDD749181FBDF1 /* CloudBackupListView.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A3 /* ServerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* ServerSettingsView.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A4 /* WebhookSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F3 /* WebhookSettingsView.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A5 /* WorkflowSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F4 /* WorkflowSettingsView.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A6 /* AIAssistantSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F5 /* AIAssistantSettingsView.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A7 /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F6 /* GeneralSettingsView.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A8 /* AccountSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F7 /* AccountSettingsView.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A9 /* BackupRestoreSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F8 /* BackupRestoreSettingsView.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2AA /* AboutSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F9 /* AboutSettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -171,6 +187,22 @@
 		AA01BB02CC03DD04EE05FF0C /* WorkflowEngineProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEngineProtocol.swift; sourceTree = "<group>"; };
 		AA01BB02CC03DD04EE05FF0D /* WorkflowExecutionLogServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowExecutionLogServiceProtocol.swift; sourceTree = "<group>"; };
 		AA01BB02CC03DD04EE05FF0E /* WorkflowStorageServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStorageServiceProtocol.swift; sourceTree = "<group>"; };
+		DBE15813B56DFFF40650A9AE /* BackupModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupModels.swift; sourceTree = "<group>"; };
+		5DACEDBAF625BF4BAAF80017 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
+		66671720DD605AA80B6E6774 /* CloudBackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBackupService.swift; sourceTree = "<group>"; };
+		B773CE1932ACD65535B70AED /* AppleSignInService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInService.swift; sourceTree = "<group>"; };
+		9DE9CC6471BBAF3DFDA71FF6 /* BackupServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupServiceProtocol.swift; sourceTree = "<group>"; };
+		B881E3B1EE83278309A44A13 /* CloudBackupServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBackupServiceProtocol.swift; sourceTree = "<group>"; };
+		AE0320859C758ADE162CFA36 /* AppleSignInServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInServiceProtocol.swift; sourceTree = "<group>"; };
+		2DA51E3EF4FDD749181FBDF1 /* CloudBackupListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBackupListView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* ServerSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F3 /* WebhookSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookSettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F4 /* WorkflowSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowSettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F5 /* AIAssistantSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistantSettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F6 /* GeneralSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F7 /* AccountSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F8 /* BackupRestoreSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupRestoreSettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F9 /* AboutSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -210,6 +242,9 @@
 				BBF546CA72B3A15B4D49F379 /* WorkflowStorageService.swift */,
 				96E057104981BCC1E7F537EA /* MCP */,
 				F60C9E6CBECD39729672774E /* Workflows */,
+				5DACEDBAF625BF4BAAF80017 /* BackupService.swift */,
+				66671720DD605AA80B6E6774 /* CloudBackupService.swift */,
+				B773CE1932ACD65535B70AED /* AppleSignInService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -336,6 +371,8 @@
 				7764344448C610926DACCBCC /* WorkflowEditorView.swift */,
 				8366906C5A636699025C0DE1 /* WorkflowListView.swift */,
 				926B18E98FAEE382CA55818F /* Components */,
+				C3D4E5F6A7B8C9D0E1F2A3B4 /* Settings */,
+				2DA51E3EF4FDD749181FBDF1 /* CloudBackupListView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -360,8 +397,24 @@
 				610207602B912E193EA7D16F /* StateChangeLog.swift */,
 				2154CF6344A2514DDB062A08 /* WorkflowEditorDraft.swift */,
 				A6B494504436886F8793A98E /* WorkflowModels.swift */,
+				DBE15813B56DFFF40650A9AE /* BackupModels.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		C3D4E5F6A7B8C9D0E1F2A3B4 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6A7B8C9D0E1F9 /* AboutSettingsView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F7 /* AccountSettingsView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F5 /* AIAssistantSettingsView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F8 /* BackupRestoreSettingsView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F6 /* GeneralSettingsView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* ServerSettingsView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F3 /* WebhookSettingsView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F4 /* WorkflowSettingsView.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 		CC01DD02EE03FF04AA05BB06 /* Protocols */ = {
@@ -376,6 +429,9 @@
 				AA01BB02CC03DD04EE05FF0C /* WorkflowEngineProtocol.swift */,
 				AA01BB02CC03DD04EE05FF0D /* WorkflowExecutionLogServiceProtocol.swift */,
 				AA01BB02CC03DD04EE05FF0E /* WorkflowStorageServiceProtocol.swift */,
+				9DE9CC6471BBAF3DFDA71FF6 /* BackupServiceProtocol.swift */,
+				B881E3B1EE83278309A44A13 /* CloudBackupServiceProtocol.swift */,
+				AE0320859C758ADE162CFA36 /* AppleSignInServiceProtocol.swift */,
 			);
 			path = Protocols;
 			sourceTree = "<group>";
@@ -555,6 +611,22 @@
 				BB01CC02DD03EE04FF05AA0C /* WorkflowEngineProtocol.swift in Sources */,
 				BB01CC02DD03EE04FF05AA0D /* WorkflowExecutionLogServiceProtocol.swift in Sources */,
 				BB01CC02DD03EE04FF05AA0E /* WorkflowStorageServiceProtocol.swift in Sources */,
+				51A187B90F4E3EDDC080B196 /* BackupModels.swift in Sources */,
+				51C0DE923950F0CD447D8FB1 /* BackupService.swift in Sources */,
+				270032CCF891EEF12CD1B965 /* CloudBackupService.swift in Sources */,
+				FE1D3FCC99FC4692577BAD19 /* AppleSignInService.swift in Sources */,
+				B66E52999861ABD63207F703 /* BackupServiceProtocol.swift in Sources */,
+				4144EAC841A4ADF62F926C38 /* CloudBackupServiceProtocol.swift in Sources */,
+				F08B926D610E7829150DEEBF /* AppleSignInServiceProtocol.swift in Sources */,
+				0EBE725F182AA090F3DB9F03 /* CloudBackupListView.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A3 /* ServerSettingsView.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A4 /* WebhookSettingsView.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A5 /* WorkflowSettingsView.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A6 /* AIAssistantSettingsView.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A7 /* GeneralSettingsView.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A8 /* AccountSettingsView.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A9 /* BackupRestoreSettingsView.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2AA /* AboutSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

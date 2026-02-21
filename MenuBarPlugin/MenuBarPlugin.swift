@@ -42,8 +42,10 @@ class MenuBarPlugin: NSObject {
     }
 
     /// Called by the Catalyst app to update the server status display.
-    @objc func updateStatus(isRunning: Bool) {
-        self.isRunning = isRunning
+    /// Accepts NSNumber because the Catalyst side calls this via perform(_:with:)
+    /// which passes objects — a raw Bool would not unbox correctly.
+    @objc func updateStatus(isRunning value: NSNumber) {
+        self.isRunning = value.boolValue
         rebuildMenu()
     }
 

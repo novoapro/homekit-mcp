@@ -22,4 +22,7 @@ protocol WorkflowStorageServiceProtocol: AnyObject, Sendable {
     // MARK: - Metadata
     func updateMetadata(id: UUID, lastTriggered: Date, incrementExecutions: Bool, resetFailures: Bool) async
     func incrementFailures(id: UUID) async
+
+    // MARK: - Restore
+    func replaceAll(workflows: [Workflow]) async
 }

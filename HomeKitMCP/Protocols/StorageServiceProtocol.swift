@@ -17,6 +17,7 @@ protocol StorageServiceProtocol: AnyObject {
     var pollingEnabled: Bool { get set }
     var pollingInterval: Int { get set }
     var workflowsEnabled: Bool { get set }
+    var autoBackupEnabled: Bool { get set }
 
     // MARK: - Derived
     func isWebhookConfigured() -> Bool

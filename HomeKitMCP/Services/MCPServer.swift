@@ -83,13 +83,22 @@ class MCPServer: ObservableObject, MCPServerProtocol {
                 self.configureRoutes(app)
                 self.app = app
 
+                // Mark as running before the blocking startup() call.
+                // Use DispatchQueue.main instead of MainActor.run to avoid
+                // potential deadlocks in detached tasks.
+                DispatchQueue.main.async {
+                    self.isRunning = true
+                    self.lastError = nil
+                }
+
                 do {
+                    // startup() blocks while the server runs — it only returns on shutdown or error
                     try await app.startup()
                 } catch {
                     let message = "MCP Server failed to start on port \(self.port): \(error.localizedDescription)"
                     AppLogger.server.error("\(message)")
                     self.logServerError(message)
-                    await MainActor.run {
+                    DispatchQueue.main.async {
                         self.isRunning = false
                         self.lastError = message
                     }
@@ -98,21 +107,9 @@ class MCPServer: ObservableObject, MCPServerProtocol {
                 let message = "MCP Server failed to initialize Application: \(error.localizedDescription)"
                 AppLogger.server.error("\(message)")
                 self.logServerError(message)
-                await MainActor.run {
+                DispatchQueue.main.async {
                     self.isRunning = false
                     self.lastError = message
-                }
-            }
-        }
-
-        // Give Vapor a moment to bind, then verify
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self else { return }
-            let running = self.app != nil
-            DispatchQueue.main.async {
-                self.isRunning = running
-                if running {
-                    self.lastError = nil
                 }
             }
         }

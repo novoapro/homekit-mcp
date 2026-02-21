@@ -182,6 +182,28 @@ struct ContentView: View {
 
     private var sidebar: some View {
         List(selection: $selection) {
+            // App branding
+            HStack(spacing: 14) {
+                Image("SidebarLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 70)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("HomeKit")
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(Theme.Text.primary)
+                    Text("MCP")
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(Theme.Text.primary)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .listRowBackground(Color.clear)
+            .listRowSeparatorTint(Color.gray)
+
             // Main navigation items
             Section {
                 ForEach(NavigationItem.allCases.filter { item in
@@ -204,7 +226,7 @@ struct ContentView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("HomeKit MCP")
+        .navigationTitle("")
     }
 
     // MARK: - Detail View

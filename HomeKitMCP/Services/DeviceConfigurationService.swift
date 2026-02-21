@@ -78,6 +78,11 @@ actor DeviceConfigurationService: DeviceConfigurationServiceProtocol {
         saveNow()
     }
 
+    func replaceAll(configs newConfigs: [String: CharacteristicConfiguration]) {
+        configs = newConfigs
+        saveNow()
+    }
+
     private func debouncedSave() {
         saveTask?.cancel()
         saveTask = Task { [weak self] in

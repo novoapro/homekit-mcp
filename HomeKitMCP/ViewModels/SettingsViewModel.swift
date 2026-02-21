@@ -12,7 +12,7 @@ enum AITestResult {
 class SettingsViewModel: ObservableObject {
     @Published var webhookStatus: WebhookStatus = .idle
     @Published var isSendingTest = false
-    @Published var mcpServerRunning = false
+    @Published var mcpServerRunning: Bool?
     @Published var mcpConnectedClients = 0
     @Published var mcpServerError: String?
     @Published var webhookEnabled: Bool {
@@ -38,6 +38,9 @@ class SettingsViewModel: ObservableObject {
     }
     @Published var workflowsEnabled: Bool {
         didSet { storage.workflowsEnabled = workflowsEnabled }
+    }
+    @Published var deviceStateLoggingEnabled: Bool {
+        didSet { storage.deviceStateLoggingEnabled = deviceStateLoggingEnabled }
     }
 
     // MARK: - Location Properties
@@ -85,6 +88,9 @@ class SettingsViewModel: ObservableObject {
     let configService: DeviceConfigurationService
     let keychainService: KeychainService
     let aiWorkflowService: AIWorkflowService
+    let backupService: BackupService
+    let cloudBackupService: CloudBackupService
+    let appleSignInService: AppleSignInService
     private var cancellables = Set<AnyCancellable>()
 
     init(
@@ -93,7 +99,10 @@ class SettingsViewModel: ObservableObject {
         mcpServer: MCPServer,
         configService: DeviceConfigurationService,
         keychainService: KeychainService,
-        aiWorkflowService: AIWorkflowService
+        aiWorkflowService: AIWorkflowService,
+        backupService: BackupService,
+        cloudBackupService: CloudBackupService,
+        appleSignInService: AppleSignInService
     ) {
         self.storage = storage
         self.webhookService = webhookService
@@ -101,12 +110,16 @@ class SettingsViewModel: ObservableObject {
         self.configService = configService
         self.keychainService = keychainService
         self.aiWorkflowService = aiWorkflowService
+        self.backupService = backupService
+        self.cloudBackupService = cloudBackupService
+        self.appleSignInService = appleSignInService
         self.webhookEnabled = storage.webhookEnabled
         self.hideRoomNameInTheApp = storage.hideRoomNameInTheApp
         self.detailedLogsEnabled = storage.detailedLogsEnabled
         self.pollingEnabled = storage.pollingEnabled
         self.pollingInterval = storage.pollingInterval
         self.workflowsEnabled = storage.workflowsEnabled
+        self.deviceStateLoggingEnabled = storage.deviceStateLoggingEnabled
         self.sunEventLatitude = storage.sunEventLatitude
         self.sunEventLongitude = storage.sunEventLongitude
         self.aiEnabled = storage.aiEnabled
@@ -129,7 +142,10 @@ class SettingsViewModel: ObservableObject {
 
         mcpServer.$isRunning
             .receive(on: DispatchQueue.main)
-            .assign(to: &$mcpServerRunning)
+            .sink { [weak self] running in
+                self?.mcpServerRunning = running
+            }
+            .store(in: &cancellables)
 
         mcpServer.$connectedClients
             .receive(on: DispatchQueue.main)

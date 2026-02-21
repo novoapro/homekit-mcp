@@ -82,6 +82,9 @@ extension KeychainService {
         static let mcpApiToken = "mcp-api-token"
         static let webhookSecret = "webhook-secret"
         static let webhookURL = "webhook-url"
+        static let appleSignInUserId = "apple-signin-user-id"
+        static let appleSignInEmail = "apple-signin-email"
+        static let appleSignInName = "apple-signin-name"
     }
 
     /// Returns the existing MCP API token, or generates and stores a new one.

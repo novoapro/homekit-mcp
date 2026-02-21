@@ -60,6 +60,25 @@ final class ServiceContainer {
         port: storageService.mcpServerPort
     )
 
+    // MARK: - Authentication & Backup
+
+    lazy var appleSignInService: AppleSignInService = AppleSignInService(
+        keychainService: keychainService
+    )
+
+    lazy var backupService: BackupService = BackupService(
+        storage: storageService,
+        keychainService: keychainService,
+        configService: configService,
+        workflowStorageService: workflowStorageService
+    )
+
+    lazy var cloudBackupService: CloudBackupService = CloudBackupService(
+        backupService: backupService,
+        storage: storageService,
+        workflowStorageService: workflowStorageService
+    )
+
     // MARK: - View Models
 
     lazy var homeKitViewModel: HomeKitViewModel = HomeKitViewModel(
@@ -79,7 +98,10 @@ final class ServiceContainer {
         mcpServer: mcpServer,
         configService: configService,
         keychainService: keychainService,
-        aiWorkflowService: aiWorkflowService
+        aiWorkflowService: aiWorkflowService,
+        backupService: backupService,
+        cloudBackupService: cloudBackupService,
+        appleSignInService: appleSignInService
     )
 
     lazy var workflowViewModel: WorkflowViewModel = WorkflowViewModel(

@@ -96,6 +96,14 @@ actor WorkflowStorageService: WorkflowStorageServiceProtocol {
         publishAndSave()
     }
 
+    func replaceAll(workflows newWorkflows: [Workflow]) {
+        workflows.removeAll()
+        for workflow in newWorkflows {
+            workflows[workflow.id] = workflow
+        }
+        publishAndSave()
+    }
+
     // MARK: - Persistence
 
     private func publishAndSave() {
