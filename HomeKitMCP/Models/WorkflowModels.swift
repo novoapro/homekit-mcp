@@ -7,6 +7,8 @@ enum ConcurrentExecutionPolicy: String, Codable, CaseIterable, Identifiable {
     case ignoreNew
     /// Cancel the running execution and start fresh from the new trigger.
     case cancelAndRestart
+    /// Queue the new trigger; it will execute after the current run finishes.
+    case queueAndExecute
 
     var id: String {
         rawValue
@@ -16,6 +18,7 @@ enum ConcurrentExecutionPolicy: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .ignoreNew: return "Ignore New Trigger"
         case .cancelAndRestart: return "Cancel & Restart"
+        case .queueAndExecute: return "Queue & Execute"
         }
     }
 
@@ -23,6 +26,7 @@ enum ConcurrentExecutionPolicy: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .ignoreNew: return "New triggers are ignored while the workflow is running."
         case .cancelAndRestart: return "The running execution is cancelled and restarted with the new trigger."
+        case .queueAndExecute: return "New triggers are queued and executed once the current run completes."
         }
     }
 }

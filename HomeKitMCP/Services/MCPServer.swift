@@ -3,7 +3,7 @@ import Vapor
 import NIOCore
 import Combine
 
-class MCPServer: ObservableObject {
+class MCPServer: ObservableObject, MCPServerProtocol {
     @Published var isRunning = false
     @Published var connectedClients = 0
     @Published var lastError: String?
@@ -32,10 +32,18 @@ class MCPServer: ObservableObject {
         return decoder
     }()
 
-    init(homeKitManager: HomeKitManager, loggingService: LoggingService, configService: DeviceConfigurationService, storage: StorageService,
-         workflowStorageService: WorkflowStorageService, workflowEngine: WorkflowEngine, workflowExecutionLogService: WorkflowExecutionLogService,
-         keychainService: KeychainService,
-         port: Int = 3000) {
+    init(
+        homeKitManager: HomeKitManager,
+        loggingService: LoggingService,
+        configService: DeviceConfigurationService,
+        storage: StorageService,
+        workflowStorageService: WorkflowStorageService,
+        workflowEngine: WorkflowEngine,
+        workflowExecutionLogService: WorkflowExecutionLogService,
+        keychainService: KeychainService,
+        port: Int = 3000,
+        handler: MCPRequestHandler? = nil
+    ) {
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
         self.storage = storage
@@ -44,9 +52,14 @@ class MCPServer: ObservableObject {
         self.workflowEngine = workflowEngine
         self.workflowExecutionLogService = workflowExecutionLogService
         self.keychainService = keychainService
-        self.handler = MCPRequestHandler(
-            homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, storage: storage,
-            workflowStorageService: workflowStorageService, workflowEngine: workflowEngine, workflowExecutionLogService: workflowExecutionLogService
+        self.handler = handler ?? MCPRequestHandler(
+            homeKitManager: homeKitManager,
+            loggingService: loggingService,
+            configService: configService,
+            storage: storage,
+            workflowStorageService: workflowStorageService,
+            workflowEngine: workflowEngine,
+            workflowExecutionLogService: workflowExecutionLogService
         )
     }
 
@@ -249,9 +262,7 @@ class MCPServer: ObservableObject {
                     resultSummary: "\(restDevices.count) devices",
                     fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
 
-        var headers = HTTPHeaders()
-        headers.add(name: .contentType, value: "application/json")
-        return Response(status: .ok, headers: headers, body: .init(data: data))
+        return jsonResponse(data: data)
     }
 
     private func handleRestGetDevice(_ req: Request) async throws -> Response {
@@ -280,9 +291,7 @@ class MCPServer: ObservableObject {
                     resultSummary: restDevice.name,
                     fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
 
-        var headers = HTTPHeaders()
-        headers.add(name: .contentType, value: "application/json")
-        return Response(status: .ok, headers: headers, body: .init(data: data))
+        return jsonResponse(data: data)
     }
 
     // MARK: - Workflow REST Handlers
@@ -294,9 +303,7 @@ class MCPServer: ObservableObject {
                     resultSummary: "\(workflows.count) workflows",
                     fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
 
-        var headers = HTTPHeaders()
-        headers.add(name: .contentType, value: "application/json")
-        return Response(status: .ok, headers: headers, body: .init(data: data))
+        return jsonResponse(data: data)
     }
 
     private func handleRestGetWorkflow(_ req: Request) async throws -> Response {
@@ -316,9 +323,7 @@ class MCPServer: ObservableObject {
                     resultSummary: workflow.name,
                     fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
 
-        var headers = HTTPHeaders()
-        headers.add(name: .contentType, value: "application/json")
-        return Response(status: .ok, headers: headers, body: .init(data: data))
+        return jsonResponse(data: data)
     }
 
     private func handleRestCreateWorkflow(_ req: Request) async throws -> Response {
@@ -366,9 +371,7 @@ class MCPServer: ObservableObject {
                     resultSummary: "Created: \(created.name)",
                     fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
 
-        var headers = HTTPHeaders()
-        headers.add(name: .contentType, value: "application/json")
-        return Response(status: .created, headers: headers, body: .init(data: data))
+        return jsonResponse(data: data, status: .created)
     }
 
     private func handleRestUpdateWorkflow(_ req: Request) async throws -> Response {
@@ -435,9 +438,7 @@ class MCPServer: ObservableObject {
                         resultSummary: "Updated: \(updated.name)",
                         fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
 
-            var headers = HTTPHeaders()
-            headers.add(name: .contentType, value: "application/json")
-            return Response(status: .ok, headers: headers, body: .init(data: data))
+            return jsonResponse(data: data)
         } catch let error as Abort {
             throw error
         } catch {
@@ -483,9 +484,7 @@ class MCPServer: ObservableObject {
                     resultSummary: "\(result.status.rawValue)",
                     fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
 
-        var headers = HTTPHeaders()
-        headers.add(name: .contentType, value: "application/json")
-        return Response(status: .ok, headers: headers, body: .init(data: data))
+        return jsonResponse(data: data)
     }
 
     private func handleRestGetWorkflowLogs(_ req: Request) async throws -> Response {
@@ -504,9 +503,7 @@ class MCPServer: ObservableObject {
                     resultSummary: "\(logs.count) logs",
                     fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
 
-        var headers = HTTPHeaders()
-        headers.add(name: .contentType, value: "application/json")
-        return Response(status: .ok, headers: headers, body: .init(data: data))
+        return jsonResponse(data: data)
     }
 
     private func handleRestWebhookTrigger(_ req: Request) async throws -> Response {
@@ -550,9 +547,7 @@ class MCPServer: ObservableObject {
                     resultSummary: "\(results.count) workflows triggered",
                     fullResponseBody: storage.readDetailedLogsEnabled() ? String(data: data, encoding: .utf8) : nil)
 
-        var headers = HTTPHeaders()
-        headers.add(name: .contentType, value: "application/json")
-        return Response(status: .ok, headers: headers, body: .init(data: data))
+        return jsonResponse(data: data)
     }
 
     // MARK: - Streamable HTTP Transport
@@ -746,18 +741,24 @@ class MCPServer: ObservableObject {
 
     // MARK: - Helpers
 
+    /// Build a 200 OK JSON HTTP response from a `JSONRPCResponse`.
     private func encodeJSONResponse(_ response: JSONRPCResponse) throws -> Response {
         let data = try Self.encoder.encode(response)
-        var headers = HTTPHeaders()
-        headers.add(name: .contentType, value: "application/json")
-        return Response(status: .ok, headers: headers, body: .init(data: data))
+        return jsonResponse(data: data)
     }
 
+    /// Build a 200 OK JSON HTTP response from a batch of `JSONRPCResponse` objects.
     private func encodeBatchJSONResponse(_ responses: [JSONRPCResponse]) throws -> Response {
         let data = try Self.encoder.encode(responses)
+        return jsonResponse(data: data)
+    }
+
+    /// Build an `application/json` response from raw encoded data.
+    /// Single source of truth for REST and MCP JSON response construction.
+    private func jsonResponse(data: Data, status: HTTPResponseStatus = .ok) -> Response {
         var headers = HTTPHeaders()
         headers.add(name: .contentType, value: "application/json")
-        return Response(status: .ok, headers: headers, body: .init(data: data))
+        return Response(status: status, headers: headers, body: .init(data: data))
     }
 
     private func updateClientCount() {

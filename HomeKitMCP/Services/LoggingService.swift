@@ -1,7 +1,8 @@
 import Foundation
 import Combine
 
-actor LoggingService {
+actor LoggingService: LoggingServiceProtocol {
+    /// Ring buffer: append to end (O(1)), trim from start when full, reverse on read.
     private var logs: [StateChangeLog] = []
     private let maxLogs = 500
     private let fileURL: URL
@@ -46,30 +47,26 @@ actor LoggingService {
             oldValue: change.oldValue.map { AnyCodable($0) },
             newValue: change.newValue.map { AnyCodable($0) }
         )
-
-        logs.insert(entry, at: 0)
-
-        if logs.count > maxLogs {
-            logs = Array(logs.prefix(maxLogs))
-        }
-
-        logsSubject.send(logs)
-        debouncedSave()
+        appendEntry(entry)
     }
 
     func logEntry(_ entry: StateChangeLog) {
-        logs.insert(entry, at: 0)
+        appendEntry(entry)
+    }
 
+    /// O(1) append; trims oldest entry when the buffer is full.
+    private func appendEntry(_ entry: StateChangeLog) {
+        logs.append(entry)
         if logs.count > maxLogs {
-            logs = Array(logs.prefix(maxLogs))
+            logs.removeFirst()  // O(n) but rare — only when buffer is full
         }
-
-        logsSubject.send(logs)
+        logsSubject.send(logs.reversed())
         debouncedSave()
     }
 
+    /// Returns logs in newest-first order (reversed once on read, not on every insert).
     func getLogs() -> [StateChangeLog] {
-        return logs
+        return logs.reversed()
     }
 
     func clearLogs() {

@@ -31,6 +31,7 @@ struct EmptyStateView: View {
                     ForEach(actions) { action in
                         Button(action: action.handler) {
                             Label(action.title, systemImage: action.icon)
+                                .foregroundColor(action.iconColor)
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                         }
@@ -50,6 +51,7 @@ struct EmptyStateAction: Identifiable {
     let id = UUID()
     let title: String
     let icon: String
+    var iconColor: Color? = nil
     var tint: Color?
     let handler: () -> Void
 }
@@ -60,7 +62,8 @@ struct EmptyStateAction: Identifiable {
         title: "No HomeKit devices found",
         message: "Make sure you have devices set up in the Home app.",
         actions: [
-            EmptyStateAction(title: "Refresh", icon: "arrow.clockwise") {}
+            EmptyStateAction(title: "Create Workflow", icon: "plus", iconColor: Color.white) {},
+            EmptyStateAction(title: "AI Builder", icon: "sparkles", iconColor: Color.white, tint: Color.purple) {}
         ]
     )
 }

@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-actor WorkflowStorageService {
+actor WorkflowStorageService: WorkflowStorageServiceProtocol {
     private var workflows: [UUID: Workflow] = [:]
     private let fileURL: URL
     private var saveTask: Task<Void, Never>?

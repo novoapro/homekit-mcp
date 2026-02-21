@@ -2,7 +2,7 @@ import Foundation
 import HomeKit
 import Combine
 
-class HomeKitManager: NSObject, ObservableObject {
+class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
     @Published var homes: [HMHome] = []
     @Published var allAccessories: [HMAccessory] = []
     @Published var authorizationStatus: HMHomeManagerAuthorizationStatus = .determined
@@ -23,8 +23,9 @@ class HomeKitManager: NSObject, ObservableObject {
     let configService: DeviceConfigurationService
     private var cancellables = Set<AnyCancellable>()
 
-    /// Workflow engine — set post-init to avoid circular dependency.
-    var workflowEngine: WorkflowEngine?
+    /// Publishes every HomeKit state change. WorkflowEngine subscribes to this
+    /// instead of being directly referenced — eliminates the bidirectional coupling.
+    let stateChangePublisher = PassthroughSubject<StateChange, Never>()
 
     /// Coalesces rapid objectWillChange signals during bulk reads.
     private var uiUpdateWorkItem: DispatchWorkItem?
@@ -153,6 +154,75 @@ class HomeKitManager: NSObject, ObservableObject {
         cachedDevices = devices
         deviceLookupLock.lock()
         deviceLookup = Dictionary(uniqueKeysWithValues: devices.map { ($0.id, $0) })
+        deviceLookupLock.unlock()
+        objectWillChange.send()
+    }
+
+    // MARK: - Targeted Cache Update
+
+    /// Patches only the changed characteristic in the cached device model graph.
+    /// O(1) device lookup + O(S×C) service/characteristic scan on the single device.
+    /// Falls back to a full `rebuildDeviceCache()` if the device is not yet cached.
+    /// Must be called on MainActor.
+    private func updateCachedCharacteristic(
+        deviceId: String,
+        serviceId: String,
+        characteristicId: String,
+        newValue: Any?
+    ) {
+        deviceLookupLock.lock()
+        let existingDevice = deviceLookup[deviceId]
+        deviceLookupLock.unlock()
+
+        guard let device = existingDevice else {
+            // Device not in cache yet — trigger a full rebuild.
+            rebuildDeviceCache()
+            return
+        }
+
+        // Rebuild only the affected service and characteristic (structs are value types).
+        var patched = false
+        let updatedServices: [ServiceModel] = device.services.map { service in
+            guard service.id == serviceId else { return service }
+            let updatedCharacteristics: [CharacteristicModel] = service.characteristics.map { char in
+                guard char.id == characteristicId else { return char }
+                patched = true
+                return CharacteristicModel(
+                    id: char.id,
+                    type: char.type,
+                    value: newValue.map { AnyCodable($0) },
+                    format: char.format,
+                    permissions: char.permissions,
+                    minValue: char.minValue,
+                    maxValue: char.maxValue,
+                    stepValue: char.stepValue,
+                    validValues: char.validValues
+                )
+            }
+            return ServiceModel(id: service.id, name: service.name, type: service.type, characteristics: updatedCharacteristics)
+        }
+
+        guard patched else {
+            // Characteristic not found in cache — fall back to full rebuild.
+            rebuildDeviceCache()
+            return
+        }
+
+        let updatedDevice = DeviceModel(
+            id: device.id,
+            name: device.name,
+            roomName: device.roomName,
+            categoryType: device.categoryType,
+            services: updatedServices,
+            isReachable: device.isReachable
+        )
+
+        // Patch the device in cachedDevices and deviceLookup.
+        if let listIdx = cachedDevices.firstIndex(where: { $0.id == deviceId }) {
+            cachedDevices[listIdx] = updatedDevice
+        }
+        deviceLookupLock.lock()
+        deviceLookup[deviceId] = updatedDevice
         deviceLookupLock.unlock()
         objectWillChange.send()
     }
@@ -437,11 +507,18 @@ extension HomeKitManager: HMAccessoryDelegate {
                 await webhookService.sendStateChange(change)
             }
 
-            // Process workflows for ALL state changes (not gated by config)
-            await workflowEngine?.processStateChange(change)
-
+            // Publish state change for any subscribers (e.g. WorkflowEngine).
+            // Using a publisher decouples HomeKitManager from WorkflowEngine entirely.
+            // Use targeted cache update — patch only the affected characteristic instead
+            // of rebuilding the entire O(A×S×C) device model graph.
             await MainActor.run {
-                self.rebuildDeviceCache()
+                self.stateChangePublisher.send(change)
+                self.updateCachedCharacteristic(
+                    deviceId: deviceId,
+                    serviceId: serviceId,
+                    characteristicId: charId,
+                    newValue: value
+                )
             }
         }
     }

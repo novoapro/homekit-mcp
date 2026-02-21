@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import CommonCrypto
 
-actor WebhookService {
+actor WebhookService: WebhookServiceProtocol {
     private let storage: StorageService
     private let loggingService: LoggingService
     private let keychainService: KeychainService

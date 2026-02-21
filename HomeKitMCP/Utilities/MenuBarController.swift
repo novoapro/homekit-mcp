@@ -3,6 +3,7 @@ import UIKit
 import Combine
 
 /// Loads the AppKit plugin bundle at runtime and bridges menu bar actions to UIKit.
+@MainActor
 class MenuBarController {
     private var plugin: NSObject?
     private var mcpServer: MCPServer?

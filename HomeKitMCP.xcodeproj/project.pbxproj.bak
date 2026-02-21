@@ -14,7 +14,6 @@
 		185DAC0F4CCBE7EADDA71DC1 /* HomeKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8BFC87681E42A0EF8D3DAF /* HomeKitManager.swift */; };
 		1E943F272DF289A0708ED7B4 /* LogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3E0E7001560CF7AC8B50C18 /* LogViewerView.swift */; };
 		21CEF85B38EFE91E076A7B41 /* MCPRequestHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42C01AAB5B5EEC084DD1E311 /* MCPRequestHandler.swift */; };
-		74BBF7A97645BE84F5D6C6AE /* MCPToolDefinitions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A63C9C2427F3990D42C564A /* MCPToolDefinitions.swift */; };
 		2A8C3616F40DA1853C90AEE6 /* LoggingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99DEDCA340108084F34C2396 /* LoggingService.swift */; };
 		2EE51A84CB777CDA945B4016 /* StorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D8F6B53E65AEF39587984F /* StorageService.swift */; };
 		2F29FA8B55B870D9821D6796 /* MenuBarPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A607932B4D328FC6E85EEDA /* MenuBarPlugin.swift */; };
@@ -101,7 +100,6 @@
 		2154CF6344A2514DDB062A08 /* WorkflowEditorDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorDraft.swift; sourceTree = "<group>"; };
 		2875A40DA5D433B3D7981C8F /* HomeKitMCP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HomeKitMCP.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		42C01AAB5B5EEC084DD1E311 /* MCPRequestHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPRequestHandler.swift; sourceTree = "<group>"; };
-		9A63C9C2427F3990D42C564A /* MCPToolDefinitions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPToolDefinitions.swift; sourceTree = "<group>"; };
 		43F36D48D99BFA9E35B9E383 /* WorkflowBuilderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowBuilderView.swift; sourceTree = "<group>"; };
 		47D0798E400ADEFA785DCB94 /* DeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListView.swift; sourceTree = "<group>"; };
 		4BBC2F6AA87E4D0C329F2595 /* DeviceCharacteristicPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceCharacteristicPicker.swift; sourceTree = "<group>"; };
@@ -266,7 +264,6 @@
 			children = (
 				12EE482294F3DD0089534DFF /* MCPModels.swift */,
 				42C01AAB5B5EEC084DD1E311 /* MCPRequestHandler.swift */,
-				9A63C9C2427F3990D42C564A /* MCPToolDefinitions.swift */,
 			);
 			path = MCP;
 			sourceTree = "<group>";
@@ -505,7 +502,6 @@
 				2A8C3616F40DA1853C90AEE6 /* LoggingService.swift in Sources */,
 				D6CF501ADBB5C51F6F6C5879 /* MCPModels.swift in Sources */,
 				21CEF85B38EFE91E076A7B41 /* MCPRequestHandler.swift in Sources */,
-				74BBF7A97645BE84F5D6C6AE /* MCPToolDefinitions.swift in Sources */,
 				A7845F42530D6DF692A39F6B /* MCPServer.swift in Sources */,
 				5B1591BA359229D986B8FD63 /* MenuBarController.swift in Sources */,
 				AEE5C04596D85BB802F0FE8D /* PreviewData.swift in Sources */,

@@ -69,6 +69,7 @@ enum UnifiedLog: Identifiable {
     }
 }
 
+@MainActor
 class LogViewModel: ObservableObject {
     // Publish grouped logs directly to the view to avoid main thread computation
     @Published var groupedLogs: [(date: String, label: String, logs: [UnifiedLog])] = []
@@ -91,38 +92,14 @@ class LogViewModel: ObservableObject {
         !selectedCategories.isEmpty || !selectedDevices.isEmpty || !selectedServices.isEmpty
     }
 
+    /// Unique device names — pre-computed in `updateView()`, never re-scanned on every access.
+    @Published private(set) var availableDevices: [String] = []
+    /// Unique service names — pre-computed in `updateView()`, never re-scanned on every access.
+    @Published private(set) var availableServices: [String] = []
+
     /// Returns the latest version of a workflow execution log by ID, for live detail views.
     func workflowExecutionLog(id: UUID) -> WorkflowExecutionLog? {
         rawWorkflowExecutionLogs.first(where: { $0.id == id })
-    }
-
-    /// Unique device names found in the current device logs, filtered by selected category.
-    var availableDevices: [String] {
-        let filtered = rawStateChangeLogs.filter { log in
-            if !selectedCategories.isEmpty {
-                let allowedCategories = selectedCategories.flatMap { $0.logCategories ?? [] }
-                return allowedCategories.contains(log.category)
-            }
-            return true
-        }
-        return Array(Set(filtered.map(\.deviceName))).sorted()
-    }
-
-    /// Unique service names found in the current device logs, filtered by selected category and device.
-    var availableServices: [String] {
-        let filtered = rawStateChangeLogs.filter { log in
-            // Filter by category
-            if !selectedCategories.isEmpty {
-                let allowedCategories = selectedCategories.flatMap { $0.logCategories ?? [] }
-                guard allowedCategories.contains(log.category) else { return false }
-            }
-            // Filter by device
-            if !selectedDevices.isEmpty {
-                guard selectedDevices.contains(log.deviceName) else { return false }
-            }
-            return true
-        }
-        return Array(Set(filtered.compactMap(\.serviceName))).sorted()
     }
 
     private let loggingService: LoggingService
@@ -212,6 +189,34 @@ class LogViewModel: ObservableObject {
 
         self.groupedLogs = grouped
         self.filteredLogCount = filtered.count
+
+        // Update cached filter option lists — previously computed properties that scanned
+        // all 500 logs on every access. Now computed once per update, O(n) total.
+        self.availableDevices = computeAvailableDevices()
+        self.availableServices = computeAvailableServices()
+    }
+
+    private func computeAvailableDevices() -> [String] {
+        let filtered = rawStateChangeLogs.filter { log in
+            guard !selectedCategories.isEmpty else { return true }
+            let allowedCategories = selectedCategories.flatMap { $0.logCategories ?? [] }
+            return allowedCategories.contains(log.category)
+        }
+        return Array(Set(filtered.map(\.deviceName))).sorted()
+    }
+
+    private func computeAvailableServices() -> [String] {
+        let filtered = rawStateChangeLogs.filter { log in
+            if !selectedCategories.isEmpty {
+                let allowedCategories = selectedCategories.flatMap { $0.logCategories ?? [] }
+                guard allowedCategories.contains(log.category) else { return false }
+            }
+            if !selectedDevices.isEmpty {
+                guard selectedDevices.contains(log.deviceName) else { return false }
+            }
+            return true
+        }
+        return Array(Set(filtered.compactMap(\.serviceName))).sorted()
     }
 
     private static func filterLogs(

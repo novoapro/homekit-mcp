@@ -29,7 +29,7 @@ enum AIProvider: String, CaseIterable, Identifiable, Codable {
 // MARK: - Storage Service
 
 @MainActor
-class StorageService: ObservableObject {
+class StorageService: ObservableObject, StorageServiceProtocol {
     private let defaults = UserDefaults.standard
     let keychainService: KeychainService
 

@@ -1,6 +1,6 @@
 import Foundation
 
-actor DeviceConfigurationService {
+actor DeviceConfigurationService: DeviceConfigurationServiceProtocol {
     private var configs: [String: CharacteristicConfiguration] = [:]
     private let fileURL: URL
     private var saveTask: Task<Void, Never>?

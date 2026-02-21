@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+@MainActor
 class WorkflowViewModel: ObservableObject {
     @Published var workflows: [Workflow] = []
     @Published var executionLogs: [WorkflowExecutionLog] = []

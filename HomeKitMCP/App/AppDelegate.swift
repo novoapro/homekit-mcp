@@ -2,44 +2,24 @@ import UIKit
 import Combine
 
 class AppDelegate: UIResponder, UIApplicationDelegate {
-    let keychainService = KeychainService()
-    lazy var storageService = StorageService(keychainService: keychainService)
-    let loggingService = LoggingService()
-    let configService = DeviceConfigurationService()
-    let workflowStorageService = WorkflowStorageService()
-    let workflowExecutionLogService = WorkflowExecutionLogService()
-    let scheduleTriggerManager = ScheduleTriggerManager()
-    lazy var webhookService = WebhookService(storage: storageService, loggingService: loggingService, keychainService: keychainService)
-    lazy var homeKitManager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storageService)
-    lazy var workflowEngine: WorkflowEngine = {
-        let engine = WorkflowEngine(
-            storageService: workflowStorageService,
-            homeKitManager: homeKitManager,
-            loggingService: loggingService,
-            executionLogService: workflowExecutionLogService,
-            storage: storageService
-        )
-        return engine
-    }()
-    lazy var aiWorkflowService = AIWorkflowService(storage: storageService, homeKitManager: homeKitManager, keychainService: keychainService)
-    lazy var mcpServer = MCPServer(
-        homeKitManager: homeKitManager, loggingService: loggingService, configService: configService, storage: storageService,
-        workflowStorageService: workflowStorageService, workflowEngine: workflowEngine, workflowExecutionLogService: workflowExecutionLogService,
-        keychainService: keychainService, port: storageService.mcpServerPort
-    )
-    lazy var homeKitViewModel = HomeKitViewModel(homeKitManager: homeKitManager, configService: configService)
-    lazy var logViewModel = LogViewModel(loggingService: loggingService, executionLogService: workflowExecutionLogService, storage: storageService)
-    lazy var settingsViewModel = SettingsViewModel(
-        storage: storageService, webhookService: webhookService, mcpServer: mcpServer, configService: configService,
-        keychainService: keychainService, aiWorkflowService: aiWorkflowService
-    )
-    lazy var workflowViewModel = WorkflowViewModel(storageService: workflowStorageService, executionLogService: workflowExecutionLogService, workflowEngine: workflowEngine, homeKitManager: homeKitManager)
+
+    /// Single source of truth for all service and view model creation.
+    let container = ServiceContainer()
 
     private var cancellables = Set<AnyCancellable>()
 
     #if targetEnvironment(macCatalyst)
     var menuBarController: MenuBarController?
     #endif
+
+    // MARK: - Lifecycle Accessors (for HomeKitMCPApp environment objects)
+
+    var homeKitViewModel: HomeKitViewModel { container.homeKitViewModel }
+    var logViewModel: LogViewModel { container.logViewModel }
+    var settingsViewModel: SettingsViewModel { container.settingsViewModel }
+    var workflowViewModel: WorkflowViewModel { container.workflowViewModel }
+
+    // MARK: - UIApplicationDelegate
 
     func application(
         _ application: UIApplication,
@@ -77,17 +57,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
-        mcpServer.stop()
+        container.mcpServer.stop()
     }
+
+    // MARK: - Private Setup
 
     /// Trap SIGTERM/SIGINT so the Vapor server is shut down even if the process is killed externally.
     private func installSignalHandlers() {
         let handler: @convention(c) (Int32) -> Void = { _ in
-            // Access the shared AppDelegate and stop the server synchronously
             guard let delegate = UIApplication.shared.delegate as? AppDelegate else {
                 exit(0)
             }
-            delegate.mcpServer.stop()
+            delegate.container.mcpServer.stop()
             exit(0)
         }
         signal(SIGTERM, handler)
@@ -95,32 +76,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     private func setupWorkflowEngine() {
-        homeKitManager.workflowEngine = workflowEngine
+        // Wire cross-service subscriptions (HomeKitManager → WorkflowEngine via Combine).
+        container.wireServices()
         Task {
-            await workflowEngine.registerEvaluator(DeviceStateChangeTriggerEvaluator())
-            await scheduleTriggerManager.setEngine(workflowEngine)
-            // Load initial schedules
-            let workflows = await workflowStorageService.getAllWorkflows()
-            await scheduleTriggerManager.reloadSchedules(workflows: workflows)
+            await container.workflowEngine.registerEvaluator(DeviceStateChangeTriggerEvaluator())
+            await container.scheduleTriggerManager.setEngine(container.workflowEngine)
+            let workflows = await container.workflowStorageService.getAllWorkflows()
+            await container.scheduleTriggerManager.reloadSchedules(workflows: workflows)
         }
-        // Reload schedules whenever workflows change
-        workflowStorageService.workflowsSubject
+        container.workflowStorageService.workflowsSubject
             .receive(on: DispatchQueue.global(qos: .utility))
             .sink { [weak self] workflows in
                 guard let self else { return }
                 Task {
-                    await self.scheduleTriggerManager.reloadSchedules(workflows: workflows)
+                    await self.container.scheduleTriggerManager.reloadSchedules(workflows: workflows)
                 }
             }
             .store(in: &cancellables)
     }
 
     private func startMCPServerIfEnabled() {
-        guard storageService.mcpServerEnabled else { return }
+        guard container.storageService.mcpServerEnabled else { return }
         Task {
             do {
-                try await mcpServer.start()
-                AppLogger.server.info("MCP Server started on port \(self.storageService.mcpServerPort)")
+                try await container.mcpServer.start()
+                AppLogger.server.info("MCP Server started on port \(self.container.storageService.mcpServerPort)")
             } catch {
                 AppLogger.server.error("Failed to start MCP Server: \(error)")
             }
@@ -130,16 +110,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     #if targetEnvironment(macCatalyst)
     private func setupMenuBar() {
         menuBarController = MenuBarController()
-        menuBarController?.setup(mcpServer: mcpServer)
+        menuBarController?.setup(mcpServer: container.mcpServer)
     }
 
     private func observeQuitNotification() {
         NotificationCenter.default.publisher(for: .menuBarQuitRequested)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.mcpServer.stop()
+                self?.container.mcpServer.stop()
                 UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
-                // Give Vapor time to release the port before exiting
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     exit(0)
                 }

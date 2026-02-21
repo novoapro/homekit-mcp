@@ -1,7 +1,8 @@
 import Foundation
+import Combine
 
 /// Core workflow engine that evaluates triggers, checks conditions, and executes blocks.
-actor WorkflowEngine {
+actor WorkflowEngine: WorkflowEngineProtocol {
     private let workflowStorageService: WorkflowStorageService
     private let homeKitManager: HomeKitManager
     private let loggingService: LoggingService
@@ -11,25 +12,66 @@ actor WorkflowEngine {
     private var evaluators: [TriggerEvaluator] = []
 
     private var runningTasks: [UUID: Task<Void, Never>] = [:]
-    private let maxConcurrentExecutions = 10
+    /// Maximum number of workflows executing concurrently. When the limit is reached,
+    /// additional triggered workflows are evaluated and then queued (not dropped).
+    private let maxConcurrentExecutions = 20
     private let blockTimeout: TimeInterval = 30
+
+    // MARK: - Pending Queue
+
+    /// A queued workflow waiting for a free execution slot.
+    private struct PendingEntry {
+        let workflow: Workflow
+        let change: StateChange?
+        let queuedAt: Date
+    }
+
+    /// FIFO queue of workflows that have triggered but cannot run yet because
+    /// all `maxConcurrentExecutions` slots are occupied.
+    private var pendingQueue: [PendingEntry] = []
+
+    /// Maximum number of entries that can wait in the pending queue.
+    /// Entries beyond this limit are logged and discarded.
+    private let maxPendingQueueSize = 50
+
+    /// Maximum time (seconds) a workflow may wait in the pending queue.
+    /// Stale entries are logged and discarded when the queue is drained.
+    private let pendingQueueStalenessTimeout: TimeInterval = 60
 
     /// Waiters for `waitForState` blocks — keyed by device+characteristic.
     private var stateWaiters: [String: [StateWaiter]] = [:]
+
+    /// Retains the Combine subscription to HomeKitManager's stateChangePublisher.
+    /// Stored as AnyCancellable so it lives as long as the engine.
+    nonisolated private let cancellableBag = CancellableBag()
 
     init(
         storageService: WorkflowStorageService,
         homeKitManager: HomeKitManager,
         loggingService: LoggingService,
         executionLogService: WorkflowExecutionLogService,
-        storage: StorageService
+        storage: StorageService,
+        conditionEvaluator: ConditionEvaluator? = nil
     ) {
         workflowStorageService = storageService
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
         self.executionLogService = executionLogService
         self.storage = storage
-        conditionEvaluator = ConditionEvaluator(homeKitManager: homeKitManager)
+        self.conditionEvaluator = conditionEvaluator ?? ConditionEvaluator(homeKitManager: homeKitManager)
+    }
+
+    /// Wire up the one-directional subscription to HomeKitManager's state changes.
+    /// Called once by ServiceContainer after both objects are created.
+    /// HomeKitManager publishes → WorkflowEngine.processStateChange() is called.
+    /// No reference to WorkflowEngine is stored in HomeKitManager.
+    nonisolated func subscribeToStateChanges(from publisher: PassthroughSubject<StateChange, Never>) {
+        let cancellable = publisher
+            .sink { [weak self] change in
+                guard let self else { return }
+                Task { await self.processStateChange(change) }
+            }
+        cancellableBag.store(cancellable)
     }
 
     func registerEvaluator(_ evaluator: TriggerEvaluator) {
@@ -54,7 +96,7 @@ actor WorkflowEngine {
 
     // MARK: - State Change Processing
 
-    /// Main entry — called by HomeKitManager on ALL state changes.
+    /// Main entry — called whenever HomeKitManager publishes a state change.
     func processStateChange(_ change: StateChange) async {
         // Notify any waitForState waiters first
         notifyStateWaiters(change)
@@ -63,9 +105,8 @@ actor WorkflowEngine {
         let context = TriggerContext.stateChange(change)
 
         for workflow in workflows {
-            guard runningTasks.count < maxConcurrentExecutions else { break }
-
-            // Check if ANY trigger matches
+            // Evaluate ALL workflows regardless of slot availability —
+            // previously used `break` which silently skipped unevaluated workflows.
             let triggered = await checkTriggers(workflow.triggers, context: context)
             guard triggered else { continue }
 
@@ -73,20 +114,19 @@ actor WorkflowEngine {
             if let existingTask = runningTasks[workflow.id] {
                 switch workflow.retriggerPolicy {
                 case .ignoreNew:
+                    AppLogger.workflow.debug("[\(workflow.name)] Ignoring new trigger — workflow already running (ignoreNew policy)")
                     continue
                 case .cancelAndRestart:
+                    AppLogger.workflow.debug("[\(workflow.name)] Cancelling running execution — restarting (cancelAndRestart policy)")
                     existingTask.cancel()
                     runningTasks.removeValue(forKey: workflow.id)
+                case .queueAndExecute:
+                    enqueueWorkflow(workflow, change: change)
+                    continue
                 }
             }
 
-            // Dispatch execution
-            let workflowId = workflow.id
-            let task = Task { [weak self] in
-                await self?.executeWorkflow(workflow, change: change)
-                await self?.removeRunning(workflowId)
-            }
-            runningTasks[workflowId] = task
+            startExecution(workflow, change: change)
         }
     }
 
@@ -102,6 +142,9 @@ actor WorkflowEngine {
             case .cancelAndRestart:
                 existingTask.cancel()
                 runningTasks.removeValue(forKey: id)
+            case .queueAndExecute:
+                enqueueWorkflow(workflow, change: nil)
+                return nil
             }
         }
 
@@ -126,6 +169,9 @@ actor WorkflowEngine {
             case .cancelAndRestart:
                 existingTask.cancel()
                 runningTasks.removeValue(forKey: id)
+            case .queueAndExecute:
+                enqueueWorkflow(workflow, change: nil)
+                return nil
             }
         }
 
@@ -138,8 +184,63 @@ actor WorkflowEngine {
         return await task.value
     }
 
+    // MARK: - Execution Slot Management
+
+    /// Attempt to immediately start a workflow, or queue it if no slots are available.
+    private func startExecution(_ workflow: Workflow, change: StateChange?) {
+        guard runningTasks.count < maxConcurrentExecutions else {
+            enqueueWorkflow(workflow, change: change)
+            return
+        }
+        let workflowId = workflow.id
+        let task = Task { [weak self] in
+            await self?.executeWorkflow(workflow, change: change)
+            await self?.removeRunning(workflowId)
+        }
+        runningTasks[workflowId] = task
+    }
+
+    /// Add a workflow to the pending FIFO queue, respecting the max queue size.
+    private func enqueueWorkflow(_ workflow: Workflow, change: StateChange?) {
+        let maxSize = maxPendingQueueSize
+        guard pendingQueue.count < maxSize else {
+            AppLogger.workflow.warning("[\(workflow.name)] Pending queue full (\(maxSize)). Discarding trigger.")
+            return
+        }
+        let slots = runningTasks.count
+        let maxSlots = maxConcurrentExecutions
+        let pending = pendingQueue.count + 1
+        AppLogger.workflow.info("[\(workflow.name)] Queued (slots: \(slots)/\(maxSlots), pending: \(pending))")
+        pendingQueue.append(PendingEntry(workflow: workflow, change: change, queuedAt: Date()))
+    }
+
+    /// Called when a workflow completes. Frees the slot and drains the pending queue.
     private func removeRunning(_ id: UUID) {
         runningTasks.removeValue(forKey: id)
+        drainPendingQueue()
+    }
+
+    /// Drain queued workflows into available execution slots.
+    /// Discards entries that have been waiting longer than `pendingQueueStalenessTimeout`.
+    private func drainPendingQueue() {
+        let now = Date()
+        let maxSlots = maxConcurrentExecutions
+        let stalenessLimit = pendingQueueStalenessTimeout
+        while runningTasks.count < maxSlots, !pendingQueue.isEmpty {
+            let entry = pendingQueue.removeFirst()
+
+            let waitTime = now.timeIntervalSince(entry.queuedAt)
+            if waitTime > stalenessLimit {
+                let waited = Int(waitTime)
+                let limit = Int(stalenessLimit)
+                AppLogger.workflow.warning("[\(entry.workflow.name)] Discarding stale queued trigger (waited \(waited)s > \(limit)s limit)")
+                continue
+            }
+
+            let waitStr = String(format: "%.1f", waitTime)
+            AppLogger.workflow.info("[\(entry.workflow.name)] Dequeued after \(waitStr)s — starting execution")
+            startExecution(entry.workflow, change: entry.change)
+        }
     }
 
     // MARK: - Trigger Evaluation
@@ -399,7 +500,7 @@ actor WorkflowEngine {
                 switch action {
                 case let .controlDevice(a):
                     try await self.executeControlDevice(a)
-                    let deviceName = self.resolveDeviceName(a.deviceId)
+                    let deviceName = await self.resolveDeviceName(a.deviceId)
                     let charName = CharacteristicTypes.displayName(for: a.characteristicType)
                     result.detail = "Set \(charName) to \(a.value.value) on \(deviceName)"
                 case let .webhook(a):
@@ -539,7 +640,7 @@ actor WorkflowEngine {
                 result.status = .success
 
             case let .waitForState(block):
-                let waitDeviceName = resolveDeviceName(block.deviceId)
+                let waitDeviceName = await resolveDeviceName(block.deviceId)
                 let waitCharName = CharacteristicTypes.displayName(for: block.characteristicType)
                 result.detail = "Waiting for \(waitDeviceName) \(waitCharName)..."
                 await onUpdate(result)
@@ -709,8 +810,8 @@ actor WorkflowEngine {
 
     // MARK: - Helpers
 
-    private func resolveDeviceName(_ deviceId: String) -> String {
-        let devices = homeKitManager.cachedDevices
+    private func resolveDeviceName(_ deviceId: String) async -> String {
+        let devices = await MainActor.run { homeKitManager.cachedDevices }
         if let device = devices.first(where: { $0.id == deviceId }) {
             if let room = device.roomName, !room.isEmpty {
                 return "\(room) \(device.name)"

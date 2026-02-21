@@ -8,6 +8,7 @@ enum TriStateFilter: String, CaseIterable {
     case disabled = "Disabled"
 }
 
+@MainActor
 class HomeKitViewModel: ObservableObject {
     @Published var devicesByRoom: [(roomName: String, devices: [DeviceModel])] = []
     @Published var isLoading = true

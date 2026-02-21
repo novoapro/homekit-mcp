@@ -14,7 +14,6 @@
 		185DAC0F4CCBE7EADDA71DC1 /* HomeKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8BFC87681E42A0EF8D3DAF /* HomeKitManager.swift */; };
 		1E943F272DF289A0708ED7B4 /* LogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3E0E7001560CF7AC8B50C18 /* LogViewerView.swift */; };
 		21CEF85B38EFE91E076A7B41 /* MCPRequestHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42C01AAB5B5EEC084DD1E311 /* MCPRequestHandler.swift */; };
-		74BBF7A97645BE84F5D6C6AE /* MCPToolDefinitions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A63C9C2427F3990D42C564A /* MCPToolDefinitions.swift */; };
 		2A8C3616F40DA1853C90AEE6 /* LoggingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99DEDCA340108084F34C2396 /* LoggingService.swift */; };
 		2EE51A84CB777CDA945B4016 /* StorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D8F6B53E65AEF39587984F /* StorageService.swift */; };
 		2F29FA8B55B870D9821D6796 /* MenuBarPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A607932B4D328FC6E85EEDA /* MenuBarPlugin.swift */; };
@@ -58,26 +57,15 @@
 		C40AB234B35245620786552A /* WorkflowExecutionLogDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EB432A57DCF562B488B624C /* WorkflowExecutionLogDetailView.swift */; };
 		D6CF501ADBB5C51F6F6C5879 /* MCPModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12EE482294F3DD0089534DFF /* MCPModels.swift */; };
 		D909854D7E1B384BBB1E3A72 /* BlockEditorRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CA300C7BE20DD7095E5804F /* BlockEditorRow.swift */; };
-		2F6F3811D78349749ADDAA74 /* CancellableBag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E8F9500B868465A851B314C /* CancellableBag.swift */; };
 		D9BE3918F51BD56E2759C765 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0EDD8CF773B924B5E9F1122 /* AppLogger.swift */; };
 		DDB9C4F7DAF16E5F1C638A4E /* DeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D0798E400ADEFA785DCB94 /* DeviceListView.swift */; };
 		E0BEDF233E070FDA10CE289C /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F75A1F84F7EC52BB4D7C7CC /* AppDelegate.swift */; };
-		2D18E429E94E4844B2E57D9D /* ServiceContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 267E79F68CAA47228228432C /* ServiceContainer.swift */; };
 		E5AE103D5B42B9B3201D5801 /* ServiceTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD53658669C55DD54D4345B4 /* ServiceTypes.swift */; };
 		F5A7A31EE689CC912FA08BE7 /* StateChangeLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 610207602B912E193EA7D16F /* StateChangeLog.swift */; };
 		F67157A5309BC6ED5DF42036 /* HomeKitViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6598C98AB6126400BA1270 /* HomeKitViewModel.swift */; };
 		F76C13D621F6EF89D6170913 /* WorkflowEditorDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2154CF6344A2514DDB062A08 /* WorkflowEditorDraft.swift */; };
 		F85B511A3A05E59499338B54 /* WorkflowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F1F32C8136FC6DD655A182D /* WorkflowViewModel.swift */; };
 		FE6AC26441EC3EDDCA92C523 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88A5A04A534224C9C7A8E939 /* SceneDelegate.swift */; };
-		BB01CC02DD03EE04FF05AA06 /* DeviceConfigurationServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF06 /* DeviceConfigurationServiceProtocol.swift */; };
-		BB01CC02DD03EE04FF05AA07 /* HomeKitManaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF07 /* HomeKitManaging.swift */; };
-		BB01CC02DD03EE04FF05AA08 /* LoggingServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF08 /* LoggingServiceProtocol.swift */; };
-		BB01CC02DD03EE04FF05AA09 /* MCPServerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF09 /* MCPServerProtocol.swift */; };
-		BB01CC02DD03EE04FF05AA0A /* StorageServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0A /* StorageServiceProtocol.swift */; };
-		BB01CC02DD03EE04FF05AA0B /* WebhookServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0B /* WebhookServiceProtocol.swift */; };
-		BB01CC02DD03EE04FF05AA0C /* WorkflowEngineProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0C /* WorkflowEngineProtocol.swift */; };
-		BB01CC02DD03EE04FF05AA0D /* WorkflowExecutionLogServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0D /* WorkflowExecutionLogServiceProtocol.swift */; };
-		BB01CC02DD03EE04FF05AA0E /* WorkflowStorageServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0E /* WorkflowStorageServiceProtocol.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -101,7 +89,6 @@
 		2154CF6344A2514DDB062A08 /* WorkflowEditorDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorDraft.swift; sourceTree = "<group>"; };
 		2875A40DA5D433B3D7981C8F /* HomeKitMCP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HomeKitMCP.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		42C01AAB5B5EEC084DD1E311 /* MCPRequestHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPRequestHandler.swift; sourceTree = "<group>"; };
-		9A63C9C2427F3990D42C564A /* MCPToolDefinitions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPToolDefinitions.swift; sourceTree = "<group>"; };
 		43F36D48D99BFA9E35B9E383 /* WorkflowBuilderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowBuilderView.swift; sourceTree = "<group>"; };
 		47D0798E400ADEFA785DCB94 /* DeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListView.swift; sourceTree = "<group>"; };
 		4BBC2F6AA87E4D0C329F2595 /* DeviceCharacteristicPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceCharacteristicPicker.swift; sourceTree = "<group>"; };
@@ -111,7 +98,6 @@
 		522B39319B446E5696EF1A8E /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		5EB432A57DCF562B488B624C /* WorkflowExecutionLogDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowExecutionLogDetailView.swift; sourceTree = "<group>"; };
 		5F75A1F84F7EC52BB4D7C7CC /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		267E79F68CAA47228228432C /* ServiceContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceContainer.swift; sourceTree = "<group>"; };
 		610207602B912E193EA7D16F /* StateChangeLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateChangeLog.swift; sourceTree = "<group>"; };
 		6458BBC92F491D770012FC37 /* CharacteristicInputConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacteristicInputConfig.swift; sourceTree = "<group>"; };
 		65766D71479AEC864A35E452 /* DeviceNameFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceNameFormatter.swift; sourceTree = "<group>"; };
@@ -132,7 +118,6 @@
 		E1F2A3B4C5D6E7F8A9B0C1D2 /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		94E00E5E7805C7F145F187EA /* LogRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogRow.swift; sourceTree = "<group>"; };
 		99DEDCA340108084F34C2396 /* LoggingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingService.swift; sourceTree = "<group>"; };
-		3E8F9500B868465A851B314C /* CancellableBag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CancellableBag.swift; sourceTree = "<group>"; };
 		A0EDD8CF773B924B5E9F1122 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
 		A5831ACADF90552245465043 /* DeviceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceModel.swift; sourceTree = "<group>"; };
 		A6B494504436886F8793A98E /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
@@ -156,15 +141,6 @@
 		F1D8F6B53E65AEF39587984F /* StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageService.swift; sourceTree = "<group>"; };
 		F904B77E53F9A48675AE552B /* CharacteristicTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacteristicTypes.swift; sourceTree = "<group>"; };
 		FD53658669C55DD54D4345B4 /* ServiceTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceTypes.swift; sourceTree = "<group>"; };
-		AA01BB02CC03DD04EE05FF06 /* DeviceConfigurationServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConfigurationServiceProtocol.swift; sourceTree = "<group>"; };
-		AA01BB02CC03DD04EE05FF07 /* HomeKitManaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeKitManaging.swift; sourceTree = "<group>"; };
-		AA01BB02CC03DD04EE05FF08 /* LoggingServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingServiceProtocol.swift; sourceTree = "<group>"; };
-		AA01BB02CC03DD04EE05FF09 /* MCPServerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPServerProtocol.swift; sourceTree = "<group>"; };
-		AA01BB02CC03DD04EE05FF0A /* StorageServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageServiceProtocol.swift; sourceTree = "<group>"; };
-		AA01BB02CC03DD04EE05FF0B /* WebhookServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookServiceProtocol.swift; sourceTree = "<group>"; };
-		AA01BB02CC03DD04EE05FF0C /* WorkflowEngineProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEngineProtocol.swift; sourceTree = "<group>"; };
-		AA01BB02CC03DD04EE05FF0D /* WorkflowExecutionLogServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowExecutionLogServiceProtocol.swift; sourceTree = "<group>"; };
-		AA01BB02CC03DD04EE05FF0E /* WorkflowStorageServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStorageServiceProtocol.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -212,7 +188,6 @@
 			isa = PBXGroup;
 			children = (
 				5F75A1F84F7EC52BB4D7C7CC /* AppDelegate.swift */,
-				267E79F68CAA47228228432C /* ServiceContainer.swift */,
 				05C1DA868F037D1DE48C1FF5 /* HomeKitMCPApp.swift */,
 				88A5A04A534224C9C7A8E939 /* SceneDelegate.swift */,
 			);
@@ -238,7 +213,6 @@
 				A9B0FCADA61E4A9BE003F07F /* Utilities */,
 				A7D5F8A570F0E1FCFE79896C /* ViewModels */,
 				B70AB260DC0C5A31005A32E3 /* Views */,
-				CC01DD02EE03FF04AA05BB06 /* Protocols */,
 			);
 			path = HomeKitMCP;
 			sourceTree = "<group>";
@@ -266,7 +240,6 @@
 			children = (
 				12EE482294F3DD0089534DFF /* MCPModels.swift */,
 				42C01AAB5B5EEC084DD1E311 /* MCPRequestHandler.swift */,
-				9A63C9C2427F3990D42C564A /* MCPToolDefinitions.swift */,
 			);
 			path = MCP;
 			sourceTree = "<group>";
@@ -304,7 +277,6 @@
 			isa = PBXGroup;
 			children = (
 				A0EDD8CF773B924B5E9F1122 /* AppLogger.swift */,
-				3E8F9500B868465A851B314C /* CancellableBag.swift */,
 				F904B77E53F9A48675AE552B /* CharacteristicTypes.swift */,
 				65766D71479AEC864A35E452 /* DeviceNameFormatter.swift */,
 				76A1CCA31A2168A2B8D12DD0 /* MenuBarController.swift */,
@@ -353,22 +325,6 @@
 				A6B494504436886F8793A98E /* WorkflowModels.swift */,
 			);
 			path = Models;
-			sourceTree = "<group>";
-		};
-		CC01DD02EE03FF04AA05BB06 /* Protocols */ = {
-			isa = PBXGroup;
-			children = (
-				AA01BB02CC03DD04EE05FF06 /* DeviceConfigurationServiceProtocol.swift */,
-				AA01BB02CC03DD04EE05FF07 /* HomeKitManaging.swift */,
-				AA01BB02CC03DD04EE05FF08 /* LoggingServiceProtocol.swift */,
-				AA01BB02CC03DD04EE05FF09 /* MCPServerProtocol.swift */,
-				AA01BB02CC03DD04EE05FF0A /* StorageServiceProtocol.swift */,
-				AA01BB02CC03DD04EE05FF0B /* WebhookServiceProtocol.swift */,
-				AA01BB02CC03DD04EE05FF0C /* WorkflowEngineProtocol.swift */,
-				AA01BB02CC03DD04EE05FF0D /* WorkflowExecutionLogServiceProtocol.swift */,
-				AA01BB02CC03DD04EE05FF0E /* WorkflowStorageServiceProtocol.swift */,
-			);
-			path = Protocols;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -478,9 +434,7 @@
 				5AE43961CFE3A9DEE90C7522 /* AIWorkflowService.swift in Sources */,
 				604630A1BF390A991532363A /* AnyCodable.swift in Sources */,
 				E0BEDF233E070FDA10CE289C /* AppDelegate.swift in Sources */,
-				2D18E429E94E4844B2E57D9D /* ServiceContainer.swift in Sources */,
 				D9BE3918F51BD56E2759C765 /* AppLogger.swift in Sources */,
-				2F6F3811D78349749ADDAA74 /* CancellableBag.swift in Sources */,
 				D909854D7E1B384BBB1E3A72 /* BlockEditorRow.swift in Sources */,
 				AFA9259AC83BA0636FEC4710 /* BlockEditorSection.swift in Sources */,
 				9C2B2547888DD514D726B727 /* CharacteristicTypes.swift in Sources */,
@@ -505,7 +459,6 @@
 				2A8C3616F40DA1853C90AEE6 /* LoggingService.swift in Sources */,
 				D6CF501ADBB5C51F6F6C5879 /* MCPModels.swift in Sources */,
 				21CEF85B38EFE91E076A7B41 /* MCPRequestHandler.swift in Sources */,
-				74BBF7A97645BE84F5D6C6AE /* MCPToolDefinitions.swift in Sources */,
 				A7845F42530D6DF692A39F6B /* MCPServer.swift in Sources */,
 				5B1591BA359229D986B8FD63 /* MenuBarController.swift in Sources */,
 				AEE5C04596D85BB802F0FE8D /* PreviewData.swift in Sources */,
@@ -534,15 +487,6 @@
 				098F9A8A61792CB5D3FE8199 /* WorkflowRow.swift in Sources */,
 				3ECA87D79B94B3E1B0634843 /* WorkflowStorageService.swift in Sources */,
 				F85B511A3A05E59499338B54 /* WorkflowViewModel.swift in Sources */,
-				BB01CC02DD03EE04FF05AA06 /* DeviceConfigurationServiceProtocol.swift in Sources */,
-				BB01CC02DD03EE04FF05AA07 /* HomeKitManaging.swift in Sources */,
-				BB01CC02DD03EE04FF05AA08 /* LoggingServiceProtocol.swift in Sources */,
-				BB01CC02DD03EE04FF05AA09 /* MCPServerProtocol.swift in Sources */,
-				BB01CC02DD03EE04FF05AA0A /* StorageServiceProtocol.swift in Sources */,
-				BB01CC02DD03EE04FF05AA0B /* WebhookServiceProtocol.swift in Sources */,
-				BB01CC02DD03EE04FF05AA0C /* WorkflowEngineProtocol.swift in Sources */,
-				BB01CC02DD03EE04FF05AA0D /* WorkflowExecutionLogServiceProtocol.swift in Sources */,
-				BB01CC02DD03EE04FF05AA0E /* WorkflowStorageServiceProtocol.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

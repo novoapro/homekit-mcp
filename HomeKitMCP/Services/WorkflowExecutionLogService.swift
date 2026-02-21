@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-actor WorkflowExecutionLogService {
+actor WorkflowExecutionLogService: WorkflowExecutionLogServiceProtocol {
     private var logs: [WorkflowExecutionLog] = []
     private let maxLogs = 500
     private let fileURL: URL

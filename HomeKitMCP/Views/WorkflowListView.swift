@@ -96,27 +96,11 @@ struct WorkflowListView: View {
                     message: aiEnabled
                         ? "Create automations with triggers, conditions, and actions to control your HomeKit devices."
                         : "Create automations with triggers, conditions, and actions, or use an AI agent via MCP.",
-                    actions: emptyStateActions
+                    actions:  []
                 )
             }
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
         }
-    }
-
-    private var emptyStateActions: [EmptyStateAction] {
-        var actions: [EmptyStateAction] = [
-            EmptyStateAction(title: "Create Workflow", icon: "plus.circle.fill") {
-                showingEditor = true
-            }
-        ]
-        if aiEnabled, aiWorkflowService != nil {
-            actions.append(
-                EmptyStateAction(title: "AI Builder", icon: "sparkles", tint: Color.purple) {
-                    showingAIBuilder = true
-                }
-            )
-        }
-        return actions
     }
 }
