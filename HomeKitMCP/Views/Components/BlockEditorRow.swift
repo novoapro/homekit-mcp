@@ -6,21 +6,85 @@ struct BlockEditorRow: View {
     let allowNesting: Bool
     let onEditNestedBlocks: ((String, [BlockDraft]) -> Void)?
     let onDelete: (() -> Void)?
+    var onMoveUp: (() -> Void)?
+    var onMoveDown: (() -> Void)?
+    var onDuplicate: (() -> Void)?
+    var isFirst: Bool = true
+    var isLast: Bool = true
 
     var body: some View {
         DisclosureGroup {
             blockContent
 
-            if let onDelete {
-                Button(role: .destructive) {
-                    onDelete()
-                } label: {
-                    Label("Remove Block", systemImage: "trash")
-                        .font(.subheadline)
+            HStack(spacing: 12) {
+                if let onMoveUp {
+                    Button {
+                        onMoveUp()
+                    } label: {
+                        Label("Up", systemImage: "arrow.up")
+                            .font(.subheadline)
+                    }
+                    .disabled(isFirst)
+                }
+
+                if let onMoveDown {
+                    Button {
+                        onMoveDown()
+                    } label: {
+                        Label("Down", systemImage: "arrow.down")
+                            .font(.subheadline)
+                    }
+                    .disabled(isLast)
+                }
+
+                if let onDuplicate {
+                    Button {
+                        onDuplicate()
+                    } label: {
+                        Label("Duplicate", systemImage: "doc.on.doc")
+                            .font(.subheadline)
+                    }
+                }
+
+                Spacer()
+
+                if let onDelete {
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Label("Remove", systemImage: "trash")
+                            .font(.subheadline)
+                    }
                 }
             }
+            .buttonStyle(.borderless)
         } label: {
             blockLabel
+        }
+        .contextMenu {
+            if let onMoveUp, !isFirst {
+                Button { onMoveUp() } label: {
+                    Label("Move Up", systemImage: "arrow.up")
+                }
+            }
+            if let onMoveDown, !isLast {
+                Button { onMoveDown() } label: {
+                    Label("Move Down", systemImage: "arrow.down")
+                }
+            }
+            if let onDuplicate {
+                Button { onDuplicate() } label: {
+                    Label("Duplicate", systemImage: "doc.on.doc")
+                }
+            }
+            if onDelete != nil || onMoveUp != nil || onMoveDown != nil || onDuplicate != nil {
+                Divider()
+            }
+            if let onDelete {
+                Button(role: .destructive) { onDelete() } label: {
+                    Label("Remove Block", systemImage: "trash")
+                }
+            }
         }
     }
 

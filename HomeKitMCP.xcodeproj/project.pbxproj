@@ -78,6 +78,7 @@
 		BB01CC02DD03EE04FF05AA0C /* WorkflowEngineProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0C /* WorkflowEngineProtocol.swift */; };
 		BB01CC02DD03EE04FF05AA0D /* WorkflowExecutionLogServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0D /* WorkflowExecutionLogServiceProtocol.swift */; };
 		BB01CC02DD03EE04FF05AA0E /* WorkflowStorageServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF0E /* WorkflowStorageServiceProtocol.swift */; };
+		CC11AA22BB33DD44EE55FF66 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DD22BB33CC44EE55FF66AA77 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -155,6 +156,7 @@
 		DD241C7AE3E844F19B9B2C1C /* WorkflowExecutionLogRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowExecutionLogRow.swift; sourceTree = "<group>"; };
 		F1D8F6B53E65AEF39587984F /* StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageService.swift; sourceTree = "<group>"; };
 		F904B77E53F9A48675AE552B /* CharacteristicTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacteristicTypes.swift; sourceTree = "<group>"; };
+		DD22BB33CC44EE55FF66AA77 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FD53658669C55DD54D4345B4 /* ServiceTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceTypes.swift; sourceTree = "<group>"; };
 		AA01BB02CC03DD04EE05FF06 /* DeviceConfigurationServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConfigurationServiceProtocol.swift; sourceTree = "<group>"; };
 		AA01BB02CC03DD04EE05FF07 /* HomeKitManaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeKitManaging.swift; sourceTree = "<group>"; };
@@ -274,6 +276,7 @@
 		9B2A6A41914CA8A481E50C41 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				DD22BB33CC44EE55FF66AA77 /* Assets.xcassets */,
 				B464E4D9ACFF628B10360AFA /* HomeKitMCP.entitlements */,
 				A97C3B391AF017E2778652F7 /* Info.plist */,
 			);
@@ -456,6 +459,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CC11AA22BB33DD44EE55FF66 /* Assets.xcassets in Resources */,
 				3128C7E7CE4B2E3DD4CDD00A /* MenuBarPlugin.bundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

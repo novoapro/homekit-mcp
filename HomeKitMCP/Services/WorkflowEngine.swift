@@ -201,7 +201,12 @@ actor WorkflowEngine: WorkflowEngineProtocol {
     }
 
     /// Add a workflow to the pending FIFO queue, respecting the max queue size.
+    /// Only one pending entry per workflow — duplicate triggers are ignored.
     private func enqueueWorkflow(_ workflow: Workflow, change: StateChange?) {
+        if pendingQueue.contains(where: { $0.workflow.id == workflow.id }) {
+            AppLogger.workflow.debug("[\(workflow.name)] Already queued, skipping duplicate trigger")
+            return
+        }
         let maxSize = maxPendingQueueSize
         guard pendingQueue.count < maxSize else {
             AppLogger.workflow.warning("[\(workflow.name)] Pending queue full (\(maxSize)). Discarding trigger.")
@@ -344,6 +349,14 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                     break
                 }
             }
+        }
+
+        // Check for cancellation after the loop — don't overwrite with failure/success
+        if Task.isCancelled {
+            logBox.execLog.status = .cancelled
+            logBox.execLog.completedAt = Date()
+            await finalizeExecution(logBox.execLog, workflow: workflow, succeeded: false)
+            return logBox.execLog
         }
 
         logBox.execLog.status = failed ? .failure : .success
@@ -512,6 +525,9 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 }
             }
             result.status = .success
+            result.completedAt = Date()
+        } catch is CancellationError {
+            result.status = .cancelled
             result.completedAt = Date()
         } catch {
             result.status = .failure
@@ -798,6 +814,8 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 result.nestedResults = nested
                 result.status = groupFailed ? .failure : .success
             }
+        } catch is CancellationError {
+            result.status = .cancelled
         } catch {
             result.status = .failure
             result.errorMessage = error.localizedDescription

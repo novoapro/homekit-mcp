@@ -558,6 +558,37 @@ struct GroupDraft {
     var blocks: [BlockDraft] = []
 }
 
+// MARK: - Deep Copy
+
+extension BlockDraft {
+    /// Creates a deep copy with new UUIDs for this block and all nested blocks.
+    func deepCopy() -> BlockDraft {
+        BlockDraft(id: UUID(), blockType: blockType.deepCopy())
+    }
+}
+
+extension BlockDraftType {
+    func deepCopy() -> BlockDraftType {
+        switch self {
+        case .controlDevice, .webhook, .log, .delay, .waitForState:
+            return self // value types with no nested blocks
+        case .conditional(var d):
+            d.thenBlocks = d.thenBlocks.map { $0.deepCopy() }
+            d.elseBlocks = d.elseBlocks.map { $0.deepCopy() }
+            return .conditional(d)
+        case .repeatBlock(var d):
+            d.blocks = d.blocks.map { $0.deepCopy() }
+            return .repeatBlock(d)
+        case .repeatWhile(var d):
+            d.blocks = d.blocks.map { $0.deepCopy() }
+            return .repeatWhile(d)
+        case .group(var d):
+            d.blocks = d.blocks.map { $0.deepCopy() }
+            return .group(d)
+        }
+    }
+}
+
 // MARK: - Validation
 
 struct WorkflowValidation {

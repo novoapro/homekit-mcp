@@ -21,15 +21,7 @@ struct BlockEditorSection: View {
     var body: some View {
         Section {
             ForEach($blocks) { $block in
-                BlockEditorRow(
-                    block: $block,
-                    devices: devices,
-                    allowNesting: allowNesting,
-                    onEditNestedBlocks: allowNesting ? { label, _ in
-                        onRequestNestedEdit?(NestedEditState(parentBlockId: block.id, label: label))
-                    } : nil,
-                    onDelete: { blocks.removeAll(where: { $0.id == block.id }) }
-                )
+                blockEditorRow(for: $block)
             }
             .onDelete { blocks.remove(atOffsets: $0) }
 
@@ -74,6 +66,45 @@ struct BlockEditorSection: View {
             Text("Blocks (\(blocks.count))")
         }
         .listRowBackground(Theme.contentBackground)
+    }
+
+    private func blockEditorRow(for block: Binding<BlockDraft>) -> BlockEditorRow {
+        let blockId = block.wrappedValue.id
+        let currentIndex = blocks.firstIndex(where: { $0.id == blockId }) ?? 0
+        return BlockEditorRow(
+            block: block,
+            devices: devices,
+            allowNesting: allowNesting,
+            onEditNestedBlocks: allowNesting ? { label, _ in
+                onRequestNestedEdit?(NestedEditState(parentBlockId: blockId, label: label))
+            } : nil,
+            onDelete: {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    blocks.removeAll(where: { $0.id == blockId })
+                }
+            },
+            onMoveUp: {
+                guard let idx = blocks.firstIndex(where: { $0.id == blockId }), idx > 0 else { return }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    blocks.swapAt(idx, idx - 1)
+                }
+            },
+            onMoveDown: {
+                guard let idx = blocks.firstIndex(where: { $0.id == blockId }), idx < blocks.count - 1 else { return }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    blocks.swapAt(idx, idx + 1)
+                }
+            },
+            onDuplicate: {
+                guard let idx = blocks.firstIndex(where: { $0.id == blockId }) else { return }
+                let copy = blocks[idx].deepCopy()
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    blocks.insert(copy, at: idx + 1)
+                }
+            },
+            isFirst: currentIndex == 0,
+            isLast: currentIndex == blocks.count - 1
+        )
     }
 }
 

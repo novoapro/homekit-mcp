@@ -19,11 +19,16 @@ class MenuBarPlugin: NSObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem?.button {
-            let image = NSImage(systemSymbolName: "house.fill", accessibilityDescription: "HomeKit MCP")
-            if image == nil {
-                NSLog("MenuBarPlugin: Failed to load system symbol 'house.fill'")
+            // Load custom icon from main app bundle's asset catalog
+            let mainBundle = Bundle.main
+            var image: NSImage?
+            if let catalogImage = mainBundle.image(forResource: "MenuBarIcon") {
+                image = catalogImage
+                NSLog("MenuBarPlugin: Custom menu bar icon loaded from asset catalog")
             } else {
-                NSLog("MenuBarPlugin: Icon image loaded successfully")
+                // Fallback to SF Symbol if custom icon not found
+                image = NSImage(systemSymbolName: "house.fill", accessibilityDescription: "HomeKit MCP")
+                NSLog("MenuBarPlugin: Falling back to system symbol 'house.fill'")
             }
             button.image = image
             button.image?.size = NSSize(width: 18, height: 18)
