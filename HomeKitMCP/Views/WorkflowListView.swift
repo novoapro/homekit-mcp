@@ -54,6 +54,7 @@ struct WorkflowListView: View {
             WorkflowEditorView(
                 mode: .create,
                 devices: viewModel.devices,
+                workflows: viewModel.workflows,
                 onSave: { draft in
                     viewModel.createWorkflow(from: draft)
                 }
@@ -76,6 +77,7 @@ struct WorkflowListView: View {
                     workflow: workflow,
                     executionLogs: viewModel.executionLogs(for: workflowId),
                     devices: viewModel.devices,
+                    workflows: viewModel.workflows,
                     onToggle: { viewModel.toggleEnabled(id: workflowId) },
                     onDelete: { viewModel.deleteWorkflow(id: workflowId) },
                     onTrigger: { viewModel.triggerWorkflow(id: workflowId) },

@@ -6,90 +6,76 @@ struct BlockEditorRow: View {
     let allowNesting: Bool
     let onEditNestedBlocks: ((String, [BlockDraft]) -> Void)?
     let onDelete: (() -> Void)?
-    var onMoveUp: (() -> Void)?
-    var onMoveDown: (() -> Void)?
     var onDuplicate: (() -> Void)?
-    var isFirst: Bool = true
-    var isLast: Bool = true
+    var isReorderMode: Bool = false
+    var workflows: [Workflow] = []
+    @State private var isExpanded: Bool = true
+    @State private var isEditingName: Bool = false
 
     var body: some View {
-        DisclosureGroup {
-            blockContent
-
-            HStack(spacing: 12) {
-                if let onMoveUp {
-                    Button {
-                        onMoveUp()
-                    } label: {
-                        Label("Up", systemImage: "arrow.up")
-                            .font(.subheadline)
-                    }
-                    .disabled(isFirst)
-                }
-
-                if let onMoveDown {
-                    Button {
-                        onMoveDown()
-                    } label: {
-                        Label("Down", systemImage: "arrow.down")
-                            .font(.subheadline)
-                    }
-                    .disabled(isLast)
-                }
-
-                if let onDuplicate {
-                    Button {
-                        onDuplicate()
-                    } label: {
-                        Label("Duplicate", systemImage: "doc.on.doc")
-                            .font(.subheadline)
-                    }
-                }
-
-                Spacer()
-
-                if let onDelete {
-                    Button(role: .destructive) {
-                        onDelete()
-                    } label: {
-                        Label("Remove", systemImage: "trash")
-                            .font(.subheadline)
-                    }
-                }
-            }
-            .buttonStyle(.borderless)
-        } label: {
+        if isReorderMode {
             blockLabel
-        }
-        .contextMenu {
-            if let onMoveUp, !isFirst {
-                Button { onMoveUp() } label: {
-                    Label("Move Up", systemImage: "arrow.up")
+        } else {
+            DisclosureGroup(isExpanded: $isExpanded) {
+                blockContent
+
+                HStack(spacing: 12) {
+                    if let onDuplicate {
+                        Button {
+                            onDuplicate()
+                        } label: {
+                            Image(systemName: "doc.on.doc")
+                                .frame(width: 44, height: 36)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Duplicate")
+                    }
+
+                    Spacer()
+
+                    if let onDelete {
+                        Button(role: .destructive) {
+                            onDelete()
+                        } label: {
+                            Image(systemName: "trash")
+                                .frame(width: 44, height: 36)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Remove")
+                    }
                 }
+            } label: {
+                blockLabel
             }
-            if let onMoveDown, !isLast {
-                Button { onMoveDown() } label: {
-                    Label("Move Down", systemImage: "arrow.down")
+            .contextMenu {
+                if let onDuplicate {
+                    Button { onDuplicate() } label: {
+                        Label("Duplicate", systemImage: "doc.on.doc")
+                    }
                 }
-            }
-            if let onDuplicate {
-                Button { onDuplicate() } label: {
-                    Label("Duplicate", systemImage: "doc.on.doc")
+                if onDelete != nil || onDuplicate != nil {
+                    Divider()
                 }
-            }
-            if onDelete != nil || onMoveUp != nil || onMoveDown != nil || onDuplicate != nil {
-                Divider()
-            }
-            if let onDelete {
-                Button(role: .destructive) { onDelete() } label: {
-                    Label("Remove Block", systemImage: "trash")
+                if let onDelete {
+                    Button(role: .destructive) { onDelete() } label: {
+                        Label("Remove Block", systemImage: "trash")
+                    }
                 }
             }
         }
     }
 
     private var blockLabel: some View {
-        HStack {
+        HStack(spacing: 8) {
+            if isReorderMode {
+                Image(systemName: "line.3.horizontal")
+                    .font(.body)
+                    .foregroundColor(Theme.Text.tertiary)
+                    .frame(width: 28, height: 28)
+            }
+
             Image(systemName: block.blockType.icon)
                 .font(.caption)
                 .foregroundColor(block.blockType.isFlowControl ? Theme.Tint.secondary : Theme.Tint.main)
@@ -97,12 +83,70 @@ struct BlockEditorRow: View {
                 Text(block.blockType.displayName)
                     .font(.subheadline)
                     .fontWeight(.medium)
-                Text(block.displayName(devices: devices))
-                    .font(.caption)
-                    .foregroundColor(Theme.Text.secondary)
-                    .lineLimit(1)
+                if isEditingName {
+                    TextField("Name", text: blockNameBinding)
+                        .font(.caption)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { isEditingName = false }
+                } else {
+                    Text(block.displayName(devices: devices))
+                        .font(.caption)
+                        .foregroundColor(Theme.Text.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            if !isReorderMode {
+                Button {
+                    isEditingName.toggle()
+                } label: {
+                    Image(systemName: isEditingName ? "checkmark.circle.fill" : "pencil")
+                        .font(.caption)
+                        .foregroundColor(Theme.Text.secondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
+    }
+
+    /// Binding to the block's name regardless of which block type it is.
+    private var blockNameBinding: Binding<String> {
+        Binding(
+            get: {
+                switch block.blockType {
+                case let .controlDevice(d): return d.name
+                case let .webhook(d): return d.name
+                case let .log(d): return d.name
+                case let .delay(d): return d.name
+                case let .waitForState(d): return d.name
+                case let .conditional(d): return d.name
+                case let .repeatBlock(d): return d.name
+                case let .repeatWhile(d): return d.name
+                case let .group(d): return d.name
+                case let .stop(d): return d.name
+                case let .executeWorkflow(d): return d.name
+                }
+            },
+            set: { newName in
+                switch block.blockType {
+                case .controlDevice(var d): d.name = newName; block.blockType = .controlDevice(d)
+                case .webhook(var d): d.name = newName; block.blockType = .webhook(d)
+                case .log(var d): d.name = newName; block.blockType = .log(d)
+                case .delay(var d): d.name = newName; block.blockType = .delay(d)
+                case .waitForState(var d): d.name = newName; block.blockType = .waitForState(d)
+                case .conditional(var d): d.name = newName; block.blockType = .conditional(d)
+                case .repeatBlock(var d): d.name = newName; block.blockType = .repeatBlock(d)
+                case .repeatWhile(var d): d.name = newName; block.blockType = .repeatWhile(d)
+                case .group(var d): d.name = newName; block.blockType = .group(d)
+                case .stop(var d): d.name = newName; block.blockType = .stop(d)
+                case .executeWorkflow(var d): d.name = newName; block.blockType = .executeWorkflow(d)
+                }
+            }
+        )
     }
 
     @ViewBuilder
@@ -126,6 +170,10 @@ struct BlockEditorRow: View {
             repeatWhileContent
         case .group:
             groupContent
+        case .stop:
+            stopContent
+        case .executeWorkflow:
+            executeWorkflowContent
         }
     }
 }
@@ -172,6 +220,14 @@ extension BlockEditorRow {
     private var groupContent: some View {
         GroupEditor(block: $block, allowNesting: allowNesting, onEditNestedBlocks: onEditNestedBlocks)
     }
+
+    private var stopContent: some View {
+        StopEditor(block: $block)
+    }
+
+    private var executeWorkflowContent: some View {
+        ExecuteWorkflowEditor(block: $block, workflows: workflows)
+    }
 }
 
 // MARK: - Control Device Editor
@@ -192,7 +248,6 @@ private struct ControlDeviceEditor: View {
     }
 
     var body: some View {
-        TextField("Custom Name (optional)", text: draft.name)
         DeviceCharacteristicPicker(
             devices: devices,
             selectedDeviceId: draft.deviceId,
@@ -224,7 +279,6 @@ private struct WebhookEditor: View {
     }
 
     var body: some View {
-        TextField("Custom Name (optional)", text: draft.name)
         TextField("URL", text: draft.url)
             .keyboardType(.URL)
             .autocapitalization(.none)
@@ -257,7 +311,6 @@ private struct LogEditor: View {
     }
 
     var body: some View {
-        TextField("Custom Name (optional)", text: draft.name)
         TextField("Log message", text: draft.message)
     }
 }
@@ -278,7 +331,6 @@ private struct DelayEditor: View {
     }
 
     var body: some View {
-        TextField("Custom Name (optional)", text: draft.name)
         HStack {
             Text("Seconds")
             Spacer()
@@ -308,7 +360,6 @@ private struct WaitForStateEditor: View {
     }
 
     var body: some View {
-        TextField("Custom Name (optional)", text: draft.name)
         DeviceCharacteristicPicker(
             devices: devices,
             selectedDeviceId: draft.deviceId,
@@ -316,13 +367,8 @@ private struct WaitForStateEditor: View {
             selectedCharacteristicType: draft.characteristicType
         )
 
-        Picker("Comparison", selection: draft.comparisonType) {
-            ForEach(ComparisonType.allCases) { type in
-                Text(type.displayName).tag(type)
-            }
-        }
-
-        ValueEditor(
+        ComparisonValueRow(
+            comparisonType: draft.comparisonType,
             value: draft.comparisonValue,
             characteristicType: draft.wrappedValue.characteristicType,
             devices: devices,
@@ -360,8 +406,6 @@ private struct ConditionalEditor: View {
     }
 
     var body: some View {
-        TextField("Custom Name (optional)", text: draft.name)
-
         Text("Condition")
             .font(.caption)
             .foregroundColor(Theme.Text.secondary)
@@ -373,13 +417,8 @@ private struct ConditionalEditor: View {
             selectedCharacteristicType: draft.conditionCharacteristicType
         )
 
-        Picker("Comparison", selection: draft.comparisonType) {
-            ForEach(ComparisonType.allCases) { type in
-                Text(type.displayName).tag(type)
-            }
-        }
-
-        ValueEditor(
+        ComparisonValueRow(
+            comparisonType: draft.comparisonType,
             value: draft.comparisonValue,
             characteristicType: draft.wrappedValue.conditionCharacteristicType,
             devices: devices,
@@ -396,9 +435,6 @@ private struct ConditionalEditor: View {
     }
 
     private var nestedBlockButtons: some View {
-        // Use .borderless button style so each button gets its own independent
-        // hit-testing rect on Mac Catalyst (plain buttons inside a List row
-        // can merge into a single tap target).
         VStack(spacing: 0) {
             Button {
                 onEditNestedBlocks?("then", draft.wrappedValue.thenBlocks)
@@ -459,8 +495,6 @@ private struct RepeatEditor: View {
     }
 
     var body: some View {
-        TextField("Custom Name (optional)", text: draft.name)
-
         Stepper("Count: \(draft.wrappedValue.count)", value: draft.count, in: 1...1000)
 
         HStack {
@@ -511,8 +545,6 @@ private struct RepeatWhileEditor: View {
     }
 
     var body: some View {
-        TextField("Custom Name (optional)", text: draft.name)
-
         Text("While Condition")
             .font(.caption)
             .foregroundColor(Theme.Text.secondary)
@@ -524,13 +556,8 @@ private struct RepeatWhileEditor: View {
             selectedCharacteristicType: draft.conditionCharacteristicType
         )
 
-        Picker("Comparison", selection: draft.comparisonType) {
-            ForEach(ComparisonType.allCases) { type in
-                Text(type.displayName).tag(type)
-            }
-        }
-
-        ValueEditor(
+        ComparisonValueRow(
+            comparisonType: draft.comparisonType,
             value: draft.comparisonValue,
             characteristicType: draft.wrappedValue.conditionCharacteristicType,
             devices: devices,
@@ -586,7 +613,6 @@ private struct GroupEditor: View {
     }
 
     var body: some View {
-        TextField("Custom Name (optional)", text: draft.name)
         TextField("Group Label (optional)", text: draft.label)
 
         if allowNesting {
@@ -605,5 +631,87 @@ private struct GroupEditor: View {
                 .font(.caption)
                 .foregroundColor(Theme.Text.secondary)
         }
+    }
+}
+
+// MARK: - Stop Editor
+
+private struct StopEditor: View {
+    @Binding var block: BlockDraft
+
+    private var draft: Binding<StopDraft> {
+        Binding(
+            get: {
+                if case .stop(let d) = block.blockType { return d }
+                return StopDraft()
+            },
+            set: { block.blockType = .stop($0) }
+        )
+    }
+
+    var body: some View {
+        Picker("Outcome", selection: draft.outcome) {
+            Text("Success").tag(StopOutcome.success)
+            Text("Error").tag(StopOutcome.error)
+            Text("Cancelled").tag(StopOutcome.cancelled)
+        }
+
+        TextField("Message (optional)", text: draft.message)
+    }
+}
+
+// MARK: - Execute Workflow Editor
+
+private struct ExecuteWorkflowEditor: View {
+    @Binding var block: BlockDraft
+    let workflows: [Workflow]
+
+    private var draft: Binding<ExecuteWorkflowDraft> {
+        Binding(
+            get: {
+                if case .executeWorkflow(let d) = block.blockType { return d }
+                return ExecuteWorkflowDraft()
+            },
+            set: { block.blockType = .executeWorkflow($0) }
+        )
+    }
+
+    /// Workflows that have a .workflow trigger and can be called.
+    private var callableWorkflows: [Workflow] {
+        workflows.filter { workflow in
+            workflow.triggers.contains { trigger in
+                if case .workflow = trigger { return true }
+                return false
+            }
+        }
+    }
+
+    var body: some View {
+        Picker("Workflow", selection: draft.targetWorkflowId) {
+            Text("Select workflow…").tag(nil as UUID?)
+            ForEach(callableWorkflows, id: \.id) { workflow in
+                Text(workflow.name).tag(workflow.id as UUID?)
+            }
+        }
+
+        Picker("Mode", selection: draft.executionMode) {
+            Text("Inline").tag(ExecutionMode.inline)
+            Text("Parallel").tag(ExecutionMode.parallel)
+            Text("Delegate").tag(ExecutionMode.delegate)
+        }
+        .pickerStyle(.segmented)
+
+        Group {
+            switch draft.wrappedValue.executionMode {
+            case .inline:
+                Text("Wait for the target workflow to complete before continuing.")
+            case .parallel:
+                Text("Launch the target workflow and continue immediately.")
+            case .delegate:
+                Text("Launch the target workflow and stop this workflow.")
+            }
+        }
+        .font(.caption)
+        .foregroundColor(Theme.Text.secondary)
     }
 }

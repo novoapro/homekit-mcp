@@ -56,12 +56,24 @@ enum ComparisonType: String, CaseIterable, Identifiable {
         case .lessThanOrEqual: return "Less or Equal"
         }
     }
+
+    var symbol: String {
+        switch self {
+        case .equals: return "="
+        case .notEquals: return "≠"
+        case .greaterThan: return ">"
+        case .lessThan: return "<"
+        case .greaterThanOrEqual: return "≥"
+        case .lessThanOrEqual: return "≤"
+        }
+    }
 }
 
 enum TriggerDraftType: String, CaseIterable, Identifiable {
     case deviceStateChange
     case schedule
     case webhook
+    case workflow
 
     var id: String {
         rawValue
@@ -72,6 +84,7 @@ enum TriggerDraftType: String, CaseIterable, Identifiable {
         case .deviceStateChange: return "Device State Change"
         case .schedule: return "Schedule"
         case .webhook: return "Webhook"
+        case .workflow: return "Workflow"
         }
     }
 
@@ -80,6 +93,7 @@ enum TriggerDraftType: String, CaseIterable, Identifiable {
         case .deviceStateChange: return "bolt.fill"
         case .schedule: return "clock.fill"
         case .webhook: return "arrow.down.circle.fill"
+        case .workflow: return "arrow.triangle.turn.up.right.diamond"
         }
     }
 }
@@ -150,6 +164,10 @@ struct TriggerDraft: Identifiable {
     static func emptyWebhook() -> TriggerDraft {
         TriggerDraft(id: UUID(), triggerType: .webhook)
     }
+
+    static func emptyWorkflow() -> TriggerDraft {
+        TriggerDraft(id: UUID(), triggerType: .workflow)
+    }
 }
 
 enum ScheduleDraftType: String, CaseIterable, Identifiable {
@@ -206,11 +224,15 @@ extension TriggerDraft {
             return scheduleAutoName
         case .webhook:
             return "Webhook Trigger"
+        case .workflow:
+            return "Workflow Trigger"
         }
     }
 
     private var scheduleAutoName: String {
-        let timeStr = String(format: "%d:%02d", scheduleHour, scheduleMinute)
+        let hour12 = scheduleHour % 12 == 0 ? 12 : scheduleHour % 12
+        let period = scheduleHour >= 12 ? "PM" : "AM"
+        let timeStr = String(format: "%d:%02d %@", hour12, scheduleMinute, period)
         switch scheduleType {
         case .once:
             let formatter = DateFormatter()
@@ -265,6 +287,10 @@ extension BlockDraft {
             return d.autoName(devices: devices)
         case let .group(d):
             return d.autoName()
+        case let .stop(d):
+            return d.autoName()
+        case let .executeWorkflow(d):
+            return d.autoName()
         }
     }
 
@@ -281,6 +307,8 @@ extension BlockDraft {
             case let .repeatBlock(d): return d.name
             case let .repeatWhile(d): return d.name
             case let .group(d): return d.name
+            case let .stop(d): return d.name
+            case let .executeWorkflow(d): return d.name
             }
         }()
         return explicitName.isEmpty ? autoName(devices: devices) : explicitName
@@ -364,6 +392,28 @@ private extension GroupDraft {
     }
 }
 
+private extension StopDraft {
+    func autoName() -> String {
+        let label = switch outcome {
+        case .success: "Stop (Success)"
+        case .error: "Stop (Error)"
+        case .cancelled: "Stop (Cancelled)"
+        }
+        return message.isEmpty ? label : "\(label): \(message)"
+    }
+}
+
+private extension ExecuteWorkflowDraft {
+    func autoName() -> String {
+        let modeStr = switch executionMode {
+        case .inline: "Inline"
+        case .parallel: "Parallel"
+        case .delegate: "Delegate"
+        }
+        return "Execute Workflow (\(modeStr))"
+    }
+}
+
 // MARK: - Condition Draft
 
 struct ConditionDraft: Identifiable {
@@ -429,6 +479,14 @@ struct BlockDraft: Identifiable {
     static func newGroup() -> BlockDraft {
         BlockDraft(id: UUID(), blockType: .group(GroupDraft()))
     }
+
+    static func newStop() -> BlockDraft {
+        BlockDraft(id: UUID(), blockType: .stop(StopDraft()))
+    }
+
+    static func newExecuteWorkflow() -> BlockDraft {
+        BlockDraft(id: UUID(), blockType: .executeWorkflow(ExecuteWorkflowDraft()))
+    }
 }
 
 enum BlockDraftType {
@@ -441,6 +499,8 @@ enum BlockDraftType {
     case repeatBlock(RepeatDraft)
     case repeatWhile(RepeatWhileDraft)
     case group(GroupDraft)
+    case stop(StopDraft)
+    case executeWorkflow(ExecuteWorkflowDraft)
 
     var displayName: String {
         switch self {
@@ -453,6 +513,8 @@ enum BlockDraftType {
         case .repeatBlock: return "Repeat"
         case .repeatWhile: return "Repeat While"
         case .group: return "Group"
+        case .stop: return "Stop"
+        case .executeWorkflow: return "Execute Workflow"
         }
     }
 
@@ -467,6 +529,8 @@ enum BlockDraftType {
         case .repeatBlock: return "repeat"
         case .repeatWhile: return "repeat.circle"
         case .group: return "folder"
+        case .stop: return "stop.circle.fill"
+        case .executeWorkflow: return "arrow.triangle.turn.up.right.diamond.fill"
         }
     }
 
@@ -558,6 +622,18 @@ struct GroupDraft {
     var blocks: [BlockDraft] = []
 }
 
+struct StopDraft {
+    var name: String = ""
+    var outcome: StopOutcome = .success
+    var message: String = ""
+}
+
+struct ExecuteWorkflowDraft {
+    var name: String = ""
+    var targetWorkflowId: UUID?
+    var executionMode: ExecutionMode = .inline
+}
+
 // MARK: - Deep Copy
 
 extension BlockDraft {
@@ -570,7 +646,7 @@ extension BlockDraft {
 extension BlockDraftType {
     func deepCopy() -> BlockDraftType {
         switch self {
-        case .controlDevice, .webhook, .log, .delay, .waitForState:
+        case .controlDevice, .webhook, .log, .delay, .waitForState, .stop, .executeWorkflow:
             return self // value types with no nested blocks
         case .conditional(var d):
             d.thenBlocks = d.thenBlocks.map { $0.deepCopy() }
@@ -620,6 +696,8 @@ extension WorkflowDraft {
                 }
             case .webhook:
                 break // Token is auto-generated
+            case .workflow:
+                break // No configuration needed
             }
         }
         if blocks.isEmpty {
@@ -691,6 +769,12 @@ extension WorkflowDraft {
                 name: t.name ?? "",
                 triggerType: .webhook,
                 webhookToken: t.token
+            )
+        case let .workflow(t):
+            return TriggerDraft(
+                id: UUID(),
+                name: t.name ?? "",
+                triggerType: .workflow
             )
         case .compound:
             // Compound triggers not editable in the UI editor
@@ -832,6 +916,18 @@ extension WorkflowDraft {
                 label: b.label ?? "",
                 blocks: b.blocks.map { convertBlock($0) }
             )))
+        case let .stop(b):
+            return BlockDraft(id: UUID(), blockType: .stop(StopDraft(
+                name: b.name ?? "",
+                outcome: b.outcome,
+                message: b.message ?? ""
+            )))
+        case let .executeWorkflow(b):
+            return BlockDraft(id: UUID(), blockType: .executeWorkflow(ExecuteWorkflowDraft(
+                name: b.name ?? "",
+                targetWorkflowId: b.targetWorkflowId,
+                executionMode: b.executionMode
+            )))
         }
     }
 
@@ -886,6 +982,10 @@ extension TriggerDraft {
         case .webhook:
             return .webhook(WebhookTrigger(
                 token: webhookToken,
+                name: name.isEmpty ? nil : name
+            ))
+        case .workflow:
+            return .workflow(WorkflowCallTrigger(
                 name: name.isEmpty ? nil : name
             ))
         }
@@ -1023,6 +1123,18 @@ extension BlockDraft {
             return .flowControl(.group(GroupBlock(
                 label: d.label.isEmpty ? nil : d.label,
                 blocks: d.blocks.map { $0.toBlock() },
+                name: d.name.isEmpty ? nil : d.name
+            )))
+        case let .stop(d):
+            return .flowControl(.stop(StopBlock(
+                outcome: d.outcome,
+                message: d.message.isEmpty ? nil : d.message,
+                name: d.name.isEmpty ? nil : d.name
+            )))
+        case let .executeWorkflow(d):
+            return .flowControl(.executeWorkflow(ExecuteWorkflowBlock(
+                targetWorkflowId: d.targetWorkflowId ?? UUID(),
+                executionMode: d.executionMode,
                 name: d.name.isEmpty ? nil : d.name
             )))
         }

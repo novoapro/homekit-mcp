@@ -463,6 +463,26 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section {
+            VStack(spacing: 12) {
+                Image("AppLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 80, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.medium, style: .continuous))
+                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+
+                VStack(spacing: 2) {
+                    Text("HomeKit MCP")
+                        .font(.headline)
+                        .foregroundColor(Theme.Text.primary)
+                    Text("Control your home with AI")
+                        .font(.caption)
+                        .foregroundColor(Theme.Text.tertiary)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+
             LabeledContent("Version", value: "1.0.0")
             LabeledContent("Build", value: "1")
         } header: {

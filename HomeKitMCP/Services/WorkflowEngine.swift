@@ -184,6 +184,42 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         return await task.value
     }
 
+    /// Internal trigger used by the Execute Workflow block — carries caller context for circular call detection.
+    private func triggerWorkflow(id: UUID, triggerEvent: TriggerEvent, callerContext: ExecutionContext) async -> WorkflowExecutionLog? {
+        guard let workflow = await workflowStorageService.getWorkflow(id: id) else { return nil }
+        guard workflow.isEnabled else { return nil }
+
+        // Check circular call before anything else
+        if callerContext.callingWorkflowIds.contains(id) {
+            AppLogger.workflow.warning("[\(workflow.name)] Circular workflow call detected — aborting")
+            return nil
+        }
+
+        if let existingTask = runningTasks[id] {
+            switch workflow.retriggerPolicy {
+            case .ignoreNew:
+                return nil
+            case .cancelAndRestart:
+                existingTask.cancel()
+                runningTasks.removeValue(forKey: id)
+            case .queueAndExecute:
+                enqueueWorkflow(workflow, change: nil)
+                return nil
+            }
+        }
+
+        var context = ExecutionContext(workflow: workflow, callingWorkflowIds: callerContext.callingWorkflowIds)
+        context.callingWorkflowIds.insert(callerContext.workflow.id)
+
+        let task = Task { [weak self] () -> WorkflowExecutionLog in
+            let result = await self?.executeWorkflow(workflow, change: nil, triggerEvent: triggerEvent, callerContext: context) ?? WorkflowExecutionLog(workflowId: id, workflowName: workflow.name, triggerEvent: triggerEvent)
+            await self?.removeRunning(id)
+            return result
+        }
+        runningTasks[id] = Task { _ = await task.value }
+        return await task.value
+    }
+
     // MARK: - Execution Slot Management
 
     /// Attempt to immediately start a workflow, or queue it if no slots are available.
@@ -266,7 +302,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
     // MARK: - Workflow Execution
 
     @discardableResult
-    private func executeWorkflow(_ workflow: Workflow, change: StateChange?, triggerEvent: TriggerEvent? = nil) async -> WorkflowExecutionLog {
+    private func executeWorkflow(_ workflow: Workflow, change: StateChange?, triggerEvent: TriggerEvent? = nil, callerContext: ExecutionContext? = nil) async -> WorkflowExecutionLog {
         let event = triggerEvent ?? change.map { c -> TriggerEvent in
             let charName = CharacteristicTypes.displayName(for: c.characteristicType)
             let desc = "\(c.deviceName) \(charName) changed"
@@ -313,7 +349,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         let logBox = LogBox(execLog)
 
         // Execute blocks in order, updating log after each step
-        let context = ExecutionContext(workflow: workflow)
+        var context = ExecutionContext(workflow: workflow, callingWorkflowIds: callerContext?.callingWorkflowIds ?? [])
         var failed = false
 
         let onUpdate: @Sendable (BlockResult) async -> Void = { [weak self] updated in
@@ -326,30 +362,44 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             await self.executionLogService.update(logBox.execLog)
         }
 
-        for (index, block) in workflow.blocks.enumerated() {
-            if Task.isCancelled {
-                logBox.execLog.status = .cancelled
-                logBox.execLog.completedAt = Date()
-                await finalizeExecution(logBox.execLog, workflow: workflow, succeeded: false)
-                return logBox.execLog
-            }
+        do {
+            for (index, block) in workflow.blocks.enumerated() {
+                if Task.isCancelled {
+                    logBox.execLog.status = .cancelled
+                    logBox.execLog.completedAt = Date()
+                    await finalizeExecution(logBox.execLog, workflow: workflow, succeeded: false)
+                    return logBox.execLog
+                }
 
-            let result = await executeBlock(block, index: index, context: context, onUpdate: onUpdate)
+                let result = try await executeBlock(block, index: index, context: context, onUpdate: onUpdate)
 
-            // Note: executeBlock already calls onUpdate for progress and completion,
-            // but we append it here if it wasn't already in the top-level list.
-            if !logBox.execLog.blockResults.contains(where: { $0.id == result.id }) {
-                logBox.execLog.blockResults.append(result)
-                await executionLogService.update(logBox.execLog)
-            }
+                // Note: executeBlock already calls onUpdate for progress and completion,
+                // but we append it here if it wasn't already in the top-level list.
+                if !logBox.execLog.blockResults.contains(where: { $0.id == result.id }) {
+                    logBox.execLog.blockResults.append(result)
+                    await executionLogService.update(logBox.execLog)
+                }
 
-            if result.status == .failure {
-                failed = true
-                if !workflow.continueOnError {
-                    break
+                if result.status == .failure {
+                    failed = true
+                    if !workflow.continueOnError {
+                        break
+                    }
                 }
             }
-        }
+        } catch let error as WorkflowEngineError {
+            if case let .stopped(outcome, message) = error {
+                logBox.execLog.status = switch outcome {
+                case .success: .success
+                case .error: .failure
+                case .cancelled: .cancelled
+                }
+                logBox.execLog.errorMessage = message
+                logBox.execLog.completedAt = Date()
+                await finalizeExecution(logBox.execLog, workflow: workflow, succeeded: outcome == .success)
+                return logBox.execLog
+            }
+        } catch {}
 
         // Check for cancellation after the loop — don't overwrite with failure/success
         if Task.isCancelled {
@@ -484,12 +534,13 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
     // MARK: - Block Execution (Recursive)
 
-    private func executeBlock(_ block: WorkflowBlock, index: Int, context: ExecutionContext, onUpdate: @escaping (BlockResult) async -> Void) async -> BlockResult {
+    /// Executes a single block. May throw `WorkflowEngineError.stopped` to halt the entire workflow.
+    private func executeBlock(_ block: WorkflowBlock, index: Int, context: ExecutionContext, onUpdate: @escaping (BlockResult) async -> Void) async throws -> BlockResult {
         switch block {
         case let .action(action):
             return await executeAction(action, index: index, context: context, onUpdate: onUpdate)
         case let .flowControl(flowControl):
-            return await executeFlowControl(flowControl, index: index, context: context, onUpdate: onUpdate)
+            return try await executeFlowControl(flowControl, index: index, context: context, onUpdate: onUpdate)
         }
     }
 
@@ -629,7 +680,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
     // MARK: - Flow Control Execution
 
-    private func executeFlowControl(_ flowControl: FlowControlBlock, index: Int, context: ExecutionContext, onUpdate: @escaping (BlockResult) async -> Void) async -> BlockResult {
+    private func executeFlowControl(_ flowControl: FlowControlBlock, index: Int, context: ExecutionContext, onUpdate: @escaping (BlockResult) async -> Void) async throws -> BlockResult {
         let fcName: String? = {
             switch flowControl {
             case let .delay(b): return b.name
@@ -638,6 +689,8 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             case let .repeat(b): return b.name
             case let .repeatWhile(b): return b.name
             case let .group(b): return b.name
+            case let .stop(b): return b.name
+            case let .executeWorkflow(b): return b.name
             }
         }()
         var result = BlockResult(blockIndex: index, blockKind: "flowControl", blockType: flowControl.displayType, blockName: fcName)
@@ -694,7 +747,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 }
 
                 for (i, b) in blocksToRun.enumerated() {
-                    let r = await executeBlock(b, index: i, context: context, onUpdate: nestedUpdate)
+                    let r = try await executeBlock(b, index: i, context: context, onUpdate: nestedUpdate)
                     if !nested.contains(where: { $0.id == r.id }) {
                         nested.append(r)
                     }
@@ -725,7 +778,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                     await onUpdate(result)
 
                     for (i, b) in block.blocks.enumerated() {
-                        let r = await executeBlock(b, index: i, context: context, onUpdate: nestedUpdate)
+                        let r = try await executeBlock(b, index: i, context: context, onUpdate: nestedUpdate)
                         if !nested.contains(where: { $0.id == r.id }) {
                             nested.append(r)
                         }
@@ -766,7 +819,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                     await onUpdate(result)
 
                     for (i, b) in block.blocks.enumerated() {
-                        let r = await executeBlock(b, index: i, context: context, onUpdate: nestedUpdate)
+                        let r = try await executeBlock(b, index: i, context: context, onUpdate: nestedUpdate)
                         if !nested.contains(where: { $0.id == r.id }) {
                             nested.append(r)
                         }
@@ -801,7 +854,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 }
 
                 for (i, b) in block.blocks.enumerated() {
-                    let r = await executeBlock(b, index: i, context: context, onUpdate: nestedUpdate)
+                    let r = try await executeBlock(b, index: i, context: context, onUpdate: nestedUpdate)
                     if !nested.contains(where: { $0.id == r.id }) {
                         nested.append(r)
                     }
@@ -813,10 +866,100 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 result.detail = block.label ?? "Group"
                 result.nestedResults = nested
                 result.status = groupFailed ? .failure : .success
+
+            case let .stop(block):
+                result.detail = "Stopping workflow: \(block.outcome.rawValue)"
+                if let msg = block.message, !msg.isEmpty {
+                    result.detail! += " — \(msg)"
+                }
+                result.status = .success
+                result.completedAt = Date()
+                await onUpdate(result)
+                throw WorkflowEngineError.stopped(outcome: block.outcome, message: block.message)
+
+            case let .executeWorkflow(block):
+                // Check for circular calls
+                if context.callingWorkflowIds.contains(block.targetWorkflowId) {
+                    let targetName = await resolveWorkflowName(block.targetWorkflowId)
+                    result.status = .failure
+                    result.errorMessage = "Circular workflow call detected: '\(targetName)'"
+                    result.completedAt = Date()
+                    await onUpdate(result)
+                    return result
+                }
+
+                guard let targetWorkflow = await workflowStorageService.getWorkflow(id: block.targetWorkflowId) else {
+                    result.status = .failure
+                    result.errorMessage = "Target workflow not found"
+                    result.completedAt = Date()
+                    await onUpdate(result)
+                    return result
+                }
+
+                // Verify target has a .workflow trigger
+                let hasWorkflowTrigger = targetWorkflow.triggers.contains {
+                    if case .workflow = $0 { return true }; return false
+                }
+                guard hasWorkflowTrigger else {
+                    result.status = .failure
+                    result.errorMessage = "Target workflow '\(targetWorkflow.name)' does not accept workflow triggers"
+                    result.completedAt = Date()
+                    await onUpdate(result)
+                    return result
+                }
+
+                let triggerEvent = TriggerEvent(
+                    deviceId: nil, deviceName: nil, serviceId: nil,
+                    characteristicType: nil, oldValue: nil, newValue: nil,
+                    triggerDescription: "Called from workflow '\(context.workflow.name)'"
+                )
+
+                // Build caller context with updated calling chain
+                var callerContext = context
+                callerContext.callingWorkflowIds.insert(context.workflow.id)
+
+                switch block.executionMode {
+                case .inline:
+                    result.detail = "Executing '\(targetWorkflow.name)' inline..."
+                    await onUpdate(result)
+                    let targetLog = await triggerWorkflow(id: targetWorkflow.id, triggerEvent: triggerEvent, callerContext: callerContext)
+                    if let log = targetLog {
+                        result.detail = "Executed '\(targetWorkflow.name)': \(log.status.rawValue)"
+                        result.status = (log.status == .success) ? .success : .failure
+                        if log.status != .success {
+                            result.errorMessage = log.errorMessage ?? "Target workflow \(log.status.rawValue)"
+                        }
+                    } else {
+                        result.detail = "'\(targetWorkflow.name)' skipped (retrigger policy)"
+                        result.status = .success
+                    }
+
+                case .parallel:
+                    result.detail = "Launched '\(targetWorkflow.name)' in parallel"
+                    Task { [weak self] in
+                        _ = await self?.triggerWorkflow(id: targetWorkflow.id, triggerEvent: triggerEvent, callerContext: callerContext)
+                    }
+                    result.status = .success
+
+                case .delegate:
+                    result.detail = "Delegating to '\(targetWorkflow.name)'"
+                    result.status = .success
+                    result.completedAt = Date()
+                    await onUpdate(result)
+                    Task { [weak self] in
+                        _ = await self?.triggerWorkflow(id: targetWorkflow.id, triggerEvent: triggerEvent, callerContext: callerContext)
+                    }
+                    throw WorkflowEngineError.stopped(outcome: .success, message: "Delegated to '\(targetWorkflow.name)'")
+                }
             }
         } catch is CancellationError {
             result.status = .cancelled
         } catch {
+            // Re-throw stop errors so they propagate to the main loop
+            if let engineError = error as? WorkflowEngineError,
+               case .stopped = engineError {
+                throw engineError
+            }
             result.status = .failure
             result.errorMessage = error.localizedDescription
         }
@@ -837,6 +980,13 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             return device.name
         }
         return deviceId
+    }
+
+    private func resolveWorkflowName(_ workflowId: UUID) async -> String {
+        if let workflow = await workflowStorageService.getWorkflow(id: workflowId) {
+            return workflow.name
+        }
+        return workflowId.uuidString
     }
 
     // MARK: - WaitForState
@@ -959,6 +1109,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
 private struct ExecutionContext {
     let workflow: Workflow
+    var callingWorkflowIds: Set<UUID> = []
 }
 
 private struct StateWaiter {
@@ -975,6 +1126,8 @@ enum WorkflowEngineError: LocalizedError {
     case invalidURL(String)
     case webhookFailed(statusCode: Int)
     case ssrfBlocked(String)
+    case stopped(outcome: StopOutcome, message: String?)
+    case circularWorkflowCall(workflowName: String)
 
     var errorDescription: String? {
         switch self {
@@ -982,6 +1135,8 @@ enum WorkflowEngineError: LocalizedError {
         case let .invalidURL(url): return "Invalid URL: \(url)"
         case let .webhookFailed(code): return "Webhook failed with status \(code)"
         case let .ssrfBlocked(url): return "Request blocked: URL '\(url)' resolves to a private/internal IP address"
+        case let .stopped(outcome, message): return "Workflow stopped (\(outcome.rawValue))\(message.map { ": \($0)" } ?? "")"
+        case let .circularWorkflowCall(name): return "Circular workflow call detected: '\(name)'"
         }
     }
 }

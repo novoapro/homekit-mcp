@@ -7,47 +7,102 @@ struct DeviceCharacteristicPicker: View {
     @Binding var selectedCharacteristicType: String
 
     var body: some View {
-        Picker("Device", selection: $selectedDeviceId) {
-            Text("Select device...").tag("")
-            ForEach(devicesByRoom, id: \.roomName) { group in
-                Section(group.roomName) {
-                    ForEach(group.devices) { device in
-                        Label {
-                            if device.isReachable {
-                                Text(device.name)
-                            } else {
-                                Text("\(device.name) (Offline)")
-                                    .foregroundColor(.secondary)
+        HStack(spacing: 8) {
+            // Device menu
+            Menu {
+                Button("None") {
+                    selectedDeviceId = ""
+                    selectedCharacteristicType = ""
+                    selectedServiceId = nil
+                }
+                ForEach(devicesByRoom, id: \.roomName) { group in
+                    Section(group.roomName) {
+                        ForEach(group.devices) { device in
+                            Button {
+                                if selectedDeviceId != device.id {
+                                    selectedDeviceId = device.id
+                                    selectedCharacteristicType = ""
+                                    selectedServiceId = nil
+                                }
+                            } label: {
+                                Label {
+                                    if device.isReachable {
+                                        Text(device.name)
+                                    } else {
+                                        Text("\(device.name) (Offline)")
+                                    }
+                                } icon: {
+                                    Image(systemName: categoryIcon(for: device.categoryType))
+                                }
                             }
-                        } icon: {
-                            Image(systemName: categoryIcon(for: device.categoryType))
                         }
-                        .tag(device.id)
                     }
                 }
+            } label: {
+                HStack(spacing: 4) {
+                    if let device = selectedDevice {
+                        Image(systemName: categoryIcon(for: device.categoryType))
+                            .font(.caption2)
+                        Text(device.name)
+                            .lineLimit(1)
+                    } else {
+                        Text("Device…")
+                            .foregroundColor(Theme.Text.secondary)
+                    }
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundColor(Theme.Text.secondary)
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(.tertiarySystemFill))
+                .cornerRadius(8)
             }
-        }
-        .onChange(of: selectedDeviceId) { _ in
-            // Reset characteristic when device changes
-            selectedCharacteristicType = ""
-            selectedServiceId = nil
-        }
 
-        if let device = devices.first(where: { $0.id == selectedDeviceId }) {
-            let characteristics = flattenedCharacteristics(for: device)
-            Picker("Characteristic", selection: $selectedCharacteristicType) {
-                Text("Select characteristic...").tag("")
-                ForEach(characteristics, id: \.characteristic.type) { item in
-                    Text("\(item.serviceName) › \(CharacteristicTypes.displayName(for: item.characteristic.type))")
-                        .tag(item.characteristic.type)
-                }
-            }
-            .onChange(of: selectedCharacteristicType) { newType in
-                if let match = characteristics.first(where: { $0.characteristic.type == newType }) {
-                    selectedServiceId = match.serviceId
+            // Characteristic menu — only when a device is selected
+            if let device = selectedDevice {
+                let characteristics = flattenedCharacteristics(for: device)
+                Menu {
+                    Button("None") {
+                        selectedCharacteristicType = ""
+                        selectedServiceId = nil
+                    }
+                    ForEach(characteristics, id: \.characteristic.type) { item in
+                        Button {
+                            selectedCharacteristicType = item.characteristic.type
+                            selectedServiceId = item.serviceId
+                        } label: {
+                            Text("\(item.serviceName) › \(CharacteristicTypes.displayName(for: item.characteristic.type))")
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        if !selectedCharacteristicType.isEmpty {
+                            Text(CharacteristicTypes.displayName(for: selectedCharacteristicType))
+                                .lineLimit(1)
+                        } else {
+                            Text("Characteristic…")
+                                .foregroundColor(Theme.Text.secondary)
+                        }
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption2)
+                            .foregroundColor(Theme.Text.secondary)
+                    }
+                    .font(.subheadline)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.tertiarySystemFill))
+                    .cornerRadius(8)
                 }
             }
         }
+    }
+
+    // MARK: - Selected Device
+
+    private var selectedDevice: DeviceModel? {
+        devices.first(where: { $0.id == selectedDeviceId })
     }
 
     // MARK: - Device Grouping

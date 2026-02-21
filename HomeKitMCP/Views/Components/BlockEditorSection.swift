@@ -14,63 +14,103 @@ struct BlockEditorSection: View {
     @Binding var blocks: [BlockDraft]
     let devices: [DeviceModel]
     var allowNesting: Bool = true
+    var workflows: [Workflow] = []
 
     /// When non-nil the parent (WorkflowEditorView) uses this to open the nested-block sheet.
     var onRequestNestedEdit: ((NestedEditState) -> Void)?
+
+    /// When true, all blocks collapse and `.onMove` is active so the user
+    /// can drag rows to reorder. No interactive controls are visible in
+    /// this mode, avoiding gesture conflicts with sliders/pickers.
+    @State private var isReorderMode = false
 
     var body: some View {
         Section {
             ForEach($blocks) { $block in
                 blockEditorRow(for: $block)
             }
+            .onMove { from, to in
+                blocks.move(fromOffsets: from, toOffset: to)
+            }
             .onDelete { blocks.remove(atOffsets: $0) }
+            .moveDisabled(!isReorderMode)
 
             // Use a Menu instead of confirmationDialog — works correctly both in
             // top-level forms and nested sheets on Mac Catalyst.
-            Menu {
-                Button("Control Device", systemImage: "house.fill") {
-                    blocks.append(.newControlDevice())
-                }
-                Button("Webhook", systemImage: "globe") {
-                    blocks.append(.newWebhook())
-                }
-                Button("Log Message", systemImage: "text.bubble") {
-                    blocks.append(.newLog())
-                }
-                Button("Delay", systemImage: "clock") {
-                    blocks.append(.newDelay())
-                }
-                Button("Wait for State", systemImage: "hourglass") {
-                    blocks.append(.newWaitForState())
-                }
-                if allowNesting {
-                    Divider()
-                    Button("If/Else", systemImage: "arrow.triangle.branch") {
-                        blocks.append(.newConditional())
+            if !isReorderMode {
+                Menu {
+                    Button("Control Device", systemImage: "house.fill") {
+                        blocks.append(.newControlDevice())
                     }
-                    Button("Repeat", systemImage: "repeat") {
-                        blocks.append(.newRepeat())
+                    Button("Webhook", systemImage: "globe") {
+                        blocks.append(.newWebhook())
                     }
-                    Button("Repeat While", systemImage: "repeat.circle") {
-                        blocks.append(.newRepeatWhile())
+                    Button("Log Message", systemImage: "text.bubble") {
+                        blocks.append(.newLog())
                     }
-                    Button("Group", systemImage: "folder") {
-                        blocks.append(.newGroup())
+                    Button("Delay", systemImage: "clock") {
+                        blocks.append(.newDelay())
                     }
+                    Button("Wait for State", systemImage: "hourglass") {
+                        blocks.append(.newWaitForState())
+                    }
+                    if allowNesting {
+                        Divider()
+                        Button("If/Else", systemImage: "arrow.triangle.branch") {
+                            blocks.append(.newConditional())
+                        }
+                        Button("Repeat", systemImage: "repeat") {
+                            blocks.append(.newRepeat())
+                        }
+                        Button("Repeat While", systemImage: "repeat.circle") {
+                            blocks.append(.newRepeatWhile())
+                        }
+                        Button("Group", systemImage: "folder") {
+                            blocks.append(.newGroup())
+                        }
+                        Button("Stop", systemImage: "stop.circle.fill") {
+                            blocks.append(.newStop())
+                        }
+                        Button("Execute Workflow", systemImage: "arrow.triangle.turn.up.right.diamond.fill") {
+                            blocks.append(.newExecuteWorkflow())
+                        }
+                    }
+                } label: {
+                    Label("Add Block", systemImage: "plus.circle")
+                        .foregroundColor(Theme.Tint.main)
                 }
-            } label: {
-                Label("Add Block", systemImage: "plus.circle")
-                    .foregroundColor(Theme.Tint.main)
             }
         } header: {
-            Text("Blocks (\(blocks.count))")
+            HStack {
+                Text("Blocks (\(blocks.count))")
+                Spacer()
+                if isReorderMode {
+                    Button("Done") {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isReorderMode = false
+                        }
+                    }
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(Theme.Tint.main)
+                } else if blocks.count > 1 {
+                    Button("Reorder") {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isReorderMode = true
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundColor(Theme.Tint.main)
+                }
+            }
         }
         .listRowBackground(Theme.contentBackground)
     }
 
+    // MARK: - Row Factory
+
     private func blockEditorRow(for block: Binding<BlockDraft>) -> BlockEditorRow {
         let blockId = block.wrappedValue.id
-        let currentIndex = blocks.firstIndex(where: { $0.id == blockId }) ?? 0
         return BlockEditorRow(
             block: block,
             devices: devices,
@@ -83,18 +123,6 @@ struct BlockEditorSection: View {
                     blocks.removeAll(where: { $0.id == blockId })
                 }
             },
-            onMoveUp: {
-                guard let idx = blocks.firstIndex(where: { $0.id == blockId }), idx > 0 else { return }
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    blocks.swapAt(idx, idx - 1)
-                }
-            },
-            onMoveDown: {
-                guard let idx = blocks.firstIndex(where: { $0.id == blockId }), idx < blocks.count - 1 else { return }
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    blocks.swapAt(idx, idx + 1)
-                }
-            },
             onDuplicate: {
                 guard let idx = blocks.firstIndex(where: { $0.id == blockId }) else { return }
                 let copy = blocks[idx].deepCopy()
@@ -102,8 +130,8 @@ struct BlockEditorSection: View {
                     blocks.insert(copy, at: idx + 1)
                 }
             },
-            isFirst: currentIndex == 0,
-            isLast: currentIndex == blocks.count - 1
+            isReorderMode: isReorderMode,
+            workflows: workflows
         )
     }
 }

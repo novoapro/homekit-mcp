@@ -393,6 +393,21 @@ private struct WorkflowBuilderTriggerRow: View {
                     .foregroundColor(.secondary)
             }
             .padding(.vertical, 2)
+        case .workflow(let t):
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: "arrow.triangle.turn.up.right.diamond")
+                        .font(.caption)
+                        .foregroundColor(Theme.Tint.main)
+                    Text(t.name ?? "Workflow Trigger")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                Text("Callable from other workflows")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.vertical, 2)
         }
     }
 
@@ -576,6 +591,8 @@ private struct BuilderFlowControlBlockRow: View {
         case .repeat: return "repeat"
         case .repeatWhile: return "repeat.circle"
         case .group: return "folder"
+        case .stop: return "stop.circle.fill"
+        case .executeWorkflow: return "arrow.triangle.turn.up.right.diamond.fill"
         }
     }
 
@@ -588,12 +605,14 @@ private struct BuilderFlowControlBlockRow: View {
         case .repeat(let b): return b.name ?? "Repeat \(b.count) times"
         case .repeatWhile(let b): return b.name ?? "Repeat while (max \(b.maxIterations))"
         case .group(let b): return b.name ?? b.label ?? "Group"
+        case .stop(let b): return b.name ?? "Stop (\(b.outcome.rawValue))"
+        case .executeWorkflow(let b): return b.name ?? "Execute Workflow (\(b.executionMode.rawValue))"
         }
     }
 
     private var flowControlNestedBlocks: [WorkflowBlock]? {
         switch flowControl {
-        case .delay, .waitForState: return nil
+        case .delay, .waitForState, .stop, .executeWorkflow: return nil
         case .conditional(let b): return b.thenBlocks + (b.elseBlocks ?? [])
         case .repeat(let b): return b.blocks
         case .repeatWhile(let b): return b.blocks

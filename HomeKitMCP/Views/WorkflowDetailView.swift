@@ -4,6 +4,7 @@ struct WorkflowDetailView: View {
     let workflow: Workflow
     let executionLogs: [WorkflowExecutionLog]
     let devices: [DeviceModel]
+    var workflows: [Workflow] = []
     let onToggle: () -> Void
     let onDelete: () -> Void
     let onTrigger: () -> Void
@@ -40,6 +41,7 @@ struct WorkflowDetailView: View {
             WorkflowEditorView(
                 mode: .edit(workflow),
                 devices: devices,
+                workflows: workflows,
                 onSave: { draft in onUpdate(draft) }
             )
         }
@@ -271,6 +273,21 @@ private struct WorkflowTriggerRow: View {
                         .fontWeight(.medium)
                 }
                 Text("Token: \(String(t.token.prefix(8)))...")
+                    .font(.caption)
+                    .foregroundColor(Theme.Text.secondary)
+            }
+            .padding(.vertical, 2)
+        case let .workflow(t):
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: "arrow.triangle.turn.up.right.diamond")
+                        .font(.caption)
+                        .foregroundColor(Theme.Tint.main)
+                    Text(t.name ?? "Workflow Trigger")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                Text("Callable from other workflows")
                     .font(.caption)
                     .foregroundColor(Theme.Text.secondary)
             }
@@ -507,6 +524,8 @@ private struct FlowControlBlockRow: View {
         case .repeat: return "repeat"
         case .repeatWhile: return "repeat.circle"
         case .group: return "folder"
+        case .stop: return "stop.circle.fill"
+        case .executeWorkflow: return "arrow.triangle.turn.up.right.diamond.fill"
         }
     }
 
@@ -523,12 +542,14 @@ private struct FlowControlBlockRow: View {
         case let .repeat(b): return b.name ?? "Repeat \(b.count) times"
         case let .repeatWhile(b): return b.name ?? "Repeat while (max \(b.maxIterations))"
         case let .group(b): return b.name ?? b.label ?? "Group"
+        case let .stop(b): return b.name ?? "Stop (\(b.outcome.rawValue))"
+        case let .executeWorkflow(b): return b.name ?? "Execute Workflow (\(b.executionMode.rawValue))"
         }
     }
 
     private var flowControlNestedBlocks: [WorkflowBlock]? {
         switch flowControl {
-        case .delay, .waitForState: return nil
+        case .delay, .waitForState, .stop, .executeWorkflow: return nil
         case .conditional: return nil // handled separately in nestedBlocksView
         case let .repeat(b): return b.blocks
         case let .repeatWhile(b): return b.blocks

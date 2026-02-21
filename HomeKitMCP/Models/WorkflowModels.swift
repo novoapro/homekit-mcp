@@ -286,6 +286,8 @@ enum FlowControlBlock: Codable {
     case `repeat`(RepeatBlock)
     case repeatWhile(RepeatWhileBlock)
     case group(GroupBlock)
+    case stop(StopBlock)
+    case executeWorkflow(ExecuteWorkflowBlock)
 
     private enum FlowControlType: String, Codable {
         case delay
@@ -294,6 +296,8 @@ enum FlowControlBlock: Codable {
         case `repeat`
         case repeatWhile
         case group
+        case stop
+        case executeWorkflow
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -304,6 +308,8 @@ enum FlowControlBlock: Codable {
         case count, blocks, delayBetweenSeconds
         case maxIterations
         case label
+        case outcome, message
+        case targetWorkflowId, executionMode
     }
 
     init(from decoder: Decoder) throws {
@@ -353,6 +359,18 @@ enum FlowControlBlock: Codable {
                 blocks: container.decode([WorkflowBlock].self, forKey: .blocks),
                 name: name
             ))
+        case .stop:
+            self = try .stop(StopBlock(
+                outcome: container.decode(StopOutcome.self, forKey: .outcome),
+                message: container.decodeIfPresent(String.self, forKey: .message),
+                name: name
+            ))
+        case .executeWorkflow:
+            self = try .executeWorkflow(ExecuteWorkflowBlock(
+                targetWorkflowId: container.decode(UUID.self, forKey: .targetWorkflowId),
+                executionMode: container.decode(ExecutionMode.self, forKey: .executionMode),
+                name: name
+            ))
         }
     }
 
@@ -395,6 +413,16 @@ enum FlowControlBlock: Codable {
             try container.encodeIfPresent(block.name, forKey: .name)
             try container.encodeIfPresent(block.label, forKey: .label)
             try container.encode(block.blocks, forKey: .blocks)
+        case let .stop(block):
+            try container.encode(FlowControlType.stop, forKey: .type)
+            try container.encodeIfPresent(block.name, forKey: .name)
+            try container.encode(block.outcome, forKey: .outcome)
+            try container.encodeIfPresent(block.message, forKey: .message)
+        case let .executeWorkflow(block):
+            try container.encode(FlowControlType.executeWorkflow, forKey: .type)
+            try container.encodeIfPresent(block.name, forKey: .name)
+            try container.encode(block.targetWorkflowId, forKey: .targetWorkflowId)
+            try container.encode(block.executionMode, forKey: .executionMode)
         }
     }
 
@@ -406,6 +434,8 @@ enum FlowControlBlock: Codable {
         case .repeat: return "repeat"
         case .repeatWhile: return "repeatWhile"
         case .group: return "group"
+        case .stop: return "stop"
+        case .executeWorkflow: return "executeWorkflow"
         }
     }
 }
@@ -494,6 +524,70 @@ struct GroupBlock {
     }
 }
 
+struct StopBlock: Codable {
+    let outcome: StopOutcome
+    let message: String?
+    let name: String?
+
+    init(outcome: StopOutcome = .success, message: String? = nil, name: String? = nil) {
+        self.outcome = outcome
+        self.message = message
+        self.name = name
+    }
+}
+
+enum StopOutcome: String, Codable, CaseIterable, Identifiable {
+    case success
+    case error
+    case cancelled
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .success: return "Success"
+        case .error: return "Error"
+        case .cancelled: return "Cancelled"
+        }
+    }
+}
+
+enum ExecutionMode: String, Codable, CaseIterable, Identifiable {
+    case inline
+    case parallel
+    case delegate
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .inline: return "Inline (Wait)"
+        case .parallel: return "Parallel"
+        case .delegate: return "Delegate"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .inline: return "Wait for the target workflow to finish before continuing"
+        case .parallel: return "Launch the target workflow and continue immediately"
+        case .delegate: return "Launch the target workflow and stop this one"
+        }
+    }
+}
+
+struct ExecuteWorkflowBlock: Codable {
+    let targetWorkflowId: UUID
+    let executionMode: ExecutionMode
+    let name: String?
+
+    init(targetWorkflowId: UUID, executionMode: ExecutionMode = .inline, name: String? = nil) {
+        self.targetWorkflowId = targetWorkflowId
+        self.executionMode = executionMode
+        self.name = name
+    }
+}
+
 // MARK: - Trigger System
 
 indirect enum WorkflowTrigger: Codable {
@@ -501,12 +595,14 @@ indirect enum WorkflowTrigger: Codable {
     case compound(CompoundTrigger)
     case schedule(ScheduleTrigger)
     case webhook(WebhookTrigger)
+    case workflow(WorkflowCallTrigger)
 
     private enum TriggerType: String, Codable {
         case deviceStateChange
         case compound
         case schedule
         case webhook
+        case workflow
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -546,6 +642,8 @@ indirect enum WorkflowTrigger: Codable {
                 token: container.decode(String.self, forKey: .token),
                 name: name
             ))
+        case .workflow:
+            self = .workflow(WorkflowCallTrigger(name: name))
         }
     }
 
@@ -572,6 +670,9 @@ indirect enum WorkflowTrigger: Codable {
             try container.encode(TriggerType.webhook, forKey: .type)
             try container.encodeIfPresent(trigger.name, forKey: .name)
             try container.encode(trigger.token, forKey: .token)
+        case let .workflow(trigger):
+            try container.encode(TriggerType.workflow, forKey: .type)
+            try container.encodeIfPresent(trigger.name, forKey: .name)
         }
     }
 }
@@ -709,6 +810,14 @@ struct WebhookTrigger {
 
     init(token: String = UUID().uuidString, name: String? = nil) {
         self.token = token
+        self.name = name
+    }
+}
+
+struct WorkflowCallTrigger: Codable {
+    let name: String?
+
+    init(name: String? = nil) {
         self.name = name
     }
 }

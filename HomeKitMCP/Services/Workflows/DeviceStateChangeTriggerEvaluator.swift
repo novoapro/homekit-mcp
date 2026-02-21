@@ -7,7 +7,7 @@ struct DeviceStateChangeTriggerEvaluator: TriggerEvaluator {
         switch trigger {
         case .deviceStateChange, .compound:
             return true
-        case .schedule, .webhook:
+        case .schedule, .webhook, .workflow:
             return false
         }
     }
@@ -27,7 +27,7 @@ struct DeviceStateChangeTriggerEvaluator: TriggerEvaluator {
             return evaluateDeviceStateTrigger(t, change: change)
         case .compound(let t):
             return evaluateCompoundTrigger(t, change: change)
-        case .schedule, .webhook:
+        case .schedule, .webhook, .workflow:
             return false
         }
     }

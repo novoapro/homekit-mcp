@@ -7,7 +7,9 @@ struct ConditionEditorSection: View {
     var body: some View {
         Section {
             ForEach($conditions) { $condition in
-                conditionRow(condition: $condition)
+                ConditionRow(condition: $condition, devices: devices, onDelete: {
+                    conditions.removeAll(where: { $0.id == condition.id })
+                })
             }
             .onDelete { conditions.remove(atOffsets: $0) }
 
@@ -23,49 +25,82 @@ struct ConditionEditorSection: View {
         }
         .listRowBackground(Theme.contentBackground)
     }
+}
 
-    private func conditionRow(condition: Binding<ConditionDraft>) -> some View {
+private struct ConditionRow: View {
+    @Binding var condition: ConditionDraft
+    let devices: [DeviceModel]
+    let onDelete: () -> Void
+    @State private var isEditingName: Bool = false
+
+    var body: some View {
         DisclosureGroup {
-            TextField("Custom Name (optional)", text: condition.name)
-
             DeviceCharacteristicPicker(
                 devices: devices,
-                selectedDeviceId: condition.deviceId,
-                selectedServiceId: condition.serviceId,
-                selectedCharacteristicType: condition.characteristicType
+                selectedDeviceId: $condition.deviceId,
+                selectedServiceId: $condition.serviceId,
+                selectedCharacteristicType: $condition.characteristicType
             )
 
-            Picker("Comparison", selection: condition.comparisonType) {
-                ForEach(ComparisonType.allCases) { type in
-                    Text(type.displayName).tag(type)
-                }
-            }
-
-            ValueEditor(
-                value: condition.comparisonValue,
-                characteristicType: condition.wrappedValue.characteristicType,
+            ComparisonValueRow(
+                comparisonType: $condition.comparisonType,
+                value: $condition.comparisonValue,
+                characteristicType: condition.characteristicType,
                 devices: devices,
-                deviceId: condition.wrappedValue.deviceId
+                deviceId: condition.deviceId
             )
 
-            Button(role: .destructive) {
-                conditions.removeAll(where: { $0.id == condition.wrappedValue.id })
-            } label: {
-                Label("Remove Condition", systemImage: "trash")
-                    .font(.subheadline)
+            HStack {
+                Spacer()
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Image(systemName: "trash")
+                        .frame(width: 44, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Remove Condition")
             }
         } label: {
-            conditionLabel(condition.wrappedValue)
+            conditionLabel
         }
     }
 
-    private func conditionLabel(_ condition: ConditionDraft) -> some View {
-        HStack {
+    private var conditionLabel: some View {
+        HStack(spacing: 8) {
             Image(systemName: "shield.fill")
                 .font(.caption)
                 .foregroundColor(.indigo)
-            Text(condition.name.isEmpty ? condition.autoName(devices: devices) : condition.name)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Condition")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                if isEditingName {
+                    TextField("Name", text: $condition.name)
+                        .font(.caption)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { isEditingName = false }
+                } else {
+                    Text(condition.name.isEmpty ? condition.autoName(devices: devices) : condition.name)
+                        .font(.caption)
+                        .foregroundColor(Theme.Text.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            Button {
+                isEditingName.toggle()
+            } label: {
+                Image(systemName: isEditingName ? "checkmark.circle.fill" : "pencil")
+                    .font(.caption)
+                    .foregroundColor(Theme.Text.secondary)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 }

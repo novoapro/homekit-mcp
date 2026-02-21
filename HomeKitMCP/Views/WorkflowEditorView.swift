@@ -13,6 +13,7 @@ struct WorkflowEditorView: View {
 
     let mode: Mode
     let devices: [DeviceModel]
+    var workflows: [Workflow] = []
     let onSave: (WorkflowDraft) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -27,9 +28,10 @@ struct WorkflowEditorView: View {
     /// does NOT re-render when individual blocks change inside the form.
     @State private var nestedEditState: NestedEditState?
 
-    init(mode: Mode, devices: [DeviceModel], onSave: @escaping (WorkflowDraft) -> Void) {
+    init(mode: Mode, devices: [DeviceModel], workflows: [Workflow] = [], onSave: @escaping (WorkflowDraft) -> Void) {
         self.mode = mode
         self.devices = devices
+        self.workflows = workflows
         self.onSave = onSave
         switch mode {
         case .create:
@@ -48,6 +50,7 @@ struct WorkflowEditorView: View {
                 BlockEditorSection(
                     blocks: $draft.blocks,
                     devices: devices,
+                    workflows: workflows,
                     onRequestNestedEdit: { state in
                         nestedEditState = state
                     }
