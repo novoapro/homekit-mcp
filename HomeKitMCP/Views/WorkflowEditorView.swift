@@ -50,7 +50,7 @@ struct WorkflowEditorView: View {
             Form {
                 detailsSection
                 TriggerEditorSection(triggers: $draft.triggers, devices: devices, onCopy: showCopyToast)
-                ConditionEditorSection(conditions: $draft.conditions, devices: devices, scenes: scenes)
+                ConditionEditorSection(conditionRoot: $draft.conditionRoot, devices: devices, scenes: scenes)
                 BlockEditorSection(
                     blocks: $draft.blocks,
                     devices: devices,

@@ -4,12 +4,17 @@ import AuthenticationServices
 struct AccountSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var appleSignInService: AppleSignInService
+    @ObservedObject private var cloudBackupService: CloudBackupService
 
     @State private var showingSignOutConfirmation = false
+    @State private var showingCloudBackupSuccess = false
+    @State private var showingBackupError = false
+    @State private var backupErrorMessage = ""
 
     init(viewModel: SettingsViewModel) {
         self.viewModel = viewModel
         self.appleSignInService = viewModel.appleSignInService
+        self.cloudBackupService = viewModel.cloudBackupService
     }
 
     var body: some View {
@@ -71,6 +76,55 @@ struct AccountSettingsView: View {
                     Text("Sign in with Apple to enable iCloud backup and restore.")
                 }
             }
+
+            // iCloud Backup section (only when signed in)
+            if appleSignInService.isSignedIn {
+                Section {
+                    Button {
+                        Task {
+                            do {
+                                try await cloudBackupService.saveToCloud()
+                                showingCloudBackupSuccess = true
+                            } catch {
+                                backupErrorMessage = error.localizedDescription
+                                showingBackupError = true
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Label("Back Up to iCloud", systemImage: "icloud.and.arrow.up")
+                            Spacer()
+                            if cloudBackupService.isSyncing {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                    }
+                    .disabled(cloudBackupService.isSyncing)
+
+                    Toggle("Auto-Backup to iCloud", isOn: Binding(
+                        get: { cloudBackupService.autoBackupEnabled },
+                        set: { cloudBackupService.autoBackupEnabled = $0 }
+                    ))
+
+                    if let lastDate = cloudBackupService.lastCloudBackupDate {
+                        LabeledContent("Last Cloud Backup") {
+                            Text(lastDate, format: .dateTime.month().day().hour().minute())
+                                .foregroundColor(Theme.Text.secondary)
+                        }
+                    }
+
+                    NavigationLink {
+                        CloudBackupListView(cloudBackupService: cloudBackupService)
+                    } label: {
+                        Label("Manage Cloud Backups...", systemImage: "icloud")
+                    }
+                } header: {
+                    Label("iCloud Backup", systemImage: "icloud")
+                } footer: {
+                    Text("Backups include settings, workflows, device configurations, and API keys.")
+                }
+            }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
@@ -83,6 +137,16 @@ struct AccountSettingsView: View {
             }
         } message: {
             Text("You will no longer be able to back up to or restore from iCloud until you sign in again.")
+        }
+        .alert("Cloud Backup Complete", isPresented: $showingCloudBackupSuccess) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Your data has been backed up to iCloud.")
+        }
+        .alert("Error", isPresented: $showingBackupError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(backupErrorMessage)
         }
     }
 

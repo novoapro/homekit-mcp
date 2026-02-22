@@ -444,43 +444,12 @@ private struct ConditionalEditor: View {
     }
 
     var body: some View {
-        Picker("Condition Type", selection: draft.conditionKind) {
-            ForEach(FlowConditionType.allCases) { type in
-                Label(type.displayName, systemImage: type.icon).tag(type)
-            }
-        }
-        .pickerStyle(.segmented)
-
-        switch draft.wrappedValue.conditionKind {
-        case .deviceState:
-            DeviceCharacteristicPicker(
-                devices: devices,
-                selectedDeviceId: draft.conditionDeviceId,
-                selectedServiceId: draft.conditionServiceId,
-                selectedCharacteristicType: draft.conditionCharacteristicType
-            )
-
-            ComparisonValueRow(
-                comparisonType: draft.comparisonType,
-                value: draft.comparisonValue,
-                characteristicType: draft.wrappedValue.conditionCharacteristicType,
-                devices: devices,
-                deviceId: draft.wrappedValue.conditionDeviceId
-            )
-        case .sceneActive:
-            Picker("Scene", selection: draft.conditionSceneId) {
-                Text("Select scene…").tag("")
-                ForEach(scenes) { scene in
-                    Text(scene.name).tag(scene.id)
-                }
-            }
-
-            Picker("Check", selection: draft.conditionSceneIsActive) {
-                Text("Is Active").tag(true)
-                Text("Is Not Active").tag(false)
-            }
-            .pickerStyle(.segmented)
-        }
+        ConditionGroupEditor(
+            group: draft.conditionRoot,
+            devices: devices,
+            scenes: scenes,
+            depth: 0
+        )
 
         if allowNesting {
             nestedBlockButtons
@@ -603,43 +572,12 @@ private struct RepeatWhileEditor: View {
     }
 
     var body: some View {
-        Picker("Condition Type", selection: draft.conditionKind) {
-            ForEach(FlowConditionType.allCases) { type in
-                Label(type.displayName, systemImage: type.icon).tag(type)
-            }
-        }
-        .pickerStyle(.segmented)
-
-        switch draft.wrappedValue.conditionKind {
-        case .deviceState:
-            DeviceCharacteristicPicker(
-                devices: devices,
-                selectedDeviceId: draft.conditionDeviceId,
-                selectedServiceId: draft.conditionServiceId,
-                selectedCharacteristicType: draft.conditionCharacteristicType
-            )
-
-            ComparisonValueRow(
-                comparisonType: draft.comparisonType,
-                value: draft.comparisonValue,
-                characteristicType: draft.wrappedValue.conditionCharacteristicType,
-                devices: devices,
-                deviceId: draft.wrappedValue.conditionDeviceId
-            )
-        case .sceneActive:
-            Picker("Scene", selection: draft.conditionSceneId) {
-                Text("Select scene…").tag("")
-                ForEach(scenes) { scene in
-                    Text(scene.name).tag(scene.id)
-                }
-            }
-
-            Picker("Check", selection: draft.conditionSceneIsActive) {
-                Text("Is Active").tag(true)
-                Text("Is Not Active").tag(false)
-            }
-            .pickerStyle(.segmented)
-        }
+        ConditionGroupEditor(
+            group: draft.conditionRoot,
+            devices: devices,
+            scenes: scenes,
+            depth: 0
+        )
 
         Stepper("Max Iterations: \(draft.wrappedValue.maxIterations)", value: draft.maxIterations, in: 1...10000)
 

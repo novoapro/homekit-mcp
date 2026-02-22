@@ -531,14 +531,36 @@ private struct WorkflowBuilderConditionRow: View {
                     .fontWeight(.medium)
             }
         case .and(let conditions):
-            Text("AND: \(conditions.count) conditions")
-                .font(.subheadline)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("ALL of (\(conditions.count))")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+                ForEach(Array(conditions.enumerated()), id: \.offset) { _, child in
+                    WorkflowBuilderConditionRow(condition: child, devices: devices, scenes: scenes)
+                        .padding(.leading, 12)
+                }
+            }
         case .or(let conditions):
-            Text("OR: \(conditions.count) conditions")
-                .font(.subheadline)
-        case .not:
-            Text("NOT condition")
-                .font(.subheadline)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("ANY of (\(conditions.count))")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+                ForEach(Array(conditions.enumerated()), id: \.offset) { _, child in
+                    WorkflowBuilderConditionRow(condition: child, devices: devices, scenes: scenes)
+                        .padding(.leading, 12)
+                }
+            }
+        case .not(let inner):
+            VStack(alignment: .leading, spacing: 4) {
+                Text("NOT")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.red)
+                WorkflowBuilderConditionRow(condition: inner, devices: devices, scenes: scenes)
+                    .padding(.leading, 12)
+            }
         }
     }
 }

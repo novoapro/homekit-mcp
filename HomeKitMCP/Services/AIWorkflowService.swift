@@ -555,6 +555,14 @@ actor AIWorkflowService {
         executeWorkflow modes: "inline" (wait for it), "parallel" (fire and continue), "delegate" (fire and stop this workflow).
         delayBetweenSeconds is optional on repeat and repeatWhile blocks.
 
+        ### Compound conditions in conditional and repeatWhile blocks
+        The "condition" field in conditional and repeatWhile blocks accepts compound conditions \
+        using the same format as guard conditions: {"type":"and","conditions":[...]}, \
+        {"type":"or","conditions":[...]}, {"type":"not","condition":{...}}. These can be nested \
+        to any depth. For example, a conditional block could use \
+        {"type":"and","conditions":[{"type":"deviceState",...},{"type":"sunEvent",...}]} to check \
+        multiple conditions together.
+
         ### waitForState condition format
         The "condition" in waitForState uses ComparisonOperator: "equals", "notEquals", \
         "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual" with a "value" field. \

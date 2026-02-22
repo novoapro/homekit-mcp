@@ -8,7 +8,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
     private let loggingService: LoggingService
     private let executionLogService: WorkflowExecutionLogService
     private let storage: StorageService
-    private let conditionEvaluator: ConditionEvaluator
+    private var conditionEvaluator: ConditionEvaluator
     private var evaluators: [TriggerEvaluator] = []
 
     private var runningTasks: [UUID: Task<Void, Never>] = [:]
@@ -64,7 +64,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         self.loggingService = loggingService
         self.executionLogService = executionLogService
         self.storage = storage
-        self.conditionEvaluator = conditionEvaluator ?? ConditionEvaluator(homeKitManager: homeKitManager, storage: storage)
+        self.conditionEvaluator = conditionEvaluator ?? ConditionEvaluator(homeKitManager: homeKitManager, storage: storage, loggingService: loggingService)
     }
 
     /// Wire up the one-directional subscription to HomeKitManager's state changes.
@@ -436,6 +436,10 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         // Log immediately as running so it appears in the UI
         await executionLogService.log(execLog)
 
+        // Set workflow context for orphan logging
+        conditionEvaluator.workflowId = workflow.id
+        conditionEvaluator.workflowName = workflow.name
+
         // Evaluate guard conditions
         if let conditions = workflow.conditions, !conditions.isEmpty {
             let (allPassed, condResults) = await conditionEvaluator.evaluateAll(conditions)
@@ -660,7 +664,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
     // MARK: - Action Execution
 
-    private func executeAction(_ action: WorkflowAction, index: Int, context _: ExecutionContext, onUpdate: @escaping (BlockResult) async -> Void) async -> BlockResult {
+    private func executeAction(_ action: WorkflowAction, index: Int, context: ExecutionContext, onUpdate: @escaping (BlockResult) async -> Void) async -> BlockResult {
         let actionName: String? = {
             switch action {
             case let .controlDevice(a): return a.name
@@ -678,7 +682,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             try await withTimeout(seconds: blockTimeout) {
                 switch action {
                 case let .controlDevice(a):
-                    try await self.executeControlDevice(a)
+                    try await self.executeControlDevice(a, workflowId: context.workflow.id, workflowName: context.workflow.name)
                     let deviceName = await self.resolveDeviceName(a.deviceId)
                     let charName = CharacteristicTypes.displayName(for: a.characteristicType)
                     result.detail = "Set \(charName) to \(a.value.value) on \(deviceName)"
@@ -709,7 +713,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         return result
     }
 
-    private func executeControlDevice(_ action: ControlDeviceAction) async throws {
+    private func executeControlDevice(_ action: ControlDeviceAction, workflowId: UUID, workflowName: String) async throws {
         let resolvedType = CharacteristicTypes.characteristicType(forName: action.characteristicType) ?? action.characteristicType
 
         // Validate value against characteristic metadata
@@ -719,6 +723,14 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             if let characteristic = targetServices.flatMap(\.characteristics).first(where: { $0.type == resolvedType }) {
                 try CharacteristicValidator.validate(value: action.value.value, against: characteristic)
             }
+        } else {
+            await logOrphan(
+                workflowId: workflowId,
+                workflowName: workflowName,
+                location: "controlDevice block '\(action.name ?? "unnamed")'",
+                deviceName: action.deviceName,
+                roomName: action.roomName
+            )
         }
 
         try await homeKitManager.updateDevice(
@@ -843,7 +855,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 result.detail = "Waiting for \(waitDeviceName) \(waitCharName)..."
                 await onUpdate(result)
 
-                let matched = try await waitForState(block) { [weak self] elapsedSeconds in
+                let matched = try await waitForState(block, workflowId: context.workflow.id, workflowName: context.workflow.name) { [weak self] elapsedSeconds in
                     // Update parent with elapsed time while waiting
                     result.detail = "Waiting for \(waitDeviceName) \(waitCharName)... (\(String(format: "%.1f", elapsedSeconds))s)"
                     await onUpdate(result)
@@ -1134,9 +1146,34 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         return workflowId.uuidString
     }
 
+    // MARK: - Orphan Logging
+
+    private func logOrphan(workflowId: UUID, workflowName: String, location: String, deviceName: String?, roomName: String?) async {
+        let deviceDesc = deviceName.map { name in
+            roomName.map { "\(name) (\($0))" } ?? name
+        } ?? "unknown device"
+
+        let errorDetails = "\(location): device '\(deviceDesc)' not found — likely orphaned after iCloud restore"
+
+        AppLogger.workflow.warning("[\(workflowName)] Orphaned reference in \(location): \(deviceDesc)")
+
+        let logEntry = StateChangeLog(
+            id: UUID(),
+            timestamp: Date(),
+            deviceId: workflowId.uuidString,
+            deviceName: workflowName,
+            characteristicType: "orphan-detection",
+            oldValue: nil,
+            newValue: nil,
+            category: .workflowError,
+            errorDetails: errorDetails
+        )
+        await loggingService.logEntry(logEntry)
+    }
+
     // MARK: - WaitForState
 
-    private func waitForState(_ block: WaitForStateBlock, onProgress: ((Double) async -> Void)? = nil) async throws -> Bool {
+    private func waitForState(_ block: WaitForStateBlock, workflowId: UUID, workflowName: String, onProgress: ((Double) async -> Void)? = nil) async throws -> Bool {
         let resolvedType = CharacteristicTypes.characteristicType(forName: block.characteristicType) ?? block.characteristicType
         let key = "\(block.deviceId):\(resolvedType)"
 
@@ -1147,6 +1184,14 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             if ConditionEvaluator.compare(currentValue, using: block.condition) {
                 return true
             }
+        } else {
+            await logOrphan(
+                workflowId: workflowId,
+                workflowName: workflowName,
+                location: "waitForState block '\(block.name ?? "unnamed")'",
+                deviceName: block.deviceName,
+                roomName: block.roomName
+            )
         }
 
         // Start time for progress tracking

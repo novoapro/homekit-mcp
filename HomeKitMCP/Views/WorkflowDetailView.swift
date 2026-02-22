@@ -126,12 +126,12 @@ struct WorkflowDetailView: View {
     private func conditionsSection(_ conditions: [WorkflowCondition]) -> some View {
         Section {
             ForEach(Array(conditions.enumerated()), id: \.offset) { _, condition in
-                WorkflowConditionRow(condition: condition, devices: devices, scenes: scenes)
+                WorkflowConditionRow(condition: condition, devices: devices, scenes: scenes, depth: 0)
             }
         } header: {
             Text("Guard Conditions")
         } footer: {
-            Text("All conditions must be true for the workflow to proceed.")
+            Text("Conditions are evaluated before the workflow proceeds.")
         }
         .listRowBackground(Theme.contentBackground)
     }
@@ -362,8 +362,25 @@ private struct WorkflowConditionRow: View {
     let condition: WorkflowCondition
     let devices: [DeviceModel]
     var scenes: [SceneModel] = []
+    var depth: Int = 0
 
     var body: some View {
+        HStack(spacing: 0) {
+            if depth > 0 {
+                ForEach(0..<depth, id: \.self) { _ in
+                    Rectangle()
+                        .fill(Theme.Tint.secondary.opacity(0.3))
+                        .frame(width: 2)
+                        .padding(.trailing, 8)
+                }
+            }
+
+            conditionContent
+        }
+    }
+
+    @ViewBuilder
+    private var conditionContent: some View {
         switch condition {
         case let .deviceState(c):
             VStack(alignment: .leading, spacing: 2) {
@@ -382,15 +399,6 @@ private struct WorkflowConditionRow: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
             }
-        case let .and(conditions):
-            Text("AND: \(conditions.count) conditions")
-                .font(.subheadline)
-        case let .or(conditions):
-            Text("OR: \(conditions.count) conditions")
-                .font(.subheadline)
-        case .not:
-            Text("NOT condition")
-                .font(.subheadline)
         case let .sceneActive(c):
             HStack(spacing: 6) {
                 Image(systemName: "play.rectangle.fill")
@@ -399,6 +407,34 @@ private struct WorkflowConditionRow: View {
                 Text("Scene \(c.isActive ? "Active" : "Not Active"): \(sceneName)")
                     .font(.subheadline)
                     .fontWeight(.medium)
+            }
+        case let .and(conditions):
+            VStack(alignment: .leading, spacing: 4) {
+                Text("ALL of (\(conditions.count))")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(Theme.Text.secondary)
+                ForEach(Array(conditions.enumerated()), id: \.offset) { _, child in
+                    WorkflowConditionRow(condition: child, devices: devices, scenes: scenes, depth: depth + 1)
+                }
+            }
+        case let .or(conditions):
+            VStack(alignment: .leading, spacing: 4) {
+                Text("ANY of (\(conditions.count))")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(Theme.Text.secondary)
+                ForEach(Array(conditions.enumerated()), id: \.offset) { _, child in
+                    WorkflowConditionRow(condition: child, devices: devices, scenes: scenes, depth: depth + 1)
+                }
+            }
+        case let .not(inner):
+            VStack(alignment: .leading, spacing: 4) {
+                Text("NOT")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.red)
+                WorkflowConditionRow(condition: inner, devices: devices, scenes: scenes, depth: depth + 1)
             }
         }
     }

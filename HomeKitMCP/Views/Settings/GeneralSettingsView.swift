@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
+    @State private var showingResetConfirmation = false
 
     var body: some View {
         Form {
@@ -38,11 +39,29 @@ struct GeneralSettingsView: View {
             } footer: {
                 Text("Periodically reads device states from HomeKit to detect missed callbacks. Logs corrections when actual state differs from cached state.")
             }
+
+            Section {
+                Button("Reset Device Configuration", role: .destructive) {
+                    showingResetConfirmation = true
+                }
+            } header: {
+                Label("Data", systemImage: "externaldrive")
+            } footer: {
+                Text("Resets all per-device MCP visibility and webhook notification toggles to defaults.")
+            }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .background(Theme.mainBackground)
         .navigationTitle("General")
+        .alert("Reset Device Configuration?", isPresented: $showingResetConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset", role: .destructive) {
+                viewModel.resetDeviceConfiguration()
+            }
+        } message: {
+            Text("This will reset all MCP and webhook toggles to their defaults (MCP: on, Webhook: off).")
+        }
     }
 }
 

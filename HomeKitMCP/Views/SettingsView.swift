@@ -116,18 +116,6 @@ struct SettingsView: View {
                         badge: accountBadge
                     )
                 }
-
-                // Backup & Restore
-                NavigationLink {
-                    BackupRestoreSettingsView(viewModel: viewModel)
-                } label: {
-                    settingsRow(
-                        icon: "arrow.clockwise",
-                        iconColor: .green,
-                        title: "Backup & Restore",
-                        badge: nil
-                    )
-                }
             }
 
             Section {

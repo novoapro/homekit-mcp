@@ -5,16 +5,63 @@ import Foundation
 struct ConditionEvaluator {
     private let homeKitManager: HomeKitManager
     private let storage: StorageService?
+    private let loggingService: LoggingService?
 
-    init(homeKitManager: HomeKitManager, storage: StorageService? = nil) {
+    /// Workflow context for orphan logging. Set by the engine before evaluation.
+    var workflowId: UUID?
+    var workflowName: String?
+
+    init(homeKitManager: HomeKitManager, storage: StorageService? = nil, loggingService: LoggingService? = nil) {
         self.homeKitManager = homeKitManager
         self.storage = storage
+        self.loggingService = loggingService
     }
 
-    /// Evaluate a single condition. Returns true if the condition is met.
+    /// Evaluate a single condition. Returns a tree-structured result with sub-results for compound conditions.
     func evaluate(_ condition: WorkflowCondition) async -> ConditionResult {
-        let (passed, description) = await evaluateInternal(condition)
-        return ConditionResult(conditionDescription: description, passed: passed)
+        switch condition {
+        case .and(let conditions):
+            var allPassed = true
+            var subResults: [ConditionResult] = []
+            for c in conditions {
+                let sub = await evaluate(c)
+                subResults.append(sub)
+                if !sub.passed { allPassed = false }
+            }
+            let descriptions = subResults.map(\.conditionDescription)
+            return ConditionResult(
+                conditionDescription: "AND(\(descriptions.joined(separator: ", ")))",
+                passed: allPassed,
+                subResults: subResults,
+                logicOperator: "AND"
+            )
+        case .or(let conditions):
+            var anyPassed = false
+            var subResults: [ConditionResult] = []
+            for c in conditions {
+                let sub = await evaluate(c)
+                subResults.append(sub)
+                if sub.passed { anyPassed = true }
+            }
+            let descriptions = subResults.map(\.conditionDescription)
+            return ConditionResult(
+                conditionDescription: "OR(\(descriptions.joined(separator: ", ")))",
+                passed: anyPassed,
+                subResults: subResults,
+                logicOperator: "OR"
+            )
+        case .not(let inner):
+            let innerResult = await evaluate(inner)
+            return ConditionResult(
+                conditionDescription: "NOT(\(innerResult.conditionDescription))",
+                passed: !innerResult.passed,
+                subResults: [innerResult],
+                logicOperator: "NOT"
+            )
+        default:
+            let (passed, description) = await evaluateLeaf(condition)
+            return ConditionResult(conditionDescription: description, passed: passed)
+        }
     }
 
     /// Evaluate all conditions (AND semantics). Returns individual results and overall pass/fail.
@@ -39,7 +86,8 @@ struct ConditionEvaluator {
 
     // MARK: - Internal
 
-    private func evaluateInternal(_ condition: WorkflowCondition) async -> (Bool, String) {
+    /// Evaluate a leaf condition (deviceState, sunEvent, sceneActive). Compound conditions are handled by `evaluate(_:)`.
+    private func evaluateLeaf(_ condition: WorkflowCondition) async -> (Bool, String) {
         switch condition {
         case .deviceState(let cond):
             return await evaluateDeviceState(cond)
@@ -47,27 +95,9 @@ struct ConditionEvaluator {
             return evaluateSunEvent(cond)
         case .sceneActive(let cond):
             return await evaluateSceneActive(cond)
-        case .and(let conditions):
-            var allPassed = true
-            var descriptions: [String] = []
-            for c in conditions {
-                let (passed, desc) = await evaluateInternal(c)
-                descriptions.append(desc)
-                if !passed { allPassed = false }
-            }
-            return (allPassed, "AND(\(descriptions.joined(separator: ", ")))")
-        case .or(let conditions):
-            var anyPassed = false
-            var descriptions: [String] = []
-            for c in conditions {
-                let (passed, desc) = await evaluateInternal(c)
-                descriptions.append(desc)
-                if passed { anyPassed = true }
-            }
-            return (anyPassed, "OR(\(descriptions.joined(separator: ", ")))")
-        case .not(let condition):
-            let (passed, desc) = await evaluateInternal(condition)
-            return (!passed, "NOT(\(desc))")
+        case .and, .or, .not:
+            // Should not reach here — compound conditions are handled in evaluate(_:)
+            return (false, "Unexpected compound condition in leaf evaluator")
         }
     }
 
@@ -76,7 +106,13 @@ struct ConditionEvaluator {
         let displayName = CharacteristicTypes.displayName(for: resolvedType)
 
         guard let device = await MainActor.run(body: { homeKitManager.getDeviceState(id: condition.deviceId) }) else {
-            return (false, "\(displayName): device not found")
+            await logOrphan(
+                location: "condition",
+                deviceName: condition.deviceName,
+                roomName: condition.roomName,
+                detail: "\(displayName): device not found"
+            )
+            return (false, "\(displayName): device not found — orphaned reference")
         }
 
         let currentValue = findCharacteristicValue(in: device, characteristicType: resolvedType, serviceId: condition.serviceId)
@@ -125,6 +161,12 @@ struct ConditionEvaluator {
         var allMatch = true
         for action in scene.actions {
             guard let device = await MainActor.run(body: { homeKitManager.getDeviceState(id: action.deviceId) }) else {
+                await logOrphan(
+                    location: "scene condition '\(scene.name)'",
+                    deviceName: nil,
+                    roomName: nil,
+                    detail: "device in scene not found"
+                )
                 allMatch = false
                 break
             }
@@ -159,6 +201,33 @@ struct ConditionEvaluator {
             }
         }
         return nil
+    }
+
+    // MARK: - Orphan Logging
+
+    private func logOrphan(location: String, deviceName: String?, roomName: String?, detail: String) async {
+        guard let loggingService, let workflowId, let workflowName else { return }
+
+        let deviceDesc = deviceName.map { name in
+            roomName.map { "\(name) (\($0))" } ?? name
+        } ?? "unknown device"
+
+        let errorDetails = "\(location): device '\(deviceDesc)' not found — likely orphaned after iCloud restore"
+
+        AppLogger.workflow.warning("[\(workflowName)] Orphaned reference in \(location): \(deviceDesc)")
+
+        let logEntry = StateChangeLog(
+            id: UUID(),
+            timestamp: Date(),
+            deviceId: workflowId.uuidString,
+            deviceName: workflowName,
+            characteristicType: "orphan-detection",
+            oldValue: nil,
+            newValue: nil,
+            category: .workflowError,
+            errorDetails: errorDetails
+        )
+        await loggingService.logEntry(logEntry)
     }
 
     // MARK: - Comparison Logic

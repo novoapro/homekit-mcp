@@ -95,6 +95,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 }
             }
             .store(in: &cancellables)
+
+        // One-shot migration: when HomeKit devices first become available, check all
+        // workflows for orphaned device UUIDs and remap them automatically.
+        container.homeKitManager.$cachedDevices
+            .first(where: { !$0.isEmpty })
+            .receive(on: DispatchQueue.global(qos: .utility))
+            .sink { [weak self] devices in
+                guard let self else { return }
+                Task {
+                    let workflows = await self.container.workflowStorageService.getAllWorkflows()
+                    guard !workflows.isEmpty else { return }
+                    let (migrated, totalRemapped, _) = WorkflowMigrationService.migrateAll(workflows, using: devices)
+                    if totalRemapped > 0 {
+                        await self.container.workflowStorageService.replaceAll(workflows: migrated)
+                        AppLogger.workflow.info("Startup migration: remapped \(totalRemapped) device reference(s)")
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func startMCPServerIfEnabled() {

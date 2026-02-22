@@ -10,30 +10,20 @@ class BackupService: ObservableObject, BackupServiceProtocol {
     private let keychainService: KeychainService
     private let configService: DeviceConfigurationService
     private let workflowStorageService: WorkflowStorageService
-
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return encoder
-    }()
-
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }()
+    private let homeKitManager: HomeKitManager
 
     init(
         storage: StorageService,
         keychainService: KeychainService,
         configService: DeviceConfigurationService,
-        workflowStorageService: WorkflowStorageService
+        workflowStorageService: WorkflowStorageService,
+        homeKitManager: HomeKitManager
     ) {
         self.storage = storage
         self.keychainService = keychainService
         self.configService = configService
         self.workflowStorageService = workflowStorageService
+        self.homeKitManager = homeKitManager
     }
 
     // MARK: - Create Backup
@@ -160,52 +150,21 @@ class BackupService: ObservableObject, BackupServiceProtocol {
             storage.webhookURL = nil
         }
 
-        // Restore workflows
+        // Restore workflows, then migrate device UUIDs that may differ on this machine
         await workflowStorageService.replaceAll(workflows: bundle.workflows)
+
+        let currentDevices = homeKitManager.cachedDevices
+        if !currentDevices.isEmpty {
+            let (migratedWorkflows, totalRemapped, _) = WorkflowMigrationService.migrateAll(bundle.workflows, using: currentDevices)
+            if totalRemapped > 0 {
+                await workflowStorageService.replaceAll(workflows: migratedWorkflows)
+            }
+        }
 
         // Restore device config
         await configService.replaceAll(configs: bundle.deviceConfig)
     }
 
-    // MARK: - File Export
-
-    func exportToFile() async throws -> URL {
-        let bundle = try await createBackup()
-        let data = try Self.encoder.encode(bundle)
-
-        let tempDir = FileManager.default.temporaryDirectory
-        let fileName = "HomeKitMCP-Backup-\(Self.dateFormatter.string(from: bundle.createdAt)).homekitmcp"
-        let fileURL = tempDir.appendingPathComponent(fileName)
-        try data.write(to: fileURL, options: .atomic)
-
-        return fileURL
-    }
-
-    // MARK: - File Import
-
-    func importFromFile(url: URL) async throws -> BackupBundle {
-        let accessing = url.startAccessingSecurityScopedResource()
-        defer {
-            if accessing { url.stopAccessingSecurityScopedResource() }
-        }
-
-        let data = try Data(contentsOf: url)
-        do {
-            let bundle = try Self.decoder.decode(BackupBundle.self, from: data)
-            return bundle
-        } catch {
-            lastError = "Invalid backup file: \(error.localizedDescription)"
-            throw BackupError.invalidFormat(error.localizedDescription)
-        }
-    }
-
-    // MARK: - Helpers
-
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd-HHmmss"
-        return f
-    }()
 }
 
 // MARK: - Errors

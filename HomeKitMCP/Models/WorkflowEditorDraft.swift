@@ -101,6 +101,66 @@ enum TriggerDraftType: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - LogicOperator UI Extensions
+
+extension LogicOperator: CaseIterable, Identifiable {
+    static var allCases: [LogicOperator] { [.and, .or] }
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .and: return "AND"
+        case .or: return "OR"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .and: return "&&"
+        case .or: return "||"
+        }
+    }
+}
+
+// MARK: - Condition Group Draft (for compound conditions)
+
+enum ConditionNodeDraft: Identifiable {
+    case leaf(ConditionDraft)
+    case group(ConditionGroupDraft)
+
+    var id: UUID {
+        switch self {
+        case .leaf(let d): return d.id
+        case .group(let d): return d.id
+        }
+    }
+}
+
+struct ConditionGroupDraft: Identifiable {
+    let id: UUID
+    var logicOperator: LogicOperator = .and
+    var isNegated: Bool = false
+    var children: [ConditionNodeDraft] = []
+
+    static func empty(operator op: LogicOperator = .and) -> ConditionGroupDraft {
+        ConditionGroupDraft(id: UUID(), logicOperator: op, isNegated: false, children: [])
+    }
+
+    /// Creates a group pre-populated with one empty device-state leaf condition.
+    static func withOneLeaf(operator op: LogicOperator = .and) -> ConditionGroupDraft {
+        ConditionGroupDraft(id: UUID(), logicOperator: op, isNegated: false, children: [.leaf(.empty())])
+    }
+
+    var leafCount: Int {
+        children.reduce(0) { count, node in
+            switch node {
+            case .leaf: return count + 1
+            case .group(let g): return count + g.leafCount
+            }
+        }
+    }
+}
+
 // MARK: - Top-Level Workflow Draft
 
 struct WorkflowDraft {
@@ -111,7 +171,7 @@ struct WorkflowDraft {
     var continueOnError: Bool
     var retriggerPolicy: ConcurrentExecutionPolicy
     var triggers: [TriggerDraft]
-    var conditions: [ConditionDraft]
+    var conditionRoot: ConditionGroupDraft
     var blocks: [BlockDraft]
 
     static func empty() -> WorkflowDraft {
@@ -123,7 +183,7 @@ struct WorkflowDraft {
             continueOnError: false,
             retriggerPolicy: .ignoreNew,
             triggers: [],
-            conditions: [],
+            conditionRoot: .empty(),
             blocks: []
         )
     }
@@ -300,6 +360,23 @@ extension ConditionDraft {
     }
 }
 
+extension ConditionGroupDraft {
+    func autoDescription(devices: [DeviceModel], scenes: [SceneModel] = []) -> String {
+        let parts: [String] = children.compactMap { node in
+            switch node {
+            case .leaf(let draft):
+                return draft.autoName(devices: devices, scenes: scenes)
+            case .group(let subGroup):
+                let sub = subGroup.autoDescription(devices: devices, scenes: scenes)
+                return sub.isEmpty ? nil : "(\(sub))"
+            }
+        }
+        guard !parts.isEmpty else { return "" }
+        let joined = parts.joined(separator: " \(logicOperator.displayName) ")
+        return isNegated ? "NOT (\(joined))" : joined
+    }
+}
+
 extension BlockDraft {
     func autoName(devices: [DeviceModel], scenes: [SceneModel] = []) -> String {
         switch blockType {
@@ -405,18 +482,8 @@ private extension WaitForStateDraft {
 
 private extension ConditionalDraft {
     func autoName(devices: [DeviceModel], scenes: [SceneModel] = []) -> String {
-        switch conditionKind {
-        case .deviceState:
-            guard !conditionDeviceId.isEmpty else { return "If/Else" }
-            let devName = devices.resolvedName(deviceId: conditionDeviceId, serviceId: conditionServiceId)
-            let charName = conditionCharacteristicType.isEmpty ? "" : CharacteristicTypes.displayName(for: conditionCharacteristicType)
-            return "If \(devName) \(charName) \(comparisonType.displayName) \(comparisonValue)".trimmingCharacters(in: .whitespaces)
-        case .sceneActive:
-            guard !conditionSceneId.isEmpty else { return "If/Else (Scene)" }
-            let scene = scenes.first(where: { $0.id == conditionSceneId })
-            let sceneName = scene?.name ?? conditionSceneId
-            return conditionSceneIsActive ? "If \"\(sceneName)\" active" : "If \"\(sceneName)\" not active"
-        }
+        let desc = conditionRoot.autoDescription(devices: devices, scenes: scenes)
+        return desc.isEmpty ? "If/Else" : "If \(desc)"
     }
 }
 
@@ -428,18 +495,8 @@ private extension RepeatDraft {
 
 private extension RepeatWhileDraft {
     func autoName(devices: [DeviceModel], scenes: [SceneModel] = []) -> String {
-        switch conditionKind {
-        case .deviceState:
-            guard !conditionDeviceId.isEmpty else { return "Repeat While" }
-            let devName = devices.resolvedName(deviceId: conditionDeviceId, serviceId: conditionServiceId)
-            let charName = conditionCharacteristicType.isEmpty ? "" : CharacteristicTypes.displayName(for: conditionCharacteristicType)
-            return "While \(devName) \(charName) \(comparisonType.displayName) \(comparisonValue)".trimmingCharacters(in: .whitespaces)
-        case .sceneActive:
-            guard !conditionSceneId.isEmpty else { return "While (Scene)" }
-            let scene = scenes.first(where: { $0.id == conditionSceneId })
-            let sceneName = scene?.name ?? conditionSceneId
-            return conditionSceneIsActive ? "While \"\(sceneName)\" active" : "While \"\(sceneName)\" not active"
-        }
+        let desc = conditionRoot.autoDescription(devices: devices, scenes: scenes)
+        return desc.isEmpty ? "Repeat While" : "While \(desc)"
     }
 }
 
@@ -719,40 +776,9 @@ struct WaitForStateDraft {
     var timeoutSeconds: Double = 30.0
 }
 
-/// Condition types available inside flow control blocks (If/Else, Repeat While).
-enum FlowConditionType: String, CaseIterable, Identifiable {
-    case deviceState
-    case sceneActive
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .deviceState: return "Device State"
-        case .sceneActive: return "Scene Active"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .deviceState: return "shield.fill"
-        case .sceneActive: return "play.rectangle.fill"
-        }
-    }
-}
-
 struct ConditionalDraft {
     var name: String = ""
-    var conditionKind: FlowConditionType = .deviceState
-    // Device State fields
-    var conditionDeviceId: String = ""
-    var conditionServiceId: String?
-    var conditionCharacteristicType: String = ""
-    var comparisonType: ComparisonType = .equals
-    var comparisonValue: String = ""
-    // Scene Active fields
-    var conditionSceneId: String = ""
-    var conditionSceneIsActive: Bool = true
+    var conditionRoot: ConditionGroupDraft = .withOneLeaf()
     var thenBlocks: [BlockDraft] = []
     var elseBlocks: [BlockDraft] = []
 }
@@ -766,16 +792,7 @@ struct RepeatDraft {
 
 struct RepeatWhileDraft {
     var name: String = ""
-    var conditionKind: FlowConditionType = .deviceState
-    // Device State fields
-    var conditionDeviceId: String = ""
-    var conditionServiceId: String?
-    var conditionCharacteristicType: String = ""
-    var comparisonType: ComparisonType = .equals
-    var comparisonValue: String = ""
-    // Scene Active fields
-    var conditionSceneId: String = ""
-    var conditionSceneIsActive: Bool = true
+    var conditionRoot: ConditionGroupDraft = .withOneLeaf()
     var maxIterations: Int = 100
     var delayBetweenSeconds: Double = 0
     var blocks: [BlockDraft] = []
@@ -885,7 +902,7 @@ extension WorkflowDraft {
         continueOnError = workflow.continueOnError
         retriggerPolicy = workflow.retriggerPolicy
         triggers = workflow.triggers.compactMap { Self.convertTrigger($0) }
-        conditions = (workflow.conditions ?? []).compactMap { Self.convertCondition($0) }
+        conditionRoot = Self.convertConditionTree(workflow.conditions ?? [])
         blocks = workflow.blocks.map { Self.convertBlock($0) }
     }
 
@@ -978,11 +995,46 @@ extension WorkflowDraft {
         }
     }
 
-    private static func convertCondition(_ condition: WorkflowCondition) -> ConditionDraft? {
+    /// Convert a flat list of `WorkflowCondition` into a `ConditionGroupDraft` tree.
+    /// Handles backward-compatible flat lists (implicit AND) and compound conditions.
+    static func convertConditionTree(_ conditions: [WorkflowCondition]) -> ConditionGroupDraft {
+        guard !conditions.isEmpty else { return .empty() }
+
+        // If the workflow stored a single compound condition, use it as the root
+        if conditions.count == 1 {
+            switch conditions[0] {
+            case .and(let children):
+                var root = ConditionGroupDraft(id: UUID(), logicOperator: .and)
+                root.children = children.map { convertConditionNode($0) }
+                return root
+            case .or(let children):
+                var root = ConditionGroupDraft(id: UUID(), logicOperator: .or)
+                root.children = children.map { convertConditionNode($0) }
+                return root
+            case .not(let inner):
+                var root = convertConditionTree([inner])
+                root.isNegated = true
+                return root
+            default:
+                // Single leaf condition
+                var root = ConditionGroupDraft.empty()
+                root.children = [convertConditionNode(conditions[0])]
+                return root
+            }
+        }
+
+        // Multiple conditions at root level = implicit AND (backward compatible)
+        var root = ConditionGroupDraft(id: UUID(), logicOperator: .and)
+        root.children = conditions.map { convertConditionNode($0) }
+        return root
+    }
+
+    /// Convert a single `WorkflowCondition` into a `ConditionNodeDraft`.
+    static func convertConditionNode(_ condition: WorkflowCondition) -> ConditionNodeDraft {
         switch condition {
         case let .deviceState(c):
             let (compType, compValue) = convertComparison(c.comparison)
-            return ConditionDraft(
+            return .leaf(ConditionDraft(
                 id: UUID(),
                 conditionDraftType: .deviceState,
                 deviceId: c.deviceId,
@@ -990,9 +1042,9 @@ extension WorkflowDraft {
                 characteristicType: c.characteristicType,
                 comparisonType: compType,
                 comparisonValue: compValue
-            )
+            ))
         case let .sunEvent(c):
-            return ConditionDraft(
+            return .leaf(ConditionDraft(
                 id: UUID(),
                 conditionDraftType: .sunEvent,
                 deviceId: "",
@@ -1002,9 +1054,9 @@ extension WorkflowDraft {
                 comparisonValue: "",
                 sunEventType: c.event,
                 sunEventComparison: c.comparison
-            )
+            ))
         case let .sceneActive(c):
-            return ConditionDraft(
+            return .leaf(ConditionDraft(
                 id: UUID(),
                 conditionDraftType: .sceneActive,
                 deviceId: "",
@@ -1014,10 +1066,20 @@ extension WorkflowDraft {
                 comparisonValue: "",
                 sceneId: c.sceneId,
                 sceneIsActive: c.isActive
-            )
-        case .and, .or, .not:
-            // Compound conditions not editable in the UI editor
-            return nil
+            ))
+        case .not(let inner):
+            // NOT always maps to a group with isNegated = true
+            var subGroup = convertConditionTree([inner])
+            subGroup.isNegated = true
+            return .group(subGroup)
+        case .and(let children):
+            var group = ConditionGroupDraft(id: UUID(), logicOperator: .and)
+            group.children = children.map { convertConditionNode($0) }
+            return .group(group)
+        case .or(let children):
+            var group = ConditionGroupDraft(id: UUID(), logicOperator: .or)
+            group.children = children.map { convertConditionNode($0) }
+            return .group(group)
         }
     }
 
@@ -1085,27 +1147,7 @@ extension WorkflowDraft {
             )))
         case let .conditional(b):
             var draft = ConditionalDraft(name: b.name ?? "")
-            switch b.condition {
-            case let .deviceState(c):
-                let (compType, compValue) = convertComparison(c.comparison)
-                draft.conditionKind = .deviceState
-                draft.conditionDeviceId = c.deviceId
-                draft.conditionServiceId = c.serviceId
-                draft.conditionCharacteristicType = c.characteristicType
-                draft.comparisonType = compType
-                draft.comparisonValue = compValue
-            case let .sceneActive(c):
-                draft.conditionKind = .sceneActive
-                draft.conditionSceneId = c.sceneId
-                draft.conditionSceneIsActive = c.isActive
-            default:
-                let (devId, svcId, charType, compType, compValue) = extractDeviceCondition(b.condition)
-                draft.conditionDeviceId = devId
-                draft.conditionServiceId = svcId
-                draft.conditionCharacteristicType = charType
-                draft.comparisonType = compType
-                draft.comparisonValue = compValue
-            }
+            draft.conditionRoot = convertConditionTree([b.condition])
             draft.thenBlocks = b.thenBlocks.map { convertBlock($0) }
             draft.elseBlocks = (b.elseBlocks ?? []).map { convertBlock($0) }
             return BlockDraft(id: UUID(), blockType: .conditional(draft))
@@ -1118,27 +1160,7 @@ extension WorkflowDraft {
             )))
         case let .repeatWhile(b):
             var draft = RepeatWhileDraft(name: b.name ?? "")
-            switch b.condition {
-            case let .deviceState(c):
-                let (compType, compValue) = convertComparison(c.comparison)
-                draft.conditionKind = .deviceState
-                draft.conditionDeviceId = c.deviceId
-                draft.conditionServiceId = c.serviceId
-                draft.conditionCharacteristicType = c.characteristicType
-                draft.comparisonType = compType
-                draft.comparisonValue = compValue
-            case let .sceneActive(c):
-                draft.conditionKind = .sceneActive
-                draft.conditionSceneId = c.sceneId
-                draft.conditionSceneIsActive = c.isActive
-            default:
-                let (devId, svcId, charType, compType, compValue) = extractDeviceCondition(b.condition)
-                draft.conditionDeviceId = devId
-                draft.conditionServiceId = svcId
-                draft.conditionCharacteristicType = charType
-                draft.comparisonType = compType
-                draft.comparisonValue = compValue
-            }
+            draft.conditionRoot = convertConditionTree([b.condition])
             draft.maxIterations = b.maxIterations
             draft.delayBetweenSeconds = b.delayBetweenSeconds ?? 0
             draft.blocks = b.blocks.map { convertBlock($0) }
@@ -1164,15 +1186,6 @@ extension WorkflowDraft {
         }
     }
 
-    private static func extractDeviceCondition(_ condition: WorkflowCondition) -> (String, String?, String, ComparisonType, String) {
-        switch condition {
-        case let .deviceState(c):
-            let (compType, compValue) = convertComparison(c.comparison)
-            return (c.deviceId, c.serviceId, c.characteristicType, compType, compValue)
-        default:
-            return ("", nil, "", .equals, "")
-        }
-    }
 }
 
 // MARK: - Device Lookup Helper
@@ -1194,7 +1207,7 @@ extension WorkflowDraft {
             description: description.isEmpty ? nil : description,
             isEnabled: isEnabled,
             triggers: triggers.map { $0.toTrigger(devices: devices) },
-            conditions: conditions.isEmpty ? nil : conditions.map { $0.toCondition(devices: devices) },
+            conditions: conditionRoot.toConditions(devices: devices),
             blocks: blocks.map { $0.toBlock(devices: devices) },
             continueOnError: continueOnError,
             retriggerPolicy: retriggerPolicy,
@@ -1280,10 +1293,11 @@ extension TriggerDraft {
 
 extension ConditionDraft {
     func toCondition(devices: [DeviceModel]) -> WorkflowCondition {
+        let base: WorkflowCondition
         switch conditionDraftType {
         case .deviceState:
             let (devName, devRoom) = lookupDevice(deviceId, in: devices)
-            return .deviceState(DeviceStateCondition(
+            base = .deviceState(DeviceStateCondition(
                 deviceId: deviceId,
                 serviceId: serviceId,
                 characteristicType: characteristicType,
@@ -1292,20 +1306,52 @@ extension ConditionDraft {
                 roomName: devRoom
             ))
         case .sunEvent:
-            return .sunEvent(SunEventCondition(
+            base = .sunEvent(SunEventCondition(
                 event: sunEventType,
                 comparison: sunEventComparison
             ))
         case .sceneActive:
-            return .sceneActive(SceneActiveCondition(
+            base = .sceneActive(SceneActiveCondition(
                 sceneId: sceneId,
                 isActive: sceneIsActive
             ))
         }
+        return base
     }
 
     func toComparison() -> ComparisonOperator {
         comparisonType.toOperator(value: comparisonValue)
+    }
+}
+
+extension ConditionGroupDraft {
+    /// Convert to a single `WorkflowCondition`, or nil if the group is empty.
+    func toCondition(devices: [DeviceModel]) -> WorkflowCondition? {
+        let childConditions: [WorkflowCondition] = children.compactMap { node in
+            switch node {
+            case .leaf(let draft):
+                return draft.toCondition(devices: devices)
+            case .group(let subGroup):
+                return subGroup.toCondition(devices: devices)
+            }
+        }
+
+        guard !childConditions.isEmpty else { return nil }
+
+        let result: WorkflowCondition
+        if childConditions.count == 1 {
+            result = childConditions[0]
+        } else {
+            result = logicOperator == .and ? .and(childConditions) : .or(childConditions)
+        }
+
+        return isNegated ? .not(result) : result
+    }
+
+    /// Convert to the `[WorkflowCondition]?` format used by `Workflow.conditions`.
+    func toConditions(devices: [DeviceModel]) -> [WorkflowCondition]? {
+        guard let condition = toCondition(devices: devices) else { return nil }
+        return [condition]
     }
 }
 
@@ -1366,25 +1412,9 @@ extension BlockDraft {
                 roomName: devRoom
             )))
         case let .conditional(d):
-            let condition: WorkflowCondition = {
-                switch d.conditionKind {
-                case .deviceState:
-                    let (devName, devRoom) = lookupDevice(d.conditionDeviceId, in: devices)
-                    return .deviceState(DeviceStateCondition(
-                        deviceId: d.conditionDeviceId,
-                        serviceId: d.conditionServiceId,
-                        characteristicType: d.conditionCharacteristicType,
-                        comparison: d.comparisonType.toOperator(value: d.comparisonValue),
-                        deviceName: devName,
-                        roomName: devRoom
-                    ))
-                case .sceneActive:
-                    return .sceneActive(SceneActiveCondition(
-                        sceneId: d.conditionSceneId,
-                        isActive: d.conditionSceneIsActive
-                    ))
-                }
-            }()
+            let condition = d.conditionRoot.toCondition(devices: devices) ?? .deviceState(DeviceStateCondition(
+                deviceId: "", characteristicType: "", comparison: .equals(AnyCodable(true))
+            ))
             return .flowControl(.conditional(ConditionalBlock(
                 condition: condition,
                 thenBlocks: d.thenBlocks.map { $0.toBlock(devices: devices) },
@@ -1399,25 +1429,9 @@ extension BlockDraft {
                 name: d.name.isEmpty ? nil : d.name
             )))
         case let .repeatWhile(d):
-            let condition: WorkflowCondition = {
-                switch d.conditionKind {
-                case .deviceState:
-                    let (devName, devRoom) = lookupDevice(d.conditionDeviceId, in: devices)
-                    return .deviceState(DeviceStateCondition(
-                        deviceId: d.conditionDeviceId,
-                        serviceId: d.conditionServiceId,
-                        characteristicType: d.conditionCharacteristicType,
-                        comparison: d.comparisonType.toOperator(value: d.comparisonValue),
-                        deviceName: devName,
-                        roomName: devRoom
-                    ))
-                case .sceneActive:
-                    return .sceneActive(SceneActiveCondition(
-                        sceneId: d.conditionSceneId,
-                        isActive: d.conditionSceneIsActive
-                    ))
-                }
-            }()
+            let condition = d.conditionRoot.toCondition(devices: devices) ?? .deviceState(DeviceStateCondition(
+                deviceId: "", characteristicType: "", comparison: .equals(AnyCodable(true))
+            ))
             return .flowControl(.repeatWhile(RepeatWhileBlock(
                 condition: condition,
                 blocks: d.blocks.map { $0.toBlock(devices: devices) },

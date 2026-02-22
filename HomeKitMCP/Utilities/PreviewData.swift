@@ -372,7 +372,7 @@ enum PreviewData {
         )
         let aiInteractionLogService = AIInteractionLogService()
         let aiWorkflowService = AIWorkflowService(storage: storage, homeKitManager: manager, keychainService: keychainService, interactionLog: aiInteractionLogService)
-        let backupService = BackupService(storage: storage, keychainService: keychainService, configService: configService, workflowStorageService: workflowStorage)
+        let backupService = BackupService(storage: storage, keychainService: keychainService, configService: configService, workflowStorageService: workflowStorage, homeKitManager: manager)
         let cloudBackupService = CloudBackupService(backupService: backupService, storage: storage, workflowStorageService: workflowStorage)
         let appleSignInService = AppleSignInService(keychainService: keychainService)
         return SettingsViewModel(

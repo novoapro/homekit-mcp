@@ -115,13 +115,7 @@ struct WorkflowExecutionLogDetailView: View {
             if let conditions = log.conditionResults, !conditions.isEmpty {
                 Section("Conditions") {
                     ForEach(Array(conditions.enumerated()), id: \.offset) { _, condition in
-                        HStack(spacing: 8) {
-                            Image(systemName: condition.passed ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .font(.subheadline)
-                                .foregroundColor(condition.passed ? Theme.Status.active : Theme.Status.error)
-                            Text(condition.conditionDescription)
-                                .font(.subheadline)
-                        }
+                        conditionResultView(condition, depth: 0)
                     }
                 }
                 .listRowBackground(Theme.contentBackground)
@@ -153,6 +147,47 @@ struct WorkflowExecutionLogDetailView: View {
         .background(Theme.mainBackground)
         .navigationTitle("Execution Log")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Recursive Condition Result View
+
+    private func conditionResultView(_ result: ConditionResult, depth: Int) -> AnyView {
+        AnyView(
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    if depth > 0 {
+                        ForEach(0..<depth, id: \.self) { _ in
+                            Rectangle()
+                                .fill(Theme.Tint.secondary.opacity(0.3))
+                                .frame(width: 2, height: 20)
+                        }
+                    }
+
+                    Image(systemName: result.passed ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .font(.subheadline)
+                        .foregroundColor(result.passed ? Theme.Status.active : Theme.Status.error)
+
+                    if let op = result.logicOperator {
+                        Text(op)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Theme.Tint.secondary.opacity(0.15))
+                            .cornerRadius(3)
+                    }
+
+                    Text(result.subResults != nil ? (result.passed ? "Passed" : "Failed") : result.conditionDescription)
+                        .font(.subheadline)
+                }
+
+                if let subs = result.subResults {
+                    ForEach(Array(subs.enumerated()), id: \.offset) { _, sub in
+                        conditionResultView(sub, depth: depth + 1)
+                    }
+                }
+            }
+        )
     }
 
     // MARK: - Recursive Block View

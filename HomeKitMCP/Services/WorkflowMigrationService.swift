@@ -7,12 +7,21 @@ import Foundation
 /// on device name + room. If exactly one match is found, the ID is updated silently.
 enum WorkflowMigrationService {
 
+    /// A device reference in a workflow that could not be resolved to any known device.
+    struct OrphanedReference {
+        let deviceId: String
+        let deviceName: String?
+        let roomName: String?
+        /// Where in the workflow the orphan was found (e.g. "trigger", "condition", "block").
+        let location: String
+    }
+
     /// Result of a migration attempt on a single workflow.
     struct MigrationResult {
         let workflow: Workflow
         let remappedDevices: Int
         let remappedServices: Int
-        let orphanedDevices: Int  // references that couldn't be resolved
+        let orphanedReferences: [OrphanedReference]
     }
 
     /// Migrate all device/service references in a workflow.
@@ -25,7 +34,7 @@ enum WorkflowMigrationService {
 
         var remappedDevices = 0
         var remappedServices = 0
-        var orphanedDevices = 0
+        var orphanedRefs: [OrphanedReference] = []
 
         // Collect all device references from the workflow
         var idMap: [String: String] = [:]           // oldDeviceId → newDeviceId
@@ -55,13 +64,18 @@ enum WorkflowMigrationService {
                     }
                 }
             } else {
-                orphanedDevices += 1
+                orphanedRefs.append(OrphanedReference(
+                    deviceId: ref.deviceId,
+                    deviceName: ref.contextName,
+                    roomName: ref.contextRoom,
+                    location: ref.location
+                ))
             }
         }
 
         // If nothing needs remapping, return as-is
         if idMap.isEmpty {
-            return MigrationResult(workflow: workflow, remappedDevices: 0, remappedServices: 0, orphanedDevices: orphanedDevices)
+            return MigrationResult(workflow: workflow, remappedDevices: 0, remappedServices: 0, orphanedReferences: orphanedRefs)
         }
 
         // Apply the remapping by encoding → modifying JSON → decoding
@@ -71,20 +85,22 @@ enum WorkflowMigrationService {
             workflow: migratedWorkflow ?? workflow,
             remappedDevices: remappedDevices,
             remappedServices: remappedServices,
-            orphanedDevices: orphanedDevices
+            orphanedReferences: orphanedRefs
         )
     }
 
     // MARK: - Device Reference Collection
 
     /// A lightweight reference to a device used somewhere in a workflow.
-    private struct DeviceRef: Hashable {
+    struct DeviceRef: Hashable {
         let deviceId: String
         let serviceId: String?
         /// Context for matching: the device name if stored alongside the ID.
         let contextName: String?
         /// Context for matching: the room name if stored alongside the ID.
         let contextRoom: String?
+        /// Where in the workflow this reference appears (e.g. "trigger", "condition", "block").
+        let location: String
 
         func hash(into hasher: inout Hasher) {
             hasher.combine(deviceId)
@@ -95,14 +111,14 @@ enum WorkflowMigrationService {
         }
     }
 
-    private static func collectDeviceReferences(from workflow: Workflow) -> Set<DeviceRef> {
+    static func collectDeviceReferences(from workflow: Workflow) -> Set<DeviceRef> {
         var refs = Set<DeviceRef>()
 
         // Triggers
         for trigger in workflow.triggers {
             switch trigger {
             case let .deviceStateChange(t):
-                refs.insert(DeviceRef(deviceId: t.deviceId, serviceId: t.serviceId, contextName: t.deviceName, contextRoom: t.roomName))
+                refs.insert(DeviceRef(deviceId: t.deviceId, serviceId: t.serviceId, contextName: t.deviceName, contextRoom: t.roomName, location: "trigger"))
             case let .compound(c):
                 collectCompoundTriggerRefs(c.triggers, into: &refs)
             default:
@@ -129,7 +145,7 @@ enum WorkflowMigrationService {
         for trigger in triggers {
             switch trigger {
             case let .deviceStateChange(t):
-                refs.insert(DeviceRef(deviceId: t.deviceId, serviceId: t.serviceId, contextName: t.deviceName, contextRoom: t.roomName))
+                refs.insert(DeviceRef(deviceId: t.deviceId, serviceId: t.serviceId, contextName: t.deviceName, contextRoom: t.roomName, location: "trigger"))
             case let .compound(c):
                 collectCompoundTriggerRefs(c.triggers, into: &refs)
             default:
@@ -141,7 +157,7 @@ enum WorkflowMigrationService {
     private static func collectConditionRefs(_ condition: WorkflowCondition, into refs: inout Set<DeviceRef>) {
         switch condition {
         case let .deviceState(c):
-            refs.insert(DeviceRef(deviceId: c.deviceId, serviceId: c.serviceId, contextName: c.deviceName, contextRoom: c.roomName))
+            refs.insert(DeviceRef(deviceId: c.deviceId, serviceId: c.serviceId, contextName: c.deviceName, contextRoom: c.roomName, location: "condition"))
         case let .and(conditions):
             for c in conditions { collectConditionRefs(c, into: &refs) }
         case let .or(conditions):
@@ -158,14 +174,14 @@ enum WorkflowMigrationService {
         case let .action(action):
             switch action {
             case let .controlDevice(a):
-                refs.insert(DeviceRef(deviceId: a.deviceId, serviceId: a.serviceId, contextName: a.deviceName, contextRoom: a.roomName))
+                refs.insert(DeviceRef(deviceId: a.deviceId, serviceId: a.serviceId, contextName: a.deviceName, contextRoom: a.roomName, location: "block"))
             default:
                 break
             }
         case let .flowControl(fc):
             switch fc {
             case let .waitForState(b):
-                refs.insert(DeviceRef(deviceId: b.deviceId, serviceId: b.serviceId, contextName: b.deviceName, contextRoom: b.roomName))
+                refs.insert(DeviceRef(deviceId: b.deviceId, serviceId: b.serviceId, contextName: b.deviceName, contextRoom: b.roomName, location: "block"))
             case let .conditional(b):
                 collectConditionRefs(b.condition, into: &refs)
                 for nested in b.thenBlocks { collectBlockRefs(nested, into: &refs) }
@@ -286,21 +302,29 @@ enum WorkflowMigrationService {
 // MARK: - Batch Migration
 
 extension WorkflowMigrationService {
-    /// Migrate multiple workflows at once. Returns updated workflows and a summary.
-    static func migrateAll(_ workflows: [Workflow], using devices: [DeviceModel]) -> (workflows: [Workflow], totalRemapped: Int) {
+    /// Migrate multiple workflows at once. Returns updated workflows, remapping count, and orphan details.
+    static func migrateAll(_ workflows: [Workflow], using devices: [DeviceModel]) -> (workflows: [Workflow], totalRemapped: Int, orphanedReferences: [String: [OrphanedReference]]) {
         var result: [Workflow] = []
         var totalRemapped = 0
+        var allOrphans: [String: [OrphanedReference]] = [:]  // workflowName → orphans
 
         for workflow in workflows {
             let migration = migrate(workflow, using: devices)
             result.append(migration.workflow)
             totalRemapped += migration.remappedDevices
+            if !migration.orphanedReferences.isEmpty {
+                allOrphans[workflow.name] = migration.orphanedReferences
+            }
         }
 
         if totalRemapped > 0 {
-            AppLogger.general.info("Workflow migration: remapped \(totalRemapped) device reference(s) across \(workflows.count) workflow(s)")
+            AppLogger.workflow.info("Workflow migration: remapped \(totalRemapped) device reference(s) across \(workflows.count) workflow(s)")
+        }
+        if !allOrphans.isEmpty {
+            let totalOrphans = allOrphans.values.map(\.count).reduce(0, +)
+            AppLogger.workflow.warning("Workflow migration: \(totalOrphans) orphaned device reference(s) in \(allOrphans.count) workflow(s) could not be resolved")
         }
 
-        return (result, totalRemapped)
+        return (result, totalRemapped, allOrphans)
     }
 }

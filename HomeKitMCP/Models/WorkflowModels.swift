@@ -1270,6 +1270,8 @@ struct TriggerEvent: Codable {
 struct ConditionResult: Codable {
     let conditionDescription: String
     let passed: Bool
+    var subResults: [ConditionResult]?
+    var logicOperator: String?
 }
 
 struct BlockResult: Identifiable, Codable {

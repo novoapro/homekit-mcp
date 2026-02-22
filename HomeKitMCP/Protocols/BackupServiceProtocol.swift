@@ -9,6 +9,4 @@ protocol BackupServiceProtocol: AnyObject {
 
     func createBackup() async throws -> BackupBundle
     func restoreBackup(_ bundle: BackupBundle) async throws
-    func exportToFile() async throws -> URL
-    func importFromFile(url: URL) async throws -> BackupBundle
 }

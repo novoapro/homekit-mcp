@@ -205,7 +205,12 @@ enum MCPToolDefinitions {
                 retriggerPolicy (string, 'ignoreNew', 'cancelAndRestart', or 'queueAndExecute', default 'ignoreNew'). \
                 Triggers use type 'deviceStateChange' with deviceId, characteristicType, and condition. \
                 Blocks use 'block' discriminator ('action' or 'flowControl') and 'type' for the specific kind. \
-                Action types: controlDevice, webhook, log. Flow control types: delay, waitForState, conditional, repeat, repeatWhile, group.
+                Action types: controlDevice, runScene, webhook, log. \
+                Flow control types: delay, waitForState, conditional, repeat, repeatWhile, group, stop, executeWorkflow. \
+                Conditions support compound operators: \
+                {"type":"and","conditions":[...]}, {"type":"or","conditions":[...]}, {"type":"not","condition":{...}}. \
+                These work in guard conditions, conditional block conditions, and repeatWhile block conditions, \
+                and can be nested to any depth.
                 """,
             "inputSchema": [
                 "type": "object",
@@ -230,7 +235,7 @@ enum MCPToolDefinitions {
                     ],
                     "workflow": [
                         "type": "object",
-                        "description": "Partial or full workflow JSON with fields to update (name, description, triggers, conditions, blocks, continueOnError, isEnabled, retriggerPolicy ('ignoreNew', 'cancelAndRestart', or 'queueAndExecute'))"
+                        "description": "Partial or full workflow JSON with fields to update (name, description, triggers, conditions, blocks, continueOnError, isEnabled, retriggerPolicy ('ignoreNew', 'cancelAndRestart', or 'queueAndExecute')). Conditions support compound operators: {\"type\":\"and\",\"conditions\":[...]}, {\"type\":\"or\",\"conditions\":[...]}, {\"type\":\"not\",\"condition\":{...}} — usable in guard conditions, conditional blocks, and repeatWhile blocks."
                     ]
                 ] as [String: Any],
                 "required": ["workflow_id", "workflow"]
