@@ -429,14 +429,15 @@ class MCPRequestHandler {
                 for service in device.services {
                     // Show service header when the device has multiple services
                     if device.services.count > 1 {
-                        lines.append("  ### \(service.name) (service_id: \(service.id))")
+                        lines.append("  ### \(service.effectiveDisplayName) (service_id: \(service.id))")
                     }
                     for char in service.characteristics {
-                        let name = CharacteristicTypes.displayName(for: char.type)
+                        guard char.isUserFacing else { continue }
+                        let charName = CharacteristicTypes.displayName(for: char.type)
                         let val = char.value.map { CharacteristicTypes.formatValue($0.value, characteristicType: char.type) } ?? "--"
                         let hint = Self.metadataHint(for: char)
                         let indent = device.services.count > 1 ? "      " : "    "
-                        lines.append("\(indent)\(name): \(val)\(hint)")
+                        lines.append("\(indent)\(charName): \(val)\(hint)")
                     }
                 }
             }

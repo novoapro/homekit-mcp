@@ -32,7 +32,7 @@ struct RESTService: Codable {
     static func from(_ service: ServiceModel) -> RESTService {
         RESTService(
             id: service.id,
-            name: service.name,
+            name: service.effectiveDisplayName,
             type: ServiceTypes.displayName(for: service.type),
             characteristics: service.characteristics.map { RESTCharacteristic.from($0) }
         )

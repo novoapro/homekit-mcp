@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E2B3C4D5F6A7B8C9D0E1F2A3 /* AIInteractionLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A2B3C4E5F6A7B8C9D0E1F2 /* AIInteractionLog.swift */; };
+		E2B3C4D5F6A7B8C9D0E1F2A4 /* AIInteractionLogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A2B3C4E5F6A7B8C9D0E1F3 /* AIInteractionLogService.swift */; };
+		E2B3C4D5F6A7B8C9D0E1F2A5 /* AIInteractionLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A2B3C4E5F6A7B8C9D0E1F4 /* AIInteractionLogView.swift */; };
 		05FE7A71EDD2732214277756 /* RESTModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A495D99FE62472ADF3E28B /* RESTModels.swift */; };
 		098F9A8A61792CB5D3FE8199 /* WorkflowRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC265741DFFD69964503BE06 /* WorkflowRow.swift */; };
 		09B94F256DC59A79C27BDDEB /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6B494504436886F8793A98E /* WorkflowModels.swift */; };
@@ -22,6 +25,7 @@
 		3870BEBD1DCA828FB0829618 /* WorkflowExecutionLogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C09E1CB85E5187D2C24A8183 /* WorkflowExecutionLogService.swift */; };
 		3DAD7E895BA3D8FA9D49EEE8 /* Vapor in Frameworks */ = {isa = PBXBuildFile; productRef = 272397878465FB7050B8FE76 /* Vapor */; };
 		3ECA87D79B94B3E1B0634843 /* WorkflowStorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBF546CA72B3A15B4D49F379 /* WorkflowStorageService.swift */; };
+		D23ECF3041CF49169983F72E /* WorkflowMigrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA029518B61146D9B49AB0B8 /* WorkflowMigrationService.swift */; };
 		47BEE9D0CBDF5EED46CAA1EC /* WorkflowEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7764344448C610926DACCBCC /* WorkflowEditorView.swift */; };
 		4A96CD220F6EB5F5FCD64E66 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DEC6F3D579DCC1F32FF60E7 /* Theme.swift */; };
 		54475060D52E744734FF1DA1 /* WorkflowBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F36D48D99BFA9E35B9E383 /* WorkflowBuilderView.swift */; };
@@ -114,6 +118,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		D1A2B3C4E5F6A7B8C9D0E1F2 /* AIInteractionLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInteractionLog.swift; sourceTree = "<group>"; };
+		D1A2B3C4E5F6A7B8C9D0E1F3 /* AIInteractionLogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInteractionLogService.swift; sourceTree = "<group>"; };
+		D1A2B3C4E5F6A7B8C9D0E1F4 /* AIInteractionLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInteractionLogView.swift; sourceTree = "<group>"; };
 		048FBDE0B4A68E50E00A22C9 /* DeviceStateChangeTriggerEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceStateChangeTriggerEvaluator.swift; sourceTree = "<group>"; };
 		05C1DA868F037D1DE48C1FF5 /* HomeKitMCPApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeKitMCPApp.swift; sourceTree = "<group>"; };
 		0AFB57519945EDEE09EC3F8A /* LogViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogViewModel.swift; sourceTree = "<group>"; };
@@ -171,6 +178,7 @@
 		B40D3B40039E20BD2B504DCB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B464E4D9ACFF628B10360AFA /* HomeKitMCP.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HomeKitMCP.entitlements; sourceTree = "<group>"; };
 		BBF546CA72B3A15B4D49F379 /* WorkflowStorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStorageService.swift; sourceTree = "<group>"; };
+		EA029518B61146D9B49AB0B8 /* WorkflowMigrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowMigrationService.swift; sourceTree = "<group>"; };
 		BD6C2347887E05C5A346B0E4 /* ConditionEditorSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConditionEditorSection.swift; sourceTree = "<group>"; };
 		C09E1CB85E5187D2C24A8183 /* WorkflowExecutionLogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowExecutionLogService.swift; sourceTree = "<group>"; };
 		C3A495D99FE62472ADF3E28B /* RESTModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RESTModels.swift; sourceTree = "<group>"; };
@@ -237,6 +245,7 @@
 		3680A7F4DD99DED4B1C222DE /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				D1A2B3C4E5F6A7B8C9D0E1F3 /* AIInteractionLogService.swift */,
 				7DB96C0E817BA1FAEA56BE62 /* AIWorkflowService.swift */,
 				7760FE5637D902D59F614907 /* DeviceConfigurationService.swift */,
 				CA8BFC87681E42A0EF8D3DAF /* HomeKitManager.swift */,
@@ -248,6 +257,7 @@
 				747594DFEFA7DA0580A1D98D /* WorkflowEngine.swift */,
 				C09E1CB85E5187D2C24A8183 /* WorkflowExecutionLogService.swift */,
 				BBF546CA72B3A15B4D49F379 /* WorkflowStorageService.swift */,
+				EA029518B61146D9B49AB0B8 /* WorkflowMigrationService.swift */,
 				96E057104981BCC1E7F537EA /* MCP */,
 				F60C9E6CBECD39729672774E /* Workflows */,
 				5DACEDBAF625BF4BAAF80017 /* BackupService.swift */,
@@ -372,6 +382,7 @@
 		B70AB260DC0C5A31005A32E3 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				D1A2B3C4E5F6A7B8C9D0E1F4 /* AIInteractionLogView.swift */,
 				47D0798E400ADEFA785DCB94 /* DeviceListView.swift */,
 				B3E0E7001560CF7AC8B50C18 /* LogViewerView.swift */,
 				B40D3B40039E20BD2B504DCB /* SettingsView.swift */,
@@ -402,6 +413,7 @@
 		FC43E71FBBEE56228F851CB8 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				D1A2B3C4E5F6A7B8C9D0E1F2 /* AIInteractionLog.swift */,
 				8520B3C8169ADBD675E1136B /* AnyCodable.swift */,
 				A5831ACADF90552245465043 /* DeviceModel.swift */,
 				D80E05BA3017B0C138675049 /* SceneModel.swift */,
@@ -553,6 +565,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E2B3C4D5F6A7B8C9D0E1F2A3 /* AIInteractionLog.swift in Sources */,
+				E2B3C4D5F6A7B8C9D0E1F2A4 /* AIInteractionLogService.swift in Sources */,
+				E2B3C4D5F6A7B8C9D0E1F2A5 /* AIInteractionLogView.swift in Sources */,
 				5AE43961CFE3A9DEE90C7522 /* AIWorkflowService.swift in Sources */,
 				604630A1BF390A991532363A /* AnyCodable.swift in Sources */,
 				E0BEDF233E070FDA10CE289C /* AppDelegate.swift in Sources */,
@@ -617,6 +632,7 @@
 				20ECBAA1CD8BCD384BCF171F /* SceneListView.swift in Sources */,
 				D4F7FA0F9C91025C1A5D4B3D /* SceneRow.swift in Sources */,
 				3ECA87D79B94B3E1B0634843 /* WorkflowStorageService.swift in Sources */,
+				D23ECF3041CF49169983F72E /* WorkflowMigrationService.swift in Sources */,
 				F85B511A3A05E59499338B54 /* WorkflowViewModel.swift in Sources */,
 				BB01CC02DD03EE04FF05AA06 /* DeviceConfigurationServiceProtocol.swift in Sources */,
 				BB01CC02DD03EE04FF05AA07 /* HomeKitManaging.swift in Sources */,

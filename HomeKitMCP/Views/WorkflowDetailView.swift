@@ -111,7 +111,7 @@ struct WorkflowDetailView: View {
     private var triggersSection: some View {
         Section {
             ForEach(Array(workflow.triggers.enumerated()), id: \.offset) { _, trigger in
-                WorkflowTriggerRow(trigger: trigger)
+                WorkflowTriggerRow(trigger: trigger, devices: devices)
             }
         } header: {
             Text("Triggers (\(workflow.triggers.count))")
@@ -126,7 +126,7 @@ struct WorkflowDetailView: View {
     private func conditionsSection(_ conditions: [WorkflowCondition]) -> some View {
         Section {
             ForEach(Array(conditions.enumerated()), id: \.offset) { _, condition in
-                WorkflowConditionRow(condition: condition)
+                WorkflowConditionRow(condition: condition, devices: devices)
             }
         } header: {
             Text("Guard Conditions")
@@ -212,6 +212,7 @@ private struct WorkflowTagsRow: View {
 
 private struct WorkflowTriggerRow: View {
     let trigger: WorkflowTrigger
+    let devices: [DeviceModel]
 
     var body: some View {
         switch trigger {
@@ -225,7 +226,7 @@ private struct WorkflowTriggerRow: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
-                Text("Device: \(t.deviceId)")
+                Text("Device: \(devices.resolvedName(deviceId: t.deviceId, serviceId: t.serviceId))")
                     .font(.caption)
                     .foregroundColor(Theme.Text.secondary)
                 Text("Characteristic: \(CharacteristicTypes.displayName(for: t.characteristicType))")
@@ -359,12 +360,13 @@ private struct WorkflowTriggerRow: View {
 
 private struct WorkflowConditionRow: View {
     let condition: WorkflowCondition
+    let devices: [DeviceModel]
 
     var body: some View {
         switch condition {
         case let .deviceState(c):
             VStack(alignment: .leading, spacing: 2) {
-                Text("Device: \(c.deviceId)")
+                Text("Device: \(devices.resolvedName(deviceId: c.deviceId, serviceId: c.serviceId))")
                     .font(.caption)
                     .foregroundColor(Theme.Text.secondary)
                 Text("\(CharacteristicTypes.displayName(for: c.characteristicType)) \(ConditionEvaluator.comparisonDescription(c.comparison))")
@@ -474,14 +476,10 @@ private struct ActionBlockRow: View {
         }
     }
 
-    private func deviceName(for deviceId: String) -> String {
-        devices.first(where: { $0.id == deviceId })?.name ?? deviceId
-    }
-
     private var actionDetail: String {
         switch action {
         case let .controlDevice(a):
-            return "Set \(deviceName(for: a.deviceId)) \(CharacteristicTypes.displayName(for: a.characteristicType)) = \(a.value.value)"
+            return "Set \(devices.resolvedName(deviceId: a.deviceId, serviceId: a.serviceId)) \(CharacteristicTypes.displayName(for: a.characteristicType)) = \(a.value.value)"
         case let .webhook(a):
             return "\(a.method) \(a.url)"
         case let .log(a):
@@ -572,15 +570,11 @@ private struct FlowControlBlockRow: View {
         }
     }
 
-    private func deviceName(for deviceId: String) -> String {
-        devices.first(where: { $0.id == deviceId })?.name ?? deviceId
-    }
-
     private var flowControlTitle: String {
         switch flowControl {
         case let .delay(b): return b.name ?? "Delay \(b.seconds)s"
         case let .waitForState(b):
-            return b.name ?? "Wait \(deviceName(for: b.deviceId)) \(CharacteristicTypes.displayName(for: b.characteristicType)) \(ConditionEvaluator.comparisonDescription(b.condition))"
+            return b.name ?? "Wait \(devices.resolvedName(deviceId: b.deviceId, serviceId: b.serviceId)) \(CharacteristicTypes.displayName(for: b.characteristicType)) \(ConditionEvaluator.comparisonDescription(b.condition))"
         case let .conditional(b): return b.name ?? "If/Else"
         case let .repeat(b): return b.name ?? "Repeat \(b.count) times"
         case let .repeatWhile(b): return b.name ?? "Repeat while (max \(b.maxIterations))"

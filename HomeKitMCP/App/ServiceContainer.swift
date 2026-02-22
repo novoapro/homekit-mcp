@@ -19,6 +19,7 @@ final class ServiceContainer {
     let configService: DeviceConfigurationService = DeviceConfigurationService()
     let workflowStorageService: WorkflowStorageService = WorkflowStorageService()
     let workflowExecutionLogService: WorkflowExecutionLogService = WorkflowExecutionLogService()
+    let aiInteractionLogService: AIInteractionLogService = AIInteractionLogService()
     let scheduleTriggerManager: ScheduleTriggerManager = ScheduleTriggerManager()
 
     lazy var webhookService: WebhookService = WebhookService(
@@ -45,7 +46,8 @@ final class ServiceContainer {
     lazy var aiWorkflowService: AIWorkflowService = AIWorkflowService(
         storage: storageService,
         homeKitManager: homeKitManager,
-        keychainService: keychainService
+        keychainService: keychainService,
+        interactionLog: aiInteractionLogService
     )
 
     lazy var mcpServer: MCPServer = MCPServer(

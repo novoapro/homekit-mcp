@@ -128,7 +128,7 @@ struct DeviceRow: View {
                                         Image(systemName: serviceIcon(for: service.type))
                                             .font(.caption)
                                             .foregroundColor(categoryColor)
-                                        Text(service.displayName)
+                                        Text(service.effectiveDisplayName)
                                             .font(.caption)
                                             .fontWeight(.bold)
                                             .foregroundColor(Theme.Text.secondary)
@@ -315,9 +315,7 @@ struct DeviceRow: View {
     }
 
     private func shouldDisplay(_ char: CharacteristicModel) -> Bool {
-        let hidden = ["Name", "Is Configured", "Status Active"]
-        let displayName = CharacteristicTypes.displayName(for: char.type)
-        return !hidden.contains(displayName)
+        char.isUserFacing
     }
 
     private var deviceIcon: String {

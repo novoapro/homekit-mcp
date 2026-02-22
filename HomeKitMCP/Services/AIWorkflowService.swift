@@ -160,6 +160,8 @@ enum AIWorkflowError: LocalizedError {
     case apiError(statusCode: Int, message: String)
     case parseError(String)
     case noJSONFound
+    case vagueprompt(String)
+    case modelRefused(String)
 
     var errorDescription: String? {
         switch self {
@@ -173,6 +175,10 @@ enum AIWorkflowError: LocalizedError {
             return "Parse error: \(msg)"
         case .noJSONFound:
             return "The AI response did not contain valid workflow JSON."
+        case .vagueprompt(let msg):
+            return msg
+        case .modelRefused(let msg):
+            return msg
         }
     }
 }
@@ -183,6 +189,7 @@ actor AIWorkflowService {
     private let storage: StorageService
     private let homeKitManager: HomeKitManager
     private let keychainService: KeychainService
+    let interactionLog: AIInteractionLogService
 
     private static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
@@ -190,48 +197,124 @@ actor AIWorkflowService {
         return decoder
     }()
 
-    init(storage: StorageService, homeKitManager: HomeKitManager, keychainService: KeychainService) {
+    init(storage: StorageService, homeKitManager: HomeKitManager, keychainService: KeychainService, interactionLog: AIInteractionLogService) {
         self.storage = storage
         self.homeKitManager = homeKitManager
         self.keychainService = keychainService
+        self.interactionLog = interactionLog
     }
 
     /// Generate a Workflow from a natural language description.
     func generateWorkflow(from description: String) async throws -> Workflow {
         let (client, apiKey, model) = try getClientConfig()
-        let systemPrompt = await buildSystemPrompt()
-        let userMessage = "Create a HomeKit automation workflow for the following:\n\n\(description)"
+        let provider = storage.readAIProvider()
 
-        let response = try await client.complete(systemPrompt: systemPrompt, userMessage: userMessage, apiKey: apiKey, model: model)
-        return try parseWorkflowFromResponse(response)
+        // Validate the prompt references known devices, scenes, or HomeKit concepts
+        try await validatePrompt(description)
+
+        let systemPrompt = buildSystemPrompt()
+        let userMessage = await buildUserMessage(description: "Create a HomeKit automation workflow for the following:\n\n\(description)")
+        let startTime = CFAbsoluteTimeGetCurrent()
+
+        let response: String
+        do {
+            response = try await client.complete(systemPrompt: systemPrompt, userMessage: userMessage, apiKey: apiKey, model: model)
+        } catch {
+            let duration = CFAbsoluteTimeGetCurrent() - startTime
+            await interactionLog.log(AIInteractionLog(
+                id: UUID(), timestamp: Date(),
+                provider: provider.rawValue, model: model,
+                operation: "generate",
+                systemPrompt: systemPrompt, userMessage: userMessage,
+                rawResponse: nil, parsedSuccessfully: false,
+                errorMessage: error.localizedDescription,
+                durationSeconds: duration
+            ))
+            throw error
+        }
+
+        let duration = CFAbsoluteTimeGetCurrent() - startTime
+        do {
+            let workflow = try parseWorkflowFromResponse(response)
+            await interactionLog.log(AIInteractionLog(
+                id: UUID(), timestamp: Date(),
+                provider: provider.rawValue, model: model,
+                operation: "generate",
+                systemPrompt: systemPrompt, userMessage: userMessage,
+                rawResponse: response, parsedSuccessfully: true,
+                errorMessage: nil, durationSeconds: duration
+            ))
+            return workflow
+        } catch {
+            await interactionLog.log(AIInteractionLog(
+                id: UUID(), timestamp: Date(),
+                provider: provider.rawValue, model: model,
+                operation: "generate",
+                systemPrompt: systemPrompt, userMessage: userMessage,
+                rawResponse: response, parsedSuccessfully: false,
+                errorMessage: error.localizedDescription,
+                durationSeconds: duration
+            ))
+            throw error
+        }
     }
 
     /// Refine an existing workflow based on user feedback.
     func refineWorkflow(_ workflow: Workflow, feedback: String) async throws -> Workflow {
         let (client, apiKey, model) = try getClientConfig()
-        let systemPrompt = await buildSystemPrompt()
+        let provider = storage.readAIProvider()
+        let systemPrompt = buildSystemPrompt()
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = .prettyPrinted
         let workflowJSON = String(data: try encoder.encode(workflow), encoding: .utf8) ?? "{}"
 
-        let userMessage = """
-            Here is the current workflow JSON:
+        let userMessage = await buildRefinementMessage(workflowJSON: workflowJSON, feedback: feedback)
 
-            ```json
-            \(workflowJSON)
-            ```
+        let startTime = CFAbsoluteTimeGetCurrent()
 
-            Please modify this workflow based on the following feedback:
+        let response: String
+        do {
+            response = try await client.complete(systemPrompt: systemPrompt, userMessage: userMessage, apiKey: apiKey, model: model)
+        } catch {
+            let duration = CFAbsoluteTimeGetCurrent() - startTime
+            await interactionLog.log(AIInteractionLog(
+                id: UUID(), timestamp: Date(),
+                provider: provider.rawValue, model: model,
+                operation: "refine",
+                systemPrompt: systemPrompt, userMessage: userMessage,
+                rawResponse: nil, parsedSuccessfully: false,
+                errorMessage: error.localizedDescription,
+                durationSeconds: duration
+            ))
+            throw error
+        }
 
-            \(feedback)
-
-            Return the complete updated workflow JSON.
-            """
-
-        let response = try await client.complete(systemPrompt: systemPrompt, userMessage: userMessage, apiKey: apiKey, model: model)
-        return try parseWorkflowFromResponse(response)
+        let duration = CFAbsoluteTimeGetCurrent() - startTime
+        do {
+            let refined = try parseWorkflowFromResponse(response)
+            await interactionLog.log(AIInteractionLog(
+                id: UUID(), timestamp: Date(),
+                provider: provider.rawValue, model: model,
+                operation: "refine",
+                systemPrompt: systemPrompt, userMessage: userMessage,
+                rawResponse: response, parsedSuccessfully: true,
+                errorMessage: nil, durationSeconds: duration
+            ))
+            return refined
+        } catch {
+            await interactionLog.log(AIInteractionLog(
+                id: UUID(), timestamp: Date(),
+                provider: provider.rawValue, model: model,
+                operation: "refine",
+                systemPrompt: systemPrompt, userMessage: userMessage,
+                rawResponse: response, parsedSuccessfully: false,
+                errorMessage: error.localizedDescription,
+                durationSeconds: duration
+            ))
+            throw error
+        }
     }
 
     /// Test the AI connection with a simple prompt.
@@ -247,6 +330,69 @@ actor AIWorkflowService {
     }
 
     // MARK: - Private Helpers
+
+    /// Validates that the user's description is specific enough to produce a meaningful workflow.
+    /// Checks that it references at least one known device, room, scene, or common HomeKit keyword.
+    private func validatePrompt(_ description: String) async throws {
+        let (devices, scenes) = await MainActor.run {
+            (homeKitManager.cachedDevices, homeKitManager.cachedScenes)
+        }
+
+        let lowered = description.lowercased()
+
+        // Check if the description references any known device name
+        let matchesDevice = devices.contains { device in
+            lowered.contains(device.name.lowercased())
+        }
+
+        // Check if it references any known room name
+        let matchesRoom = devices.contains { device in
+            if let room = device.roomName {
+                return lowered.contains(room.lowercased())
+            }
+            return false
+        }
+
+        // Check if it references any known scene name
+        let matchesScene = scenes.contains { scene in
+            lowered.contains(scene.name.lowercased())
+        }
+
+        // Check for common HomeKit action/concept keywords
+        let homekitKeywords = [
+            "light", "lights", "lamp", "lamps", "bulb",
+            "switch", "switches", "outlet", "plug",
+            "thermostat", "temperature", "heating", "cooling", "hvac", "climate",
+            "lock", "unlock", "door", "garage", "window", "blind", "blinds", "shade", "shades", "curtain",
+            "fan", "humidifier", "dehumidifier",
+            "sensor", "motion", "occupancy", "contact", "leak", "smoke", "carbon",
+            "camera", "security", "alarm",
+            "speaker", "tv", "television",
+            "brightness", "color", "hue", "saturation",
+            "turn on", "turn off", "set", "dim", "open", "close",
+            "sunrise", "sunset", "schedule", "every day", "every morning", "every night", "every evening",
+            "when", "trigger", "if", "then", "wait", "delay", "after",
+            "scene", "webhook"
+        ]
+        let matchesKeyword = homekitKeywords.contains { keyword in
+            lowered.contains(keyword)
+        }
+
+        if matchesDevice || matchesRoom || matchesScene || matchesKeyword {
+            return // Prompt is specific enough
+        }
+
+        // Build a helpful error message
+        var hint = "Your description doesn't seem to reference any of your HomeKit devices, rooms, or scenes."
+        if !devices.isEmpty {
+            let deviceNames = devices.prefix(5).map { $0.name }
+            let nameList = deviceNames.joined(separator: ", ")
+            hint += " Try mentioning specific devices like: \(nameList)."
+        } else {
+            hint += " No HomeKit devices are currently available — make sure they are paired and reachable."
+        }
+        throw AIWorkflowError.vagueprompt(hint)
+    }
 
     private func getClientConfig() throws -> (LLMClient, String, String) {
         guard storage.readAIEnabled() else {
@@ -271,84 +417,239 @@ actor AIWorkflowService {
         return (client, apiKey, model)
     }
 
-    private func buildSystemPrompt() async -> String {
-        let devices = await MainActor.run { homeKitManager.cachedDevices }
+    // MARK: - Default System Prompt
+
+    static let defaultSystemPrompt: String = """
+        You are a HomeKit automation workflow builder. Given a natural language description, \
+        generate a valid workflow JSON object.
+
+        ## Output Format
+
+        Return ONLY a JSON code block. Do not include any explanation before or after the JSON. \
+        The JSON must be wrapped in ```json ... ``` markers.
+
+        ## CRITICAL: Anti-Hallucination Rules
+
+        - Do NOT invent device IDs, scene IDs, or characteristic types that are not listed in the \
+        available devices/scenes provided with the user message.
+        - If the user's description is ambiguous, too vague, or does not clearly specify what \
+        devices to control and what actions to take, do NOT guess. Instead, return an error JSON \
+        (see Error Format below).
+        - If the user references a device or scene that does not exist in the provided lists, \
+        return an error JSON explaining which device or scene could not be found.
+        - Never fabricate UUIDs or placeholder IDs.
+
+        ## Error Format
+
+        When you cannot confidently generate a workflow, return ONLY a JSON code block with:
+        ```json
+        {
+          "error": true,
+          "message": "Human-readable explanation of what is unclear or missing"
+        }
+        ```
+
+        Examples of when to return an error:
+        - "Turn on the thing" (which device?)
+        - "Make it comfortable" (what action on what device?)
+        - User references "kitchen light" but no such device exists in the available list
+        - The description has no clear trigger or action
+
+        ## Workflow Schema
+
+        ```json
+        {
+          "name": "string (required)",
+          "description": "string (optional)",
+          "isEnabled": true,
+          "continueOnError": false,
+          "retriggerPolicy": "ignoreNew",
+          "triggers": [ ... ],
+          "conditions": [ ... ],
+          "blocks": [ ... ]
+        }
+        ```
+
+        ### retriggerPolicy (optional, defaults to "ignoreNew")
+        Controls what happens if the workflow is triggered while already running:
+        - "ignoreNew": ignore the new trigger
+        - "cancelAndRestart": cancel the running execution and restart
+        - "queueAndExecute": queue the trigger for after the current run
+
+        ## Trigger Types
+
+        ### deviceStateChange
+        ```json
+        {
+          "type": "deviceStateChange",
+          "name": "optional label",
+          "deviceId": "device-uuid",
+          "serviceId": "optional-service-uuid",
+          "characteristicType": "Power",
+          "condition": { "type": "equals", "value": true }
+        }
+        ```
+        Condition types: "changed" (no value needed), "equals", "notEquals", \
+        "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual" (with "value"), \
+        "transitioned" (with required "to" and optional "from").
+
+        ### schedule
+        ```json
+        { "type": "schedule", "name": "optional label", "scheduleType": { ... } }
+        ```
+        Schedule type formats:
+        - Once: `{ "type": "once", "date": "2025-01-15T08:00:00Z" }`
+        - Daily: `{ "type": "daily", "time": { "hour": 7, "minute": 30 } }`
+        - Weekly: `{ "type": "weekly", "time": { "hour": 7, "minute": 30 }, "days": [2, 3, 4, 5, 6] }`
+          (1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday)
+        - Interval: `{ "type": "interval", "seconds": 300 }`
+
+        ### sunEvent
+        ```json
+        { "type": "sunEvent", "name": "optional label", "event": "sunrise", "offsetMinutes": -15 }
+        ```
+        Events: "sunrise", "sunset". offsetMinutes: negative = before, positive = after, 0 = exact.
+
+        ### compound
+        Combines multiple triggers with AND/OR logic:
+        ```json
+        { "type": "compound", "name": "optional label", "operator": "and", "triggers": [ ... ] }
+        ```
+        Note: the JSON key is "operator" (not "logicOperator").
+
+        ### webhook
+        ```json
+        { "type": "webhook", "name": "optional label", "token": "unique-token-string" }
+        ```
+
+        ### workflow
+        Makes this workflow callable from other workflows:
+        ```json
+        { "type": "workflow", "name": "optional label" }
+        ```
+
+        ## Block Types
+
+        ### Action Blocks
+
+        ```json
+        { "block": "action", "type": "controlDevice", "name": "optional", "deviceId": "...", "serviceId": "optional-service-uuid", "characteristicType": "Power", "value": true }
+        { "block": "action", "type": "runScene", "name": "optional", "sceneId": "scene-uuid" }
+        { "block": "action", "type": "webhook", "name": "optional", "url": "https://...", "method": "POST", "headers": {}, "body": {} }
+        { "block": "action", "type": "log", "name": "optional", "message": "Something happened" }
+        ```
+
+        ### Flow Control Blocks
+
+        ```json
+        { "block": "flowControl", "type": "delay", "name": "optional", "seconds": 5.0 }
+        { "block": "flowControl", "type": "waitForState", "name": "optional", "deviceId": "...", "serviceId": "optional", "characteristicType": "Power", "condition": { "type": "equals", "value": true }, "timeoutSeconds": 60 }
+        { "block": "flowControl", "type": "conditional", "name": "optional", "condition": { ... }, "thenBlocks": [ ... ], "elseBlocks": [ ... ] }
+        { "block": "flowControl", "type": "repeat", "name": "optional", "count": 3, "blocks": [ ... ], "delayBetweenSeconds": 1.0 }
+        { "block": "flowControl", "type": "repeatWhile", "name": "optional", "condition": { ... }, "blocks": [ ... ], "maxIterations": 10, "delayBetweenSeconds": 1.0 }
+        { "block": "flowControl", "type": "group", "name": "optional", "label": "Group label", "blocks": [ ... ] }
+        { "block": "flowControl", "type": "stop", "name": "optional", "outcome": "success", "message": "optional reason" }
+        { "block": "flowControl", "type": "executeWorkflow", "name": "optional", "targetWorkflowId": "workflow-uuid", "executionMode": "inline" }
+        ```
+        stop outcomes: "success", "error", "cancelled".
+        executeWorkflow modes: "inline" (wait for it), "parallel" (fire and continue), "delegate" (fire and stop this workflow).
+        delayBetweenSeconds is optional on repeat and repeatWhile blocks.
+
+        ### waitForState condition format
+        The "condition" in waitForState uses ComparisonOperator: "equals", "notEquals", \
+        "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual" with a "value" field. \
+        "changed" and "transitioned" are NOT valid here.
+
+        ## Guard Condition Types (workflow-level "conditions" array)
+
+        Guard conditions are checked before the workflow runs. If any fail, the workflow is skipped.
+
+        ```json
+        { "type": "deviceState", "deviceId": "...", "serviceId": "optional", "characteristicType": "Power", "comparison": { "type": "equals", "value": true } }
+        { "type": "sunEvent", "event": "sunrise", "sunComparison": "after" }
+        { "type": "sceneActive", "sceneId": "scene-uuid", "isActive": true }
+        { "type": "and", "conditions": [ ... ] }
+        { "type": "or", "conditions": [ ... ] }
+        { "type": "not", "condition": { ... } }
+        ```
+        The "comparison" in deviceState uses ComparisonOperator: "equals", "notEquals", \
+        "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual" with "value".
+        sunComparison values: "before", "after".
+
+        ## Trigger Condition Types (for deviceStateChange triggers only)
+        - "changed": fires on any value change (no "value" field needed)
+        - "equals": fires when value equals the specified value
+        - "notEquals": fires when value does not equal the specified value
+        - "transitioned": fires on specific state transition, with required "to" and optional "from"
+        - "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual": numeric comparisons
+
+        ## Important Rules
+        - Use the exact deviceId and sceneId values from the device and scene lists provided with the user message
+        - Use human-readable characteristic names (e.g. "Power", "Brightness", "Current Temperature")
+        - For boolean characteristics like Power, use true/false values
+        - For percentage characteristics like Brightness, use 0-100
+        - Always include at least one trigger and one block
+        - Generate a descriptive name for the workflow
+        - Blocks and triggers can optionally include a "name" field for readability. \
+        Use short, descriptive names like "Turn on lamp", "Wait for door", "Check temperature"
+        - The "serviceId" field is optional; use it only for devices with multiple services of the same type
+        - Do not include "id", "createdAt", "updatedAt", or "metadata" — they are auto-generated
+        """
+
+    // MARK: - Prompt Construction
+
+    private func buildSystemPrompt() -> String {
+        let custom = storage.readAISystemPrompt()
+        return custom.isEmpty ? Self.defaultSystemPrompt : custom
+    }
+
+    private func buildUserMessage(description: String) async -> String {
+        let (devices, scenes) = await MainActor.run {
+            (homeKitManager.cachedDevices, homeKitManager.cachedScenes)
+        }
         let deviceContext = buildDeviceContext(devices)
+        let sceneContext = buildSceneContext(scenes)
 
         return """
-            You are a HomeKit automation workflow builder. Given a natural language description, \
-            generate a valid workflow JSON object.
-
-            ## Output Format
-
-            Return ONLY a JSON code block with the workflow. Do not include any explanation before \
-            or after the JSON. The JSON must be wrapped in ```json ... ``` markers.
-
-            ## Workflow Schema
-
-            ```json
-            {
-              "name": "string (required)",
-              "description": "string (optional)",
-              "isEnabled": true,
-              "continueOnError": false,
-              "triggers": [
-                {
-                  "type": "deviceStateChange",
-                  "name": "optional human-readable name",
-                  "deviceId": "device-uuid",
-                  "characteristicType": "characteristic-name-or-uuid",
-                  "condition": { "type": "equals|notEquals|changed|greaterThan|lessThan|transitioned", "value": ... }
-                }
-              ],
-              "conditions": [
-                {
-                  "type": "deviceState",
-                  "deviceId": "device-uuid",
-                  "characteristicType": "characteristic-name-or-uuid",
-                  "comparison": { "type": "equals|notEquals|greaterThan|lessThan", "value": ... }
-                }
-              ],
-              "blocks": [
-                { "block": "action", "type": "controlDevice", "name": "optional name", "deviceId": "...", "characteristicType": "...", "value": ... },
-                { "block": "action", "type": "webhook", "name": "optional name", "url": "...", "method": "POST" },
-                { "block": "action", "type": "log", "name": "optional name", "message": "..." },
-                { "block": "flowControl", "type": "delay", "name": "optional name", "seconds": 5.0 },
-                { "block": "flowControl", "type": "waitForState", "name": "optional name", "deviceId": "...", "characteristicType": "...", "condition": {...}, "timeoutSeconds": 60 },
-                { "block": "flowControl", "type": "conditional", "name": "optional name", "condition": {...}, "thenBlocks": [...], "elseBlocks": [...] },
-                { "block": "flowControl", "type": "repeat", "name": "optional name", "count": 3, "blocks": [...] },
-                { "block": "flowControl", "type": "repeatWhile", "name": "optional name", "condition": {...}, "blocks": [...], "maxIterations": 10 },
-                { "block": "flowControl", "type": "group", "name": "optional name", "label": "...", "blocks": [...] }
-              ]
-            }
-            ```
-
-            ## Trigger Condition Types
-            - "changed": fires on any value change
-            - "equals": fires when value equals the specified value
-            - "notEquals": fires when value does not equal the specified value
-            - "transitioned": fires on value transition, with optional "from" and required "to" fields
-            - "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual": numeric comparisons
-
-            ## Guard Condition Types
-            - "deviceState": check current device state with a comparison operator
-            - "and": array of sub-conditions, all must be true
-            - "or": array of sub-conditions, any must be true
-            - "not": negate a single condition
-
-            ## Important Rules
-            - Use the exact deviceId values from the device list below
-            - Use human-readable characteristic names (e.g. "Power", "Brightness", "Current Temperature")
-            - For boolean characteristics like Power, use true/false values
-            - For percentage characteristics like Brightness, use 0-100
-            - Always include at least one trigger and one block
-            - Generate a descriptive name for the workflow
-            - Blocks and triggers can optionally include a "name" field for readability in logs and the UI. \
-            Use short, descriptive names like "Turn on lamp", "Wait for door", "Check temperature"
+            \(description)
 
             ## Available Devices
 
             \(deviceContext)
+
+            ## Available Scenes
+
+            \(sceneContext)
+            """
+    }
+
+    private func buildRefinementMessage(workflowJSON: String, feedback: String) async -> String {
+        let (devices, scenes) = await MainActor.run {
+            (homeKitManager.cachedDevices, homeKitManager.cachedScenes)
+        }
+        let deviceContext = buildDeviceContext(devices)
+        let sceneContext = buildSceneContext(scenes)
+
+        return """
+            Here is the current workflow JSON:
+
+            ```json
+            \(workflowJSON)
+            ```
+
+            Please modify this workflow based on the following feedback:
+
+            \(feedback)
+
+            Return the complete updated workflow JSON.
+
+            ## Available Devices
+
+            \(deviceContext)
+
+            ## Available Scenes
+
+            \(sceneContext)
             """
     }
 
@@ -365,12 +666,32 @@ actor AIWorkflowService {
             lines.append("  - ID: \(device.id)")
             lines.append("  - Room: \(room)")
             for service in device.services {
-                lines.append("  - Service: \(service.displayName) (id: \(service.id))")
+                lines.append("  - Service: \(service.effectiveDisplayName) (id: \(service.id))")
                 for char in service.characteristics {
+                    guard char.isUserFacing else { continue }
                     let name = CharacteristicTypes.displayName(for: char.type)
                     let val = char.value.map { "\($0.value)" } ?? "nil"
                     lines.append("    - \(name) (type: \(char.type)) = \(val)")
                 }
+            }
+            lines.append("")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func buildSceneContext(_ scenes: [SceneModel]) -> String {
+        if scenes.isEmpty {
+            return "No scenes available."
+        }
+
+        var lines: [String] = []
+        for scene in scenes {
+            lines.append("### \(scene.name)")
+            lines.append("  - ID: \(scene.id)")
+            lines.append("  - Type: \(scene.type)")
+            for action in scene.actions {
+                let charName = CharacteristicTypes.displayName(for: action.characteristicType)
+                lines.append("  - Action: Set \(charName) = \(action.targetValue.value) on \(action.deviceName)")
             }
             lines.append("")
         }
@@ -397,6 +718,14 @@ actor AIWorkflowService {
             throw AIWorkflowError.parseError("Could not convert response to data")
         }
 
+        // Check for model-refused error pattern before attempting workflow decode
+        if let errorDict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+           let isError = errorDict["error"] as? Bool,
+           isError {
+            let message = errorDict["message"] as? String ?? "The AI could not generate a workflow from your description."
+            throw AIWorkflowError.modelRefused(message)
+        }
+
         // Normalize with defaults (same as MCP create_workflow)
         var dict = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] ?? [:]
 
@@ -410,6 +739,7 @@ actor AIWorkflowService {
             }
         }
         if dict["continueOnError"] == nil { dict["continueOnError"] = false }
+        if dict["retriggerPolicy"] == nil { dict["retriggerPolicy"] = "ignoreNew" }
         if dict["triggers"] == nil { dict["triggers"] = [] as [Any] }
         if dict["blocks"] == nil { dict["blocks"] = [] as [Any] }
         let now = ISO8601DateFormatter().string(from: Date())

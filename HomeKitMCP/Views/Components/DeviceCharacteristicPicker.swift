@@ -63,17 +63,22 @@ struct DeviceCharacteristicPicker: View {
             // Characteristic menu — only when a device is selected
             if let device = selectedDevice {
                 let characteristics = flattenedCharacteristics(for: device)
+                let showServicePrefix = device.services.count > 1
                 Menu {
                     Button("None") {
                         selectedCharacteristicType = ""
                         selectedServiceId = nil
                     }
-                    ForEach(characteristics, id: \.characteristic.type) { item in
+                    ForEach(characteristics) { item in
                         Button {
                             selectedCharacteristicType = item.characteristic.type
                             selectedServiceId = item.serviceId
                         } label: {
-                            Text("\(item.serviceName) › \(CharacteristicTypes.displayName(for: item.characteristic.type))")
+                            if showServicePrefix {
+                                Text("\(item.serviceName) › \(CharacteristicTypes.displayName(for: item.characteristic.type))")
+                            } else {
+                                Text(CharacteristicTypes.displayName(for: item.characteristic.type))
+                            }
                         }
                     }
                 } label: {
@@ -162,18 +167,23 @@ struct DeviceCharacteristicPicker: View {
 
     // MARK: - Characteristic Helpers
 
-    private struct CharacteristicItem {
+    private struct CharacteristicItem: Identifiable {
         let serviceId: String
         let serviceName: String
         let characteristic: CharacteristicModel
+
+        /// Composite identity: service + characteristic type, so the same characteristic type
+        /// on different services (e.g. Power on Switch 1 vs Power on Switch 2) stays unique.
+        var id: String { "\(serviceId):\(characteristic.type)" }
     }
 
     private func flattenedCharacteristics(for device: DeviceModel) -> [CharacteristicItem] {
         device.services.flatMap { service in
-            service.characteristics.map { characteristic in
-                CharacteristicItem(
+            service.characteristics.compactMap { characteristic in
+                guard characteristic.isUserFacing else { return nil }
+                return CharacteristicItem(
                     serviceId: service.id,
-                    serviceName: service.displayName,
+                    serviceName: service.effectiveDisplayName,
                     characteristic: characteristic
                 )
             }

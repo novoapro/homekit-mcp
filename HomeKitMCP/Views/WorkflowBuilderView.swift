@@ -13,6 +13,7 @@ struct WorkflowBuilderView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var showingSaveConfirmation = false
+    @State private var showingDiagnostics = false
 
     private enum BuilderPhase {
         case describe
@@ -40,6 +41,16 @@ struct WorkflowBuilderView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingDiagnostics = true
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingDiagnostics) {
+                AIInteractionLogView(interactionLog: aiWorkflowService.interactionLog)
             }
         }
     }
@@ -109,10 +120,17 @@ struct WorkflowBuilderView: View {
 
                 // Error
                 if let errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .font(.subheadline)
-                        .foregroundColor(.red)
-                        .padding(.horizontal)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.subheadline)
+                            .foregroundColor(.red)
+                        Button("View Diagnostics") {
+                            showingDiagnostics = true
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal)
                 }
 
                 // Generate button
@@ -163,7 +181,7 @@ struct WorkflowBuilderView: View {
                 // Triggers
                 Section {
                     ForEach(Array(workflow.triggers.enumerated()), id: \.offset) { _, trigger in
-                        WorkflowBuilderTriggerRow(trigger: trigger)
+                        WorkflowBuilderTriggerRow(trigger: trigger, devices: devices)
                     }
                 } header: {
                     Text("Triggers (\(workflow.triggers.count))")
@@ -174,7 +192,7 @@ struct WorkflowBuilderView: View {
                 if let conditions = workflow.conditions, !conditions.isEmpty {
                     Section {
                         ForEach(Array(conditions.enumerated()), id: \.offset) { _, condition in
-                            WorkflowBuilderConditionRow(condition: condition)
+                            WorkflowBuilderConditionRow(condition: condition, devices: devices)
                         }
                     } header: {
                         Text("Guard Conditions")
@@ -185,7 +203,7 @@ struct WorkflowBuilderView: View {
                 // Blocks
                 Section {
                     ForEach(Array(workflow.blocks.enumerated()), id: \.offset) { index, block in
-                        WorkflowBuilderBlockRow(block: block, index: index, depth: 0)
+                        WorkflowBuilderBlockRow(block: block, index: index, depth: 0, devices: devices)
                     }
                 } header: {
                     Text("Blocks (\(workflow.blocks.count))")
@@ -223,8 +241,15 @@ struct WorkflowBuilderView: View {
                 // Error
                 if let errorMessage {
                     Section {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundColor(.red)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                                .foregroundColor(.red)
+                            Button("View Diagnostics") {
+                                showingDiagnostics = true
+                            }
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        }
                     }
                     .listRowBackground(Theme.contentBackground)
                 }
@@ -325,6 +350,7 @@ struct WorkflowBuilderView: View {
 
 private struct WorkflowBuilderTriggerRow: View {
     let trigger: WorkflowTrigger
+    let devices: [DeviceModel]
 
     var body: some View {
         switch trigger {
@@ -338,7 +364,7 @@ private struct WorkflowBuilderTriggerRow: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
-                Text("Device: \(t.deviceId)")
+                Text("Device: \(devices.resolvedName(deviceId: t.deviceId, serviceId: t.serviceId))")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Text("Characteristic: \(CharacteristicTypes.displayName(for: t.characteristicType))")
@@ -472,12 +498,13 @@ private struct WorkflowBuilderTriggerRow: View {
 
 private struct WorkflowBuilderConditionRow: View {
     let condition: WorkflowCondition
+    let devices: [DeviceModel]
 
     var body: some View {
         switch condition {
         case .deviceState(let c):
             VStack(alignment: .leading, spacing: 2) {
-                Text("Device: \(c.deviceId)")
+                Text("Device: \(devices.resolvedName(deviceId: c.deviceId, serviceId: c.serviceId))")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Text("\(CharacteristicTypes.displayName(for: c.characteristicType)) \(ConditionEvaluator.comparisonDescription(c.comparison))")
@@ -519,13 +546,14 @@ private struct WorkflowBuilderBlockRow: View {
     let block: WorkflowBlock
     let index: Int
     let depth: Int
+    let devices: [DeviceModel]
 
     var body: some View {
         switch block {
         case .action(let action):
-            BuilderActionBlockRow(action: action, depth: depth)
+            BuilderActionBlockRow(action: action, depth: depth, devices: devices)
         case .flowControl(let flowControl):
-            BuilderFlowControlBlockRow(flowControl: flowControl, depth: depth)
+            BuilderFlowControlBlockRow(flowControl: flowControl, depth: depth, devices: devices)
         }
     }
 }
@@ -533,6 +561,7 @@ private struct WorkflowBuilderBlockRow: View {
 private struct BuilderActionBlockRow: View {
     let action: WorkflowAction
     let depth: Int
+    let devices: [DeviceModel]
 
     var body: some View {
         HStack(spacing: 4) {
@@ -581,7 +610,7 @@ private struct BuilderActionBlockRow: View {
     private var actionDetail: String {
         switch action {
         case .controlDevice(let a):
-            return "Set \(CharacteristicTypes.displayName(for: a.characteristicType)) = \(a.value.value) on \(a.deviceId)"
+            return "Set \(CharacteristicTypes.displayName(for: a.characteristicType)) = \(a.value.value) on \(devices.resolvedName(deviceId: a.deviceId, serviceId: a.serviceId))"
         case .webhook(let a):
             return "\(a.method) \(a.url)"
         case .log(let a):
@@ -595,6 +624,7 @@ private struct BuilderActionBlockRow: View {
 private struct BuilderFlowControlBlockRow: View {
     let flowControl: FlowControlBlock
     let depth: Int
+    let devices: [DeviceModel]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -616,7 +646,7 @@ private struct BuilderFlowControlBlockRow: View {
 
             if let nestedBlocks = flowControlNestedBlocks {
                 ForEach(Array(nestedBlocks.enumerated()), id: \.offset) { i, nested in
-                    WorkflowBuilderBlockRow(block: nested, index: i, depth: depth + 1)
+                    WorkflowBuilderBlockRow(block: nested, index: i, depth: depth + 1, devices: devices)
                 }
             }
         }
@@ -640,7 +670,7 @@ private struct BuilderFlowControlBlockRow: View {
         switch flowControl {
         case .delay(let b): return b.name ?? "Delay \(b.seconds)s"
         case .waitForState(let b):
-            return b.name ?? "Wait for \(CharacteristicTypes.displayName(for: b.characteristicType)) \(ConditionEvaluator.comparisonDescription(b.condition))"
+            return b.name ?? "Wait \(devices.resolvedName(deviceId: b.deviceId, serviceId: b.serviceId)) \(CharacteristicTypes.displayName(for: b.characteristicType)) \(ConditionEvaluator.comparisonDescription(b.condition))"
         case .conditional(let b): return b.name ?? "If/Else"
         case .repeat(let b): return b.name ?? "Repeat \(b.count) times"
         case .repeatWhile(let b): return b.name ?? "Repeat while (max \(b.maxIterations))"

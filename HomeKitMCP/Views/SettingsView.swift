@@ -78,7 +78,10 @@ struct SettingsView: View {
 
                 // AI Assistant
                 NavigationLink {
-                    AIAssistantSettingsView(viewModel: viewModel)
+                    AIAssistantSettingsView(
+                        viewModel: viewModel,
+                        aiWorkflowService: viewModel.aiWorkflowService
+                    )
                 } label: {
                     settingsRow(
                         icon: "sparkles",

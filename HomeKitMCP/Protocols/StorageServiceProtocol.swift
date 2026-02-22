@@ -15,6 +15,7 @@ protocol StorageServiceProtocol: AnyObject {
     var aiEnabled: Bool { get set }
     var aiProvider: AIProvider { get set }
     var aiModelId: String { get set }
+    var aiSystemPrompt: String { get set }
     var mcpServerBindAddress: String { get set }
     var pollingEnabled: Bool { get set }
     var pollingInterval: Int { get set }
@@ -32,6 +33,7 @@ protocol StorageServiceProtocol: AnyObject {
     nonisolated func readAIEnabled() -> Bool
     nonisolated func readAIProvider() -> AIProvider
     nonisolated func readAIModelId() -> String
+    nonisolated func readAISystemPrompt() -> String
     nonisolated func readBindAddress() -> String
     nonisolated func readPollingEnabled() -> Bool
     nonisolated func readPollingInterval() -> Int

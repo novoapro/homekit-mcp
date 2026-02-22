@@ -226,7 +226,7 @@ extension TriggerDraft {
             guard !deviceId.isEmpty else { return "New Trigger" }
             let device = devices.first(where: { $0.id == deviceId })
             let room = device?.roomName ?? ""
-            let devName = device?.name ?? "Unknown"
+            let devName = device?.nameIncludingService(serviceId: serviceId) ?? "Unknown"
             let charName = characteristicType.isEmpty ? "" : CharacteristicTypes.displayName(for: characteristicType)
             let condDesc = conditionType == .changed ? "Changed" : "\(conditionType.displayName) \(conditionValue)"
             let parts = [room, devName, charName, condDesc].filter { !$0.isEmpty }
@@ -284,7 +284,7 @@ extension ConditionDraft {
             guard !deviceId.isEmpty else { return "New Condition" }
             let device = devices.first(where: { $0.id == deviceId })
             let room = device?.roomName ?? ""
-            let devName = device?.name ?? "Unknown"
+            let devName = device?.nameIncludingService(serviceId: serviceId) ?? "Unknown"
             let charName = characteristicType.isEmpty ? "" : CharacteristicTypes.displayName(for: characteristicType)
             let comp = "\(comparisonType.displayName) \(comparisonValue)"
             let parts = [room, devName, charName, comp].filter { !$0.isEmpty }
@@ -355,8 +355,7 @@ extension BlockDraft {
 private extension ControlDeviceDraft {
     func autoName(devices: [DeviceModel]) -> String {
         guard !deviceId.isEmpty else { return "Control Device" }
-        let device = devices.first(where: { $0.id == deviceId })
-        let devName = device?.name ?? "Unknown"
+        let devName = devices.resolvedName(deviceId: deviceId, serviceId: serviceId)
         let charName = characteristicType.isEmpty ? "" : CharacteristicTypes.displayName(for: characteristicType)
         if charName.isEmpty { return "Set \(devName)" }
         let valStr = value.isEmpty ? "" : "= \(value)"
@@ -398,8 +397,7 @@ private extension DelayDraft {
 private extension WaitForStateDraft {
     func autoName(devices: [DeviceModel]) -> String {
         guard !deviceId.isEmpty else { return "Wait for State" }
-        let device = devices.first(where: { $0.id == deviceId })
-        let devName = device?.name ?? "Unknown"
+        let devName = devices.resolvedName(deviceId: deviceId, serviceId: serviceId)
         let charName = characteristicType.isEmpty ? "" : CharacteristicTypes.displayName(for: characteristicType)
         return "Wait \(devName) \(charName) \(comparisonType.displayName) \(comparisonValue)".trimmingCharacters(in: .whitespaces)
     }
@@ -410,8 +408,7 @@ private extension ConditionalDraft {
         switch conditionKind {
         case .deviceState:
             guard !conditionDeviceId.isEmpty else { return "If/Else" }
-            let device = devices.first(where: { $0.id == conditionDeviceId })
-            let devName = device?.name ?? "Unknown"
+            let devName = devices.resolvedName(deviceId: conditionDeviceId, serviceId: conditionServiceId)
             let charName = conditionCharacteristicType.isEmpty ? "" : CharacteristicTypes.displayName(for: conditionCharacteristicType)
             return "If \(devName) \(charName) \(comparisonType.displayName) \(comparisonValue)".trimmingCharacters(in: .whitespaces)
         case .sceneActive:
@@ -434,8 +431,7 @@ private extension RepeatWhileDraft {
         switch conditionKind {
         case .deviceState:
             guard !conditionDeviceId.isEmpty else { return "Repeat While" }
-            let device = devices.first(where: { $0.id == conditionDeviceId })
-            let devName = device?.name ?? "Unknown"
+            let devName = devices.resolvedName(deviceId: conditionDeviceId, serviceId: conditionServiceId)
             let charName = conditionCharacteristicType.isEmpty ? "" : CharacteristicTypes.displayName(for: conditionCharacteristicType)
             return "While \(devName) \(charName) \(comparisonType.displayName) \(comparisonValue)".trimmingCharacters(in: .whitespaces)
         case .sceneActive:

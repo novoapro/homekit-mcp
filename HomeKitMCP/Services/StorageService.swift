@@ -72,6 +72,9 @@ class StorageService: ObservableObject, StorageServiceProtocol {
     @Published var aiModelId: String {
         didSet { defaults.set(aiModelId, forKey: Keys.aiModelId) }
     }
+    @Published var aiSystemPrompt: String {
+        didSet { defaults.set(aiSystemPrompt, forKey: Keys.aiSystemPrompt) }
+    }
     @Published var mcpServerBindAddress: String {
         didSet { defaults.set(mcpServerBindAddress, forKey: Keys.mcpServerBindAddress) }
     }
@@ -118,6 +121,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             Keys.aiEnabled: false,
             Keys.aiProvider: AIProvider.claude.rawValue,
             Keys.aiModelId: "",
+            Keys.aiSystemPrompt: "",
             Keys.mcpServerBindAddress: "127.0.0.1",
             Keys.pollingEnabled: false,
             Keys.pollingInterval: 30,
@@ -145,6 +149,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         self.aiEnabled = defaults.bool(forKey: Keys.aiEnabled)
         self.aiProvider = AIProvider(rawValue: defaults.string(forKey: Keys.aiProvider) ?? "") ?? .claude
         self.aiModelId = defaults.string(forKey: Keys.aiModelId) ?? ""
+        self.aiSystemPrompt = defaults.string(forKey: Keys.aiSystemPrompt) ?? ""
         self.mcpServerBindAddress = defaults.string(forKey: Keys.mcpServerBindAddress) ?? "127.0.0.1"
         self.sunEventLatitude = defaults.double(forKey: Keys.sunEventLatitude)
         self.sunEventLongitude = defaults.double(forKey: Keys.sunEventLongitude)
@@ -193,6 +198,10 @@ class StorageService: ObservableObject, StorageServiceProtocol {
 
     nonisolated func readAIModelId() -> String {
         UserDefaults.standard.string(forKey: Keys.aiModelId) ?? ""
+    }
+
+    nonisolated func readAISystemPrompt() -> String {
+        UserDefaults.standard.string(forKey: Keys.aiSystemPrompt) ?? ""
     }
 
     nonisolated func readBindAddress() -> String {
@@ -252,6 +261,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         static let aiEnabled = "aiEnabled"
         static let aiProvider = "aiProvider"
         static let aiModelId = "aiModelId"
+        static let aiSystemPrompt = "aiSystemPrompt"
         static let mcpServerBindAddress = "mcpServerBindAddress"
         static let sunEventLatitude = "sunEventLatitude"
         static let sunEventLongitude = "sunEventLongitude"

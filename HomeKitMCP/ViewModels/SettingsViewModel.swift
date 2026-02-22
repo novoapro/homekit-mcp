@@ -86,6 +86,9 @@ class SettingsViewModel: ObservableObject {
     @Published var aiModelId: String {
         didSet { storage.aiModelId = aiModelId }
     }
+    @Published var aiSystemPrompt: String {
+        didSet { storage.aiSystemPrompt = aiSystemPrompt }
+    }
     @Published var aiApiKeyConfigured: Bool = false
     @Published var aiTestResult: AITestResult?
     @Published var isTestingAI = false
@@ -136,6 +139,8 @@ class SettingsViewModel: ObservableObject {
         self.aiEnabled = storage.aiEnabled
         self.aiProvider = storage.aiProvider
         self.aiModelId = storage.aiModelId
+        let storedPrompt = storage.aiSystemPrompt
+        self.aiSystemPrompt = storedPrompt.isEmpty ? AIWorkflowService.defaultSystemPrompt : storedPrompt
         self.aiApiKeyConfigured = keychainService.exists(key: KeychainService.Keys.aiApiKey)
         self.apiTokens = keychainService.getAPITokens()
 
@@ -245,6 +250,10 @@ class SettingsViewModel: ObservableObject {
         keychainService.delete(key: KeychainService.Keys.aiApiKey)
         aiApiKeyConfigured = false
         aiTestResult = nil
+    }
+
+    func resetAISystemPrompt() {
+        aiSystemPrompt = AIWorkflowService.defaultSystemPrompt
     }
 
     // MARK: - API Token Methods
