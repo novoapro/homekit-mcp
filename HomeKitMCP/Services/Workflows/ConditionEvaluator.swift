@@ -142,23 +142,27 @@ struct ConditionEvaluator {
 
         switch condition.mode {
         case .beforeSunrise:
-            guard let sunrise else { return (false, "\(modeDesc): cannot compute (polar region)") }
-            let passed = now < sunrise
+            // Night before dawn: between yesterday's sunset and today's sunrise
+            guard let sunrise, let sunset else { return (false, "\(modeDesc): cannot compute (polar region)") }
+            let passed = now < sunrise || now > sunset
             return (passed, "\(modeDesc) = \(passed)")
 
         case .afterSunrise:
-            guard let sunrise else { return (false, "\(modeDesc): cannot compute (polar region)") }
-            let passed = now > sunrise
+            // Daytime: between today's sunrise and sunset
+            guard let sunrise, let sunset else { return (false, "\(modeDesc): cannot compute (polar region)") }
+            let passed = now > sunrise && now < sunset
             return (passed, "\(modeDesc) = \(passed)")
 
         case .beforeSunset:
-            guard let sunset else { return (false, "\(modeDesc): cannot compute (polar region)") }
-            let passed = now < sunset
+            // Daytime (before dusk): between today's sunrise and sunset
+            guard let sunrise, let sunset else { return (false, "\(modeDesc): cannot compute (polar region)") }
+            let passed = now > sunrise && now < sunset
             return (passed, "\(modeDesc) = \(passed)")
 
         case .afterSunset:
-            guard let sunset else { return (false, "\(modeDesc): cannot compute (polar region)") }
-            let passed = now > sunset
+            // Nighttime (after dusk): between today's sunset and tomorrow's sunrise
+            guard let sunrise, let sunset else { return (false, "\(modeDesc): cannot compute (polar region)") }
+            let passed = now < sunrise || now > sunset
             return (passed, "\(modeDesc) = \(passed)")
 
         case .daytime:

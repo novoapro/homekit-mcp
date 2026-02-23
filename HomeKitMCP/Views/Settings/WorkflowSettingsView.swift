@@ -28,7 +28,7 @@ struct WorkflowSettingsView: View {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Button("Lookup") {
+                        Button("Save") {
                             viewModel.geocodeZipCode()
                         }
                         .buttonStyle(.borderless)
@@ -76,7 +76,7 @@ struct WorkflowSettingsView: View {
             } header: {
                 Label("Location", systemImage: "location")
             } footer: {
-                Text("Enter your zip or postal code to enable sunrise/sunset workflow triggers.")
+                Text("Enter your zip or postal code and tap Save. Sunrise and sunset times update automatically on launch and at midnight.")
             }
         }
         .formStyle(.grouped)

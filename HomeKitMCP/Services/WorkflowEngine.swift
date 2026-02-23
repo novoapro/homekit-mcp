@@ -84,6 +84,12 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         evaluators.append(evaluator)
     }
 
+    /// Evaluate a single condition using the engine's condition evaluator.
+    /// Used by the workflow editor's real-time test button.
+    func evaluateCondition(_ condition: WorkflowCondition) async -> ConditionResult {
+        await conditionEvaluator.evaluate(condition)
+    }
+
     private nonisolated func updateBlockResult(_ updated: BlockResult, in results: inout [BlockResult]) -> Bool {
         for i in 0 ..< results.count {
             if results[i].id == updated.id {

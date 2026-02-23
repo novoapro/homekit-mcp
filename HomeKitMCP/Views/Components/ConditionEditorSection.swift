@@ -285,6 +285,10 @@ private struct ConditionLeafEditSheet: View {
     let devices: [DeviceModel]
     var scenes: [SceneModel] = []
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var workflowViewModel: WorkflowViewModel
+
+    @State private var testResult: ConditionResult?
+    @State private var isTesting = false
 
     var body: some View {
         NavigationStack {
@@ -296,6 +300,8 @@ private struct ConditionLeafEditSheet: View {
                 Section("Name") {
                     TextField("Custom name (optional)", text: $condition.name)
                 }
+
+                testSection
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
@@ -307,6 +313,56 @@ private struct ConditionLeafEditSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+
+    // MARK: - Test Section
+
+    private var testSection: some View {
+        Section {
+            if let result = testResult {
+                HStack(spacing: 10) {
+                    Image(systemName: result.passed ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundColor(result.passed ? .green : .red)
+                        .font(.title3)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(result.passed ? "Passed" : "Failed")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(result.passed ? .green : .red)
+                        Text(result.conditionDescription)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(3)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
+            Button {
+                isTesting = true
+                testResult = nil
+                let c = condition.toCondition(devices: devices)
+                Task {
+                    let result = await workflowViewModel.evaluateCondition(c)
+                    isTesting = false
+                    testResult = result
+                }
+            } label: {
+                if isTesting {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Testing…")
+                    }
+                } else {
+                    Label("Test Condition", systemImage: "play.circle.fill")
+                }
+            }
+            .disabled(isTesting)
+        } header: {
+            Text("Test")
+        } footer: {
+            Text("Evaluates the condition right now against current device state and time.")
         }
     }
 

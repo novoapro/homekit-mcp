@@ -158,4 +158,8 @@ class WorkflowViewModel: ObservableObject {
             await storageService.createWorkflow(workflow)
         }
     }
+
+    func evaluateCondition(_ condition: WorkflowCondition) async -> ConditionResult {
+        await workflowEngine.evaluateCondition(condition)
+    }
 }

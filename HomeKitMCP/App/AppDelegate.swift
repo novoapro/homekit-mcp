@@ -29,6 +29,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         setupWorkflowEngine()
         startMCPServerIfEnabled()
         container.appleSignInService.checkExistingCredential()
+        container.settingsViewModel.refreshSunEventCoordinatesIfNeeded()
 
         #if targetEnvironment(macCatalyst)
         setupMenuBar()

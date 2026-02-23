@@ -170,6 +170,8 @@ class SettingsViewModel: ObservableObject {
         mcpServer.$lastError
             .receive(on: DispatchQueue.main)
             .assign(to: &$mcpServerError)
+
+        scheduleMidnightRefresh()
     }
 
     func sendTestWebhook() {
@@ -294,6 +296,30 @@ class SettingsViewModel: ObservableObject {
     }
 
     // MARK: - Geocoding
+
+    /// Geocodes the stored zipcode if coordinates are not yet set.
+    /// Called on app launch to restore location state after fresh install or failed geocoding.
+    func refreshSunEventCoordinatesIfNeeded() {
+        let zip = sunEventZipCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !zip.isEmpty, sunEventLatitude == 0.0, sunEventLongitude == 0.0 else { return }
+        geocodeZipCode()
+    }
+
+    /// Schedules a task that fires at the next midnight to refresh the solar time display,
+    /// then reschedules itself for the following midnight.
+    private func scheduleMidnightRefresh() {
+        let calendar = Calendar.current
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()),
+              let nextMidnight = calendar.date(bySettingHour: 0, minute: 0, second: 0, of: tomorrow) else { return }
+        let interval = nextMidnight.timeIntervalSinceNow
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(max(0, interval) * 1_000_000_000))
+            await MainActor.run {
+                self?.objectWillChange.send()
+                self?.scheduleMidnightRefresh()
+            }
+        }
+    }
 
     func geocodeZipCode() {
         let zip = sunEventZipCode.trimmingCharacters(in: .whitespacesAndNewlines)
