@@ -242,7 +242,7 @@ struct DeviceListView: View {
                         }
                     } label: {
                         Label("Clear", systemImage: "xmark.circle.fill")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundColor(Theme.Status.error)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
@@ -266,7 +266,7 @@ struct DeviceListView: View {
                     return "\(viewModel.selectedRooms.count) Rooms"
                 }()
                 Text(text)
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))
@@ -324,7 +324,7 @@ struct DeviceListView: View {
                     return "\(viewModel.selectedServiceTypes.count) Types"
                 }()
                 Text(text)
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))
@@ -376,7 +376,7 @@ struct DeviceListView: View {
                 Image(systemName: "server.rack")
                     .font(.caption2)
                 Text(isActive ? "API: \(viewModel.mcpFilter.rawValue)" : "API")
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))
@@ -412,7 +412,7 @@ struct DeviceListView: View {
                 Image(systemName: "bell.badge")
                     .font(.caption2)
                 Text(isActive ? "Webhook: \(viewModel.webhookFilter.rawValue)" : "Webhook")
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))

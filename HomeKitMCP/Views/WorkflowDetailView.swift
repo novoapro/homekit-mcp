@@ -234,7 +234,7 @@ private struct WorkflowTagsRow: View {
             Spacer()
             ForEach(tags, id: \.self) { tag in
                 Text(tag)
-                    .font(.caption)
+                    .font(.footnote)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Theme.Tint.main.opacity(0.1))
@@ -257,20 +257,20 @@ private struct WorkflowTriggerRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Image(systemName: "bolt.fill")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Tint.main)
                     Text(t.name ?? "Device State Change")
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
                 Text("Device: \(devices.resolvedName(deviceId: t.deviceId, serviceId: t.serviceId))")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
                 Text("Characteristic: \(CharacteristicTypes.displayName(for: t.characteristicType))")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
                 Text("Condition: \(Self.triggerConditionDescription(t.condition))")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
             }
             .padding(.vertical, 2)
@@ -278,28 +278,28 @@ private struct WorkflowTriggerRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Image(systemName: "arrow.triangle.branch")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Tint.main)
                     Text(t.name ?? "Compound (\(t.logicOperator.rawValue.uppercased()))")
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
                 Text("\(t.triggers.count) sub-triggers")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
             }
         case let .schedule(t):
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Image(systemName: "clock.fill")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Tint.main)
                     Text(t.name ?? "Schedule")
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
                 Text(Self.scheduleDescription(t.scheduleType))
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
             }
             .padding(.vertical, 2)
@@ -307,14 +307,14 @@ private struct WorkflowTriggerRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Image(systemName: "arrow.down.circle.fill")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Tint.main)
                     Text(t.name ?? "Webhook")
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
                 Text("Token: \(String(t.token.prefix(8)))...")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
             }
             .padding(.vertical, 2)
@@ -322,14 +322,14 @@ private struct WorkflowTriggerRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Image(systemName: "arrow.triangle.turn.up.right.diamond")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Tint.main)
                     Text(t.name ?? "Workflow Trigger")
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
                 Text("Callable from other workflows")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
             }
             .padding(.vertical, 2)
@@ -337,7 +337,7 @@ private struct WorkflowTriggerRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Image(systemName: "sunrise.fill")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.orange)
                     Text(t.name ?? "Sunrise/Sunset")
                         .font(.subheadline)
@@ -349,7 +349,7 @@ private struct WorkflowTriggerRow: View {
                     return " \(t.offsetMinutes)min"
                 }()
                 Text("\(t.event.displayName)\(offsetDesc)")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
             }
             .padding(.vertical, 2)
@@ -422,7 +422,7 @@ private struct WorkflowConditionRow: View {
         case let .deviceState(c):
             VStack(alignment: .leading, spacing: 2) {
                 Text("Device: \(devices.resolvedName(deviceId: c.deviceId, serviceId: c.serviceId))")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
                 Text("\(CharacteristicTypes.displayName(for: c.characteristicType)) \(ConditionEvaluator.comparisonDescription(c.comparison))")
                     .font(.subheadline)
@@ -454,7 +454,7 @@ private struct WorkflowConditionRow: View {
         case let .and(conditions):
             VStack(alignment: .leading, spacing: 4) {
                 Text("ALL of (\(conditions.count))")
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.bold)
                     .foregroundColor(Theme.Text.secondary)
                 ForEach(Array(conditions.enumerated()), id: \.offset) { _, child in
@@ -464,7 +464,7 @@ private struct WorkflowConditionRow: View {
         case let .or(conditions):
             VStack(alignment: .leading, spacing: 4) {
                 Text("ANY of (\(conditions.count))")
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.bold)
                     .foregroundColor(Theme.Text.secondary)
                 ForEach(Array(conditions.enumerated()), id: \.offset) { _, child in
@@ -474,7 +474,7 @@ private struct WorkflowConditionRow: View {
         case let .not(inner):
             VStack(alignment: .leading, spacing: 4) {
                 Text("NOT")
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.bold)
                     .foregroundColor(.red)
                 WorkflowConditionRow(condition: inner, devices: devices, scenes: scenes, depth: depth + 1)
@@ -517,14 +517,14 @@ private struct ActionBlockRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Image(systemName: actionIcon)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Tint.main)
                     Text(actionTitle)
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
                 Text(actionDetail)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
                     .lineLimit(2)
             }
@@ -600,7 +600,7 @@ private struct FlowControlBlockRow: View {
             }
 
             Image(systemName: flowControlIcon)
-                .font(.caption)
+                .font(.footnote)
                 .foregroundColor(Theme.Tint.secondary)
             Text(flowControlTitle)
                 .font(.subheadline)
@@ -615,7 +615,7 @@ private struct FlowControlBlockRow: View {
         case let .conditional(b):
             if !b.thenBlocks.isEmpty {
                 Text("Then")
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.semibold)
                     .foregroundColor(Theme.Text.tertiary)
                     .padding(.leading, CGFloat((depth + 1) * 7))
@@ -625,7 +625,7 @@ private struct FlowControlBlockRow: View {
             }
             if let elseBlocks = b.elseBlocks, !elseBlocks.isEmpty {
                 Text("Else")
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.semibold)
                     .foregroundColor(Theme.Text.tertiary)
                     .padding(.leading, CGFloat((depth + 1) * 7))

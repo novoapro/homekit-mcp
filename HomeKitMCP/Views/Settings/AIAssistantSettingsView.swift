@@ -25,12 +25,12 @@ struct AIAssistantSettingsView: View {
                         if viewModel.aiApiKeyConfigured {
                             HStack {
                                 Text(String(repeating: "\u{2022}", count: 32))
-                                    .font(.system(.caption, design: .monospaced))
+                                    .font(.system(.footnote, design: .monospaced))
                                     .foregroundColor(.secondary)
                                 Spacer()
                                 Label("Configured", systemImage: "checkmark.circle.fill")
                                     .foregroundColor(.green)
-                                    .font(.caption)
+                                    .font(.footnote)
                             }
                             .allowsHitTesting(false)
                             Button("Clear Key", role: .destructive) {
@@ -63,7 +63,7 @@ struct AIAssistantSettingsView: View {
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
                         Text("Default: \(viewModel.aiProvider.defaultModel)")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundColor(.secondary)
                     }
 
@@ -89,11 +89,11 @@ struct AIAssistantSettingsView: View {
                             case .success:
                                 Label("Connected", systemImage: "checkmark.circle.fill")
                                     .foregroundColor(.green)
-                                    .font(.caption)
+                                    .font(.footnote)
                             case .failure(let error):
                                 Label(error, systemImage: "xmark.circle.fill")
                                     .foregroundColor(.red)
-                                    .font(.caption)
+                                    .font(.footnote)
                                     .lineLimit(2)
                             }
                         }
@@ -111,11 +111,11 @@ struct AIAssistantSettingsView: View {
                 DisclosureGroup("System Prompt", isExpanded: $showingSystemPrompt) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Customize the instructions sent to the AI model. Edit directly or reset to restore the built-in default.")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundColor(.secondary)
 
                         TextEditor(text: $viewModel.aiSystemPrompt)
-                            .font(.system(.caption, design: .monospaced))
+                            .font(.system(.footnote, design: .monospaced))
                             .frame(minHeight: 200, maxHeight: 400)
                             .padding(4)
                             .background(Theme.contentBackground)
@@ -128,11 +128,11 @@ struct AIAssistantSettingsView: View {
                         HStack {
                             if viewModel.aiSystemPrompt == AIWorkflowService.defaultSystemPrompt {
                                 Label("Using default prompt", systemImage: "checkmark.circle")
-                                    .font(.caption)
+                                    .font(.footnote)
                                     .foregroundColor(.green)
                             } else {
                                 Label("Using custom prompt", systemImage: "pencil.circle")
-                                    .font(.caption)
+                                    .font(.footnote)
                                     .foregroundColor(.orange)
                             }
 
@@ -142,7 +142,7 @@ struct AIAssistantSettingsView: View {
                                 Button("Reset to Default", role: .destructive) {
                                     viewModel.resetAISystemPrompt()
                                 }
-                                .font(.caption)
+                                .font(.footnote)
                                 .buttonStyle(.borderless)
                             }
                         }

@@ -52,7 +52,7 @@ struct BlockEditorRow: View {
             }
 
             Image(systemName: block.blockType.icon)
-                .font(.caption)
+                .font(.footnote)
                 .foregroundColor(block.blockType.isFlowControl ? Theme.Tint.secondary : Theme.Tint.main)
             VStack(alignment: .leading, spacing: 2) {
                 Text(block.blockType.displayName)
@@ -60,12 +60,12 @@ struct BlockEditorRow: View {
                     .fontWeight(.medium)
                 if isEditingName {
                     TextField("Name", text: blockNameBinding)
-                        .font(.caption)
+                        .font(.footnote)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { isEditingName = false }
                 } else {
                     Text(block.displayName(devices: devices, scenes: scenes))
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Text.secondary)
                         .lineLimit(1)
                 }
@@ -310,6 +310,11 @@ private struct WebhookEditor: View {
         )
     }
 
+    private var methodSupportsBody: Bool {
+        let method = draft.wrappedValue.method.uppercased()
+        return method != "GET" && method != "HEAD"
+    }
+
     var body: some View {
         TextField("URL", text: draft.url)
             .keyboardType(.URL)
@@ -322,8 +327,16 @@ private struct WebhookEditor: View {
             Text("PUT").tag("PUT")
             Text("DELETE").tag("DELETE")
         }
+        .onChange(of: draft.wrappedValue.method) { newMethod in
+            let upper = newMethod.uppercased()
+            if upper == "GET" || upper == "HEAD" {
+                draft.wrappedValue.body = ""
+            }
+        }
 
-        TextField("Body (optional)", text: draft.body)
+        if methodSupportsBody {
+            TextField("Body (optional)", text: draft.body)
+        }
     }
 }
 
@@ -476,7 +489,7 @@ private struct ConditionalEditor: View {
             nestedBlockButtons
         } else {
             Text("Then: \(draft.wrappedValue.thenBlocks.count) blocks, Else: \(draft.wrappedValue.elseBlocks.count) blocks")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundColor(Theme.Text.secondary)
         }
     }
@@ -567,7 +580,7 @@ private struct RepeatEditor: View {
             }
         } else {
             Text("\(draft.wrappedValue.blocks.count) nested blocks")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundColor(Theme.Text.secondary)
         }
     }
@@ -625,7 +638,7 @@ private struct RepeatWhileEditor: View {
             }
         } else {
             Text("\(draft.wrappedValue.blocks.count) nested blocks")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundColor(Theme.Text.secondary)
         }
     }
@@ -664,7 +677,7 @@ private struct GroupEditor: View {
             }
         } else {
             Text("\(draft.wrappedValue.blocks.count) nested blocks")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundColor(Theme.Text.secondary)
         }
     }
@@ -747,7 +760,7 @@ private struct ExecuteWorkflowEditor: View {
                 Text("Launch the target workflow and stop this workflow.")
             }
         }
-        .font(.caption)
+        .font(.footnote)
         .foregroundColor(Theme.Text.secondary)
     }
 }

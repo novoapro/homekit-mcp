@@ -229,7 +229,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             return try await self.handleRestGetScene(req)
         }
 
-        protected.on(.POST, "scenes", ":sceneId", "execute") { [weak self] req async throws -> Response in
+        protected.on(.POST, "scenes", ":sceneId", "execute", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
             return try await self.handleRestExecuteScene(req)
@@ -266,7 +266,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             return try await self.handleRestDeleteWorkflow(req)
         }
 
-        protected.on(.POST, "workflows", ":workflowId", "trigger") { [weak self] req async throws -> Response in
+        protected.on(.POST, "workflows", ":workflowId", "trigger", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
             return try await self.handleRestTriggerWorkflow(req)

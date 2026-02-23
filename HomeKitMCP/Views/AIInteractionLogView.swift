@@ -70,28 +70,28 @@ private struct AIInteractionLogRow: View {
                     Text("·")
                         .foregroundColor(.secondary)
                     Text(log.provider)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.secondary)
                     Text(log.model)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
 
                 HStack(spacing: 6) {
                     Text(log.timestamp, style: .relative)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.secondary)
                     Text("·")
                         .foregroundColor(.secondary)
                     Text(String(format: "%.1fs", log.durationSeconds))
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.secondary)
                 }
 
                 if let error = log.errorMessage {
                     Text(error)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.red)
                         .lineLimit(1)
                 }
@@ -166,7 +166,7 @@ struct AIInteractionDetailView: View {
             if let response = log.rawResponse {
                 Section {
                     Text(response)
-                        .font(.caption.monospaced())
+                        .font(.footnote.monospaced())
                         .textSelection(.enabled)
                 } header: {
                     HStack {
@@ -215,7 +215,7 @@ private struct CopyButton: View {
             }
         } label: {
             Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
-                .font(.caption)
+                .font(.footnote)
         }
     }
 }

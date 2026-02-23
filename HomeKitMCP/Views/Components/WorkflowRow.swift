@@ -54,7 +54,7 @@ struct WorkflowRow: View {
 
                     if !workflow.isEnabled {
                         Text("Disabled")
-                            .font(.caption)
+                            .font(.footnote)
                             .fontWeight(.medium)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -68,7 +68,7 @@ struct WorkflowRow: View {
                     // Trigger type pill
                     if let firstTrigger = workflow.triggers.first {
                         Text(triggerTypeLabel(firstTrigger))
-                            .font(.caption)
+                            .font(.footnote)
                             .fontWeight(.medium)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -79,32 +79,32 @@ struct WorkflowRow: View {
 
                     // Trigger count
                     Label("\(workflow.triggers.count)", systemImage: "bolt.fill")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Text.secondary)
 
                     // Block count
                     Label("\(workflow.blocks.count)", systemImage: "list.number")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Text.secondary)
 
                     // Execution count
                     if workflow.metadata.totalExecutions > 0 {
                         Label("\(workflow.metadata.totalExecutions)", systemImage: "play.circle")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundColor(Theme.Text.secondary)
                     }
                 }
 
                 if let description = workflow.description, !description.isEmpty {
                     Text(description)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Text.secondary)
                         .lineLimit(1)
                 }
 
                 if let lastTriggered = workflow.metadata.lastTriggeredAt {
                     Text("Last triggered \(lastTriggered, style: .relative) ago")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Text.tertiary)
                 }
             }

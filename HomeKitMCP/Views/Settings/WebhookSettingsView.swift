@@ -46,7 +46,7 @@ struct WebhookSettingsView: View {
                 }
 
                 HStack {
-                    TextField("192.168.1.100 or myserver.local", text: $newAllowlistEntry)
+                    TextField("192.168.1.* or *.local", text: $newAllowlistEntry)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
@@ -64,7 +64,7 @@ struct WebhookSettingsView: View {
             } header: {
                 Label("Private Network Allow List", systemImage: "network.badge.shield.half.filled")
             } footer: {
-                Text("By default, webhooks to private IP ranges (192.168.x.x, 10.x.x.x, etc.) are blocked. Add a host here to allow it. Matches the exact hostname or IP used in the URL.")
+                Text("By default, webhooks to private IP ranges (192.168.x.x, 10.x.x.x, etc.) are blocked. Add a host or pattern to allow it. Use * as a wildcard (e.g. 192.168.1.* or *.local).")
             }
 
             Section {
@@ -86,7 +86,7 @@ struct WebhookSettingsView: View {
 
                     if hasEdited && !webhookURL.isEmpty && !urlIsValid {
                         Label("Enter a valid HTTP or HTTPS URL", systemImage: "exclamationmark.triangle")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundColor(.orange)
                     }
 

@@ -48,7 +48,7 @@ struct ConditionGroupEditor: View {
 
             if group.isNegated {
                 Text("NOT")
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.bold)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
@@ -154,7 +154,7 @@ struct ConditionGroupEditor: View {
     private func subGroupLabel(at index: Int) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "folder")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(Theme.Tint.secondary)
 
             if case .group(let subGroup) = group.children[index] {
@@ -162,7 +162,7 @@ struct ConditionGroupEditor: View {
                     HStack(spacing: 4) {
                         if subGroup.isNegated {
                             Text("NOT")
-                                .font(.caption)
+                                .font(.footnote)
                                 .fontWeight(.bold)
                                 .foregroundStyle(.red)
                         }
@@ -171,7 +171,7 @@ struct ConditionGroupEditor: View {
                             .fontWeight(.medium)
                     }
                     Text("\(subGroup.leafCount) conditions")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(Theme.Text.secondary)
                 }
             }
@@ -182,7 +182,7 @@ struct ConditionGroupEditor: View {
                 group.children.remove(at: index)
             } label: {
                 Image(systemName: "trash")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(.red)
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
@@ -233,7 +233,7 @@ private struct ConditionLeafRow: View {
                 .frame(width: 20)
 
             Text(condition.name.isEmpty ? condition.autoName(devices: devices, scenes: scenes) : condition.name)
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(Theme.Text.primary)
                 .lineLimit(1)
 
@@ -243,7 +243,7 @@ private struct ConditionLeafRow: View {
                 onDelete()
             } label: {
                 Image(systemName: "trash")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(.red)
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
@@ -331,7 +331,7 @@ private struct ConditionLeafEditSheet: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(result.passed ? Color.green : Color.red)
                         Text(result.conditionDescription)
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
                             .lineLimit(3)
                     }
@@ -397,7 +397,7 @@ private struct ConditionLeafEditSheet: View {
 
             if condition.timeConditionMode.requiresLocation {
                 Text("Requires location configured in Settings")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         case .sceneActive:
@@ -481,7 +481,7 @@ private struct ConditionLeafEditSheet: View {
 
         if condition.timeRangeStart.totalMinutes > condition.timeRangeEnd.totalMinutes {
             Label("Spans midnight", systemImage: "moon.fill")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
         }
     }

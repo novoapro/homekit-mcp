@@ -798,8 +798,8 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
         let lowered = host.lowercased()
 
-        // Allow hosts explicitly listed in the user-configured allow list
-        if allowlist.contains(where: { $0.lowercased() == lowered }) {
+        // Allow hosts matching the user-configured allow list (supports * wildcards)
+        if allowlist.contains(where: { matchesWildcard(host: lowered, pattern: $0.lowercased()) }) {
             return
         }
 
@@ -837,6 +837,13 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         }
     }
 
+    /// Matches a host against a pattern that may contain `*` wildcards.
+    private static func matchesWildcard(host: String, pattern: String) -> Bool {
+        if !pattern.contains("*") { return host == pattern }
+        let regex = "^" + NSRegularExpression.escapedPattern(for: pattern).replacingOccurrences(of: "\\*", with: ".*") + "$"
+        return host.range(of: regex, options: .regularExpression) != nil
+    }
+
     /// Headers that must not be set by user-supplied workflow configurations.
     private static let restrictedHeaders: Set<String> = [
         "host", "transfer-encoding", "content-length", "connection",
@@ -862,7 +869,8 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             }
         }
 
-        if let body = action.body {
+        let methodUpper = action.method.uppercased()
+        if let body = action.body, methodUpper != "GET", methodUpper != "HEAD" {
             let encoder = JSONEncoder()
             request.httpBody = try encoder.encode(body)
             if request.value(forHTTPHeaderField: "Content-Type") == nil {

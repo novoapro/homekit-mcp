@@ -100,7 +100,7 @@ struct BlockEditorSection: View {
                             isReorderMode = false
                         }
                     }
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.semibold)
                     .foregroundColor(Theme.Tint.main)
                 } else if blocks.count > 1 {
@@ -109,7 +109,7 @@ struct BlockEditorSection: View {
                             isReorderMode = true
                         }
                     }
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Tint.main)
                 }
             }

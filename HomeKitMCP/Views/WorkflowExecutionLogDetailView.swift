@@ -51,7 +51,7 @@ struct WorkflowExecutionLogDetailView: View {
                         Text(log.workflowName)
                             .font(.headline)
                         Text(log.status.displayName)
-                            .font(.caption)
+                            .font(.footnote)
                             .fontWeight(.medium)
                             .foregroundColor(statusColor(log.status))
                             .padding(.horizontal, 6)
@@ -61,11 +61,11 @@ struct WorkflowExecutionLogDetailView: View {
                         Spacer()
                         if let duration = executionDuration(log) {
                             Text(duration)
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundColor(Theme.Text.secondary)
                         } else if log.status == .running {
                             LiveElapsedText(since: log.triggeredAt)
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundColor(.blue)
                         }
                     }
@@ -178,7 +178,7 @@ struct WorkflowExecutionLogDetailView: View {
 
                     if let op = result.logicOperator {
                         Text(op)
-                            .font(.caption)
+                            .font(.footnote)
                             .fontWeight(.bold)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -255,11 +255,11 @@ struct WorkflowExecutionLogDetailView: View {
                             Spacer()
                             if let dur {
                                 Text(dur)
-                                    .font(.caption)
+                                    .font(.footnote)
                                     .foregroundColor(Theme.Text.tertiary)
                             } else if result.status == .running {
                                 LiveElapsedText(since: result.startedAt)
-                                    .font(.caption)
+                                    .font(.footnote)
                                     .foregroundColor(.blue)
                             }
                         }
@@ -267,14 +267,14 @@ struct WorkflowExecutionLogDetailView: View {
                         // Detail
                         if let detail = result.detail {
                             Text(detail)
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundColor(result.status == .running ? .blue : Theme.Text.secondary)
                         }
 
                         // Error
                         if let error = result.errorMessage {
                             Text(error)
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundColor(Theme.Status.error)
                         }
                     }
@@ -322,7 +322,7 @@ struct WorkflowExecutionLogDetailView: View {
             if let deviceName = trigger.deviceName {
                 HStack(spacing: 6) {
                     Image(systemName: "house")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Tint.main)
                     Text(deviceName)
                         .font(.subheadline)
@@ -336,7 +336,7 @@ struct WorkflowExecutionLogDetailView: View {
 
                 HStack(spacing: 6) {
                     Image(systemName: "slider.horizontal.3")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Text.tertiary)
                     Text(charName)
                         .font(.subheadline)
@@ -347,7 +347,7 @@ struct WorkflowExecutionLogDetailView: View {
                 if trigger.oldValue != nil || trigger.newValue != nil {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.right")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundColor(Theme.Text.tertiary)
 
                         if let oldVal = trigger.oldValue {

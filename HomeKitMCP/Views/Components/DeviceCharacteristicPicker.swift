@@ -246,11 +246,11 @@ private struct DevicePickerSheet: View {
                                     if device.id == selectedDeviceId {
                                         Image(systemName: "checkmark")
                                             .foregroundColor(.accentColor)
-                                            .font(.caption)
+                                            .font(.footnote)
                                     }
                                     if !device.isReachable {
                                         Text("Offline")
-                                            .font(.caption)
+                                            .font(.footnote)
                                             .foregroundColor(Theme.Text.secondary)
                                     }
                                 }

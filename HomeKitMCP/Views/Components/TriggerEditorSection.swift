@@ -67,7 +67,7 @@ private struct TriggerRow: View {
     private var triggerLabel: some View {
         HStack(spacing: 8) {
             Image(systemName: trigger.triggerType.icon)
-                .font(.caption)
+                .font(.footnote)
                 .foregroundColor(trigger.triggerType == .deviceStateChange ? Theme.Tint.main : trigger.triggerType == .sunEvent ? .orange : .indigo)
             VStack(alignment: .leading, spacing: 2) {
                 Text(trigger.triggerType.displayName)
@@ -75,12 +75,12 @@ private struct TriggerRow: View {
                     .fontWeight(.medium)
                 if isEditingName {
                     TextField("Name", text: $trigger.name)
-                        .font(.caption)
+                        .font(.footnote)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { isEditingName = false }
                 } else {
                     Text(trigger.name.isEmpty ? trigger.autoName(devices: devices) : trigger.name)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Text.secondary)
                         .lineLimit(1)
                 }
@@ -137,7 +137,7 @@ private struct TriggerRow: View {
                 VStack(alignment: .leading) {
                     Text(policy.displayName)
                     Text(policy.description)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.secondary)
                 }
                 .tag(policy)
@@ -299,7 +299,7 @@ private struct TriggerRow: View {
                         }
                     } label: {
                         Text(day.displayName)
-                            .font(.caption)
+                            .font(.footnote)
                             .fontWeight(isSelected ? .bold : .regular)
                             .frame(minWidth: 32)
                             .padding(.vertical, 6)
@@ -319,7 +319,7 @@ private struct TriggerRow: View {
     private var webhookTriggerContent: some View {
         LabeledContent("Token") {
             Text(trigger.webhookToken)
-                .font(.system(.caption, design: .monospaced))
+                .font(.system(.footnote, design: .monospaced))
                 .foregroundColor(Theme.Text.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -338,7 +338,7 @@ private struct TriggerRow: View {
     @ViewBuilder
     private var workflowTriggerContent: some View {
         Text("This workflow can be launched from an Execute Workflow block in another workflow.")
-            .font(.caption)
+            .font(.footnote)
             .foregroundColor(Theme.Text.secondary)
     }
 
@@ -363,7 +363,7 @@ private struct TriggerRow: View {
         }
 
         Text("Negative = before, Positive = after. Set location in Settings.")
-            .font(.caption)
+            .font(.footnote)
             .foregroundColor(Theme.Text.secondary)
     }
 }

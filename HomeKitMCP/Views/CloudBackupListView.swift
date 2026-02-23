@@ -110,7 +110,7 @@ struct CloudBackupListView: View {
                 .font(.headline)
                 .foregroundColor(Theme.Text.secondary)
             Text("Back up your settings and workflows to iCloud from the Settings page.")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundColor(Theme.Text.tertiary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 300)
@@ -118,10 +118,10 @@ struct CloudBackupListView: View {
             if let error = cloudBackupService.lastSyncError {
                 VStack(spacing: 4) {
                     Label("Sync Error", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.red)
                     Text(error)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.red)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 300)
@@ -181,7 +181,7 @@ struct CloudBackupListView: View {
                         Label(backup.deviceName, systemImage: "desktopcomputer")
                         Label("v\(backup.appVersion)", systemImage: "app.badge")
                     }
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
                 }
 

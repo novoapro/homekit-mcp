@@ -10,7 +10,7 @@ struct WorkflowExecutionLogRow: View {
         HStack(alignment: .center, spacing: 8) {
             // Column 1: Status indicator
             Image(systemName: "bolt.horizontal.circle.fill")
-                .font(.caption)
+                .font(.footnote)
                 .foregroundColor(Theme.Text.primary)
                 .frame(width: 16)
 
@@ -28,33 +28,33 @@ struct WorkflowExecutionLogRow: View {
                 HStack(spacing: 8) {
                     if log.completedAt == nil {
                         Text("Running")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundColor(.blue)
                             .fontWeight(.medium)
                     } else {
                         Text(log.status.displayName)
-                            .font(.caption)
+                            .font(.footnote)
                             .fontWeight(.medium)
                             .foregroundColor(statusTextColor)
                     }
                     Text("•")
                         .foregroundColor(Theme.Text.tertiary)
                     Text("\(log.blockResults.count) steps")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Text.secondary)
                 }
 
                 // Content rows: trigger and error
                 if let desc = log.triggerEvent?.triggerDescription ?? log.triggerEvent?.deviceName {
                     Text(desc)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Text.secondary)
                         .lineLimit(1)
                 }
 
                 if let error = log.errorMessage {
                     Text(error)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Status.error)
                         .lineLimit(1)
                 }
@@ -63,12 +63,12 @@ struct WorkflowExecutionLogRow: View {
             // Column 3: Time of execution
             VStack(alignment: .trailing, spacing: 2) {
                 Text(log.triggeredAt, style: .time)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
 
                 if let duration = displayedDuration {
                     Text(duration)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Text.tertiary)
                 }
             }

@@ -102,7 +102,7 @@ struct LogViewerView: View {
                         }
                     } label: {
                         Label("Clear", systemImage: "xmark.circle.fill")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundColor(Theme.Status.error)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
@@ -137,7 +137,7 @@ struct LogViewerView: View {
                 }()
 
                 Text(text)
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.medium)
 
                 Image(systemName: "chevron.down")
@@ -208,7 +208,7 @@ struct LogViewerView: View {
                     return "\(viewModel.selectedDevices.count) Devices"
                 }()
                 Text(text)
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))
@@ -263,7 +263,7 @@ struct LogViewerView: View {
                         }
                         if viewModel.availableDevices.isEmpty {
                             Text("No devices found")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundColor(.secondary)
                                 .padding(12)
                         }
@@ -287,7 +287,7 @@ struct LogViewerView: View {
                     return "\(viewModel.selectedServices.count) Services"
                 }()
                 Text(text)
-                    .font(.caption)
+                    .font(.footnote)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))
@@ -342,7 +342,7 @@ struct LogViewerView: View {
                         }
                         if viewModel.availableServices.isEmpty {
                             Text("No services found")
-                                .font(.caption)
+                                .font(.footnote)
                                 .foregroundColor(.secondary)
                                 .padding(12)
                         }

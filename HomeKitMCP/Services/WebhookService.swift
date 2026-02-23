@@ -225,9 +225,9 @@ actor WebhookService: WebhookServiceProtocol {
 
         let lowered = host.lowercased()
 
-        // Allow hosts explicitly listed in the user-configured allow list
+        // Allow hosts matching the user-configured allow list (supports * wildcards)
         let allowlist = storage.readWebhookPrivateIPAllowlist()
-        if allowlist.contains(where: { $0.lowercased() == lowered }) {
+        if allowlist.contains(where: { Self.matchesWildcard(host: lowered, pattern: $0.lowercased()) }) {
             return
         }
 
@@ -287,6 +287,14 @@ actor WebhookService: WebhookServiceProtocol {
         }
 
         return try await URLSession.shared.data(for: request)
+    }
+
+    /// Matches a host against a pattern that may contain `*` wildcards.
+    /// e.g. `192.168.1.*` matches `192.168.1.88`, `*.local` matches `myserver.local`.
+    private static func matchesWildcard(host: String, pattern: String) -> Bool {
+        if !pattern.contains("*") { return host == pattern }
+        let regex = "^" + NSRegularExpression.escapedPattern(for: pattern).replacingOccurrences(of: "\\*", with: ".*") + "$"
+        return host.range(of: regex, options: .regularExpression) != nil
     }
 
     private func hmacSHA256(data: Data, key: Data) -> String {

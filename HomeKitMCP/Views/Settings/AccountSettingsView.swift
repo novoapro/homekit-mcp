@@ -31,7 +31,7 @@ struct AccountSettingsView: View {
                                     .font(.body)
                                 if let email = appleSignInService.userEmail, !email.isEmpty {
                                     Text(email)
-                                        .font(.caption)
+                                        .font(.footnote)
                                         .foregroundColor(Theme.Text.secondary)
                                 }
                             } else if let email = appleSignInService.userEmail, !email.isEmpty {
@@ -45,7 +45,7 @@ struct AccountSettingsView: View {
                         Spacer()
                         Label("Signed In", systemImage: "checkmark.circle.fill")
                             .foregroundColor(.green)
-                            .font(.caption)
+                            .font(.footnote)
                     }
 
                     Button("Sign Out", role: .destructive) {

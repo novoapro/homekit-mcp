@@ -44,7 +44,7 @@ struct SceneRow: View {
 
                 HStack(spacing: 8) {
                     Text(scene.type)
-                        .font(.caption)
+                        .font(.footnote)
                         .fontWeight(.medium)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -53,7 +53,7 @@ struct SceneRow: View {
                         .cornerRadius(4)
 
                     Text("\(scene.actions.count) action\(scene.actions.count == 1 ? "" : "s")")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(Theme.Text.secondary)
                 }
             }

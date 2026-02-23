@@ -39,7 +39,7 @@ struct WorkflowSettingsView: View {
                 if let error = viewModel.geocodingError {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
-                        .font(.caption)
+                        .font(.footnote)
                 }
 
                 if viewModel.hasValidCoordinates {

@@ -61,7 +61,7 @@ struct LogRow: View {
 
                     if let serviceName = log.serviceName, !isMCP && !isREST {
                         Text(serviceName)
-                            .font(.caption)
+                            .font(.footnote)
                             .fontWeight(.semibold)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -84,7 +84,7 @@ struct LogRow: View {
 
             // Column 3: Time of execution
             Text(log.timestamp, style: .time)
-                .font(.caption)
+                .font(.footnote)
                 .foregroundColor(Theme.Text.secondary)
                 .frame(minWidth: 50)
 
@@ -172,13 +172,13 @@ struct LogRow: View {
         VStack(alignment: .leading, spacing: 2) {
             if let requestBody = log.requestBody {
                 Text("→ \(requestBody)")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
                     .lineLimit(2)
             }
             if let responseBody = log.responseBody {
                 Text("← \(responseBody)")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
                     .lineLimit(2)
             }
@@ -194,7 +194,7 @@ struct LogRow: View {
 
             if let responseBody = log.responseBody {
                 Text("← \(responseBody)")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
                     .lineLimit(2)
             }
@@ -211,7 +211,7 @@ struct LogRow: View {
             }
             if let responseBody = log.responseBody {
                 Text("← \(responseBody)")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.secondary)
             }
         }
@@ -227,7 +227,7 @@ struct LogRow: View {
             }
             if let errorDetails = log.errorDetails {
                 Text(errorDetails)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Status.error)
                     .lineLimit(3)
             }
@@ -242,7 +242,7 @@ struct LogRow: View {
         VStack(alignment: .leading, spacing: 4) {
             if let requestBody = log.requestBody {
                 Text(requestBody)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(isWorkflowError ? Theme.Status.error : Theme.Text.secondary)
             }
             if let responseBody = log.responseBody {
@@ -258,7 +258,7 @@ struct LogRow: View {
             if let errorDetails = log.errorDetails {
                 let isOrphan = log.characteristicType == "orphan-detection"
                 Text(errorDetails)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(isOrphan ? Theme.Status.error : Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -301,7 +301,7 @@ struct LogRow: View {
                 if let detailedReq = log.detailedRequestBody {
                     HStack {
                         Text("Request:")
-                            .font(.caption)
+                            .font(.footnote)
                             .fontWeight(.semibold)
                             .foregroundColor(Theme.Text.secondary)
                         Spacer()
@@ -309,20 +309,20 @@ struct LogRow: View {
                             UIPasteboard.general.string = detailedReq
                         } label: {
                             Label("Copy", systemImage: "doc.on.doc")
-                                .font(.caption)
+                                .font(.footnote)
                         }
                         .buttonStyle(.plain)
                         .foregroundColor(Theme.Tint.main)
                     }
                     Text(Self.formatJSON(detailedReq))
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.system(.footnote, design: .monospaced))
                         .foregroundColor(Theme.Text.secondary)
                         .textSelection(.enabled)
                 }
                 if let detailedResp = log.detailedResponseBody {
                     HStack {
                         Text("Response:")
-                            .font(.caption)
+                            .font(.footnote)
                             .fontWeight(.semibold)
                             .foregroundColor(Theme.Text.secondary)
                         Spacer()
@@ -330,13 +330,13 @@ struct LogRow: View {
                             UIPasteboard.general.string = detailedResp
                         } label: {
                             Label("Copy", systemImage: "doc.on.doc")
-                                .font(.caption)
+                                .font(.footnote)
                         }
                         .buttonStyle(.plain)
                         .foregroundColor(Theme.Tint.main)
                     }
                     Text(Self.formatJSON(detailedResp))
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.system(.footnote, design: .monospaced))
                         .foregroundColor(Theme.Text.secondary)
                         .textSelection(.enabled)
                 }

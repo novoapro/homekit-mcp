@@ -62,7 +62,7 @@ struct DeviceRow: View {
 
                         if !device.isReachable {
                             Text("No Response")
-                                .font(.caption)
+                                .font(.footnote)
                                 .fontWeight(.bold)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -126,10 +126,10 @@ struct DeviceRow: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     HStack(spacing: 6) {
                                         Image(systemName: serviceIcon(for: service.type))
-                                            .font(.caption)
+                                            .font(.footnote)
                                             .foregroundColor(categoryColor)
                                         Text(service.effectiveDisplayName)
-                                            .font(.caption)
+                                            .font(.footnote)
                                             .fontWeight(.bold)
                                             .foregroundColor(Theme.Text.secondary)
                                             .textCase(.uppercase)
@@ -147,7 +147,7 @@ struct DeviceRow: View {
                         } else {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Characteristics")
-                                    .font(.caption)
+                                    .font(.footnote)
                                     .fontWeight(.bold)
                                     .foregroundColor(Theme.Text.secondary)
                                     .textCase(.uppercase)
@@ -173,7 +173,7 @@ struct DeviceRow: View {
                                     Image(systemName: showGranularControls ? "chevron.down" : "chevron.right")
                                         .font(.system(size: 12, weight: .bold))
                                     Text(showGranularControls ? "Hide Granular Controls" : "Show Granular Controls")
-                                        .font(.caption)
+                                        .font(.footnote)
                                         .fontWeight(.medium)
                                 }
                                 .foregroundColor(Theme.Text.tertiary)

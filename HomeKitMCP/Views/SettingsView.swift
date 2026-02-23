@@ -28,7 +28,7 @@ struct SettingsView: View {
                             .font(.headline)
                             .foregroundColor(Theme.Text.primary)
                         Text("Control your home with AI")
-                            .font(.caption)
+                            .font(.footnote)
                             .foregroundColor(Theme.Text.tertiary)
                     }
                 }

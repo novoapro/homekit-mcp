@@ -49,7 +49,7 @@ struct ServerSettingsView: View {
 
                 if let error = viewModel.mcpServerError {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.red)
                 }
             } header: {
@@ -208,7 +208,7 @@ struct ServerSettingsView: View {
                     .fontWeight(.medium)
                 Spacer()
                 Text(apiToken.createdAt, style: .date)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.tertiary)
             }
 
@@ -216,12 +216,12 @@ struct ServerSettingsView: View {
                 let isRevealed = revealedTokenIds.contains(apiToken.id)
                 if isRevealed {
                     Text(apiToken.token)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.system(.footnote, design: .monospaced))
                         .lineLimit(1)
                         .truncationMode(.middle)
                 } else {
                     Text(String(repeating: "\u{2022}", count: 32))
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.system(.footnote, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
 
@@ -276,10 +276,10 @@ struct ServerSettingsView: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Text.tertiary)
                 Text(url)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.system(.footnote, design: .monospaced))
                     .foregroundColor(Theme.Text.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -292,7 +292,7 @@ struct ServerSettingsView: View {
                 showCopyToast()
             } label: {
                 Image(systemName: "doc.on.doc")
-                    .font(.caption)
+                    .font(.footnote)
                     .foregroundColor(Theme.Tint.main)
             }
             .buttonStyle(.plain)
