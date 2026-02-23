@@ -73,7 +73,8 @@ final class ServiceContainer {
         keychainService: keychainService,
         configService: configService,
         workflowStorageService: workflowStorageService,
-        homeKitManager: homeKitManager
+        homeKitManager: homeKitManager,
+        loggingService: loggingService
     )
 
     lazy var cloudBackupService: CloudBackupService = CloudBackupService(

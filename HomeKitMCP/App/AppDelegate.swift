@@ -106,10 +106,29 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 Task {
                     let workflows = await self.container.workflowStorageService.getAllWorkflows()
                     guard !workflows.isEmpty else { return }
-                    let (migrated, totalRemapped, _) = WorkflowMigrationService.migrateAll(workflows, using: devices)
+                    let scenes = await MainActor.run { self.container.homeKitManager.cachedScenes }
+                    let migration = WorkflowMigrationService.migrateAll(workflows, using: devices, scenes: scenes)
+                    let totalRemapped = migration.totalRemappedDevices + migration.totalRemappedScenes
                     if totalRemapped > 0 {
-                        await self.container.workflowStorageService.replaceAll(workflows: migrated)
-                        AppLogger.workflow.info("Startup migration: remapped \(totalRemapped) device reference(s)")
+                        await self.container.workflowStorageService.replaceAll(workflows: migration.workflows)
+                        AppLogger.workflow.info("Startup migration: remapped \(migration.totalRemappedDevices) device(s), \(migration.totalRemappedScenes) scene(s)")
+                    }
+                    // Log orphans
+                    for (workflowName, orphans) in migration.orphanedReferences {
+                        for orphan in orphans {
+                            let kind = orphan.isScene ? "scene" : "device"
+                            let desc = orphan.referenceName ?? orphan.referenceId
+                            AppLogger.workflow.warning("Startup migration: workflow '\(workflowName)' has orphaned \(kind) '\(desc)' in \(orphan.location)")
+                            let logEntry = StateChangeLog(
+                                id: UUID(), timestamp: Date(),
+                                deviceId: workflowName, deviceName: workflowName,
+                                characteristicType: "orphan-detection",
+                                oldValue: nil, newValue: nil,
+                                category: .workflowError,
+                                errorDetails: "Orphaned \(kind) '\(desc)' in \(orphan.location) — not found after migration"
+                            )
+                            await self.container.loggingService.logEntry(logEntry)
+                        }
                     }
                 }
             }

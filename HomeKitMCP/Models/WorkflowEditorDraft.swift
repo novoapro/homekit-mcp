@@ -195,6 +195,7 @@ struct TriggerDraft: Identifiable {
     let id: UUID
     var name: String = ""
     var triggerType: TriggerDraftType = .deviceStateChange
+    var retriggerPolicy: ConcurrentExecutionPolicy = .ignoreNew
 
     // Device state change fields
     var deviceId: String = ""
@@ -349,8 +350,11 @@ extension ConditionDraft {
             let comp = "\(comparisonType.displayName) \(comparisonValue)"
             let parts = [room, devName, charName, comp].filter { !$0.isEmpty }
             return parts.joined(separator: " ")
-        case .sunEvent:
-            return "\(sunEventComparison.displayName) \(sunEventType.displayName)"
+        case .timeCondition:
+            if timeConditionMode == .timeRange {
+                return "\(timeRangeStart.formatted)–\(timeRangeEnd.formatted)"
+            }
+            return timeConditionMode.displayName
         case .sceneActive:
             guard !sceneId.isEmpty else { return "Scene Active" }
             let scene = scenes.first(where: { $0.id == sceneId })
@@ -532,7 +536,7 @@ private extension ExecuteWorkflowDraft {
 
 enum ConditionDraftType: String, CaseIterable, Identifiable {
     case deviceState
-    case sunEvent
+    case timeCondition
     case sceneActive
 
     var id: String { rawValue }
@@ -540,7 +544,7 @@ enum ConditionDraftType: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .deviceState: return "Device State"
-        case .sunEvent: return "Sunrise/Sunset"
+        case .timeCondition: return "Time Condition"
         case .sceneActive: return "Scene Active"
         }
     }
@@ -548,7 +552,7 @@ enum ConditionDraftType: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .deviceState: return "shield.fill"
-        case .sunEvent: return "sunrise.fill"
+        case .timeCondition: return "clock.fill"
         case .sceneActive: return "play.rectangle.fill"
         }
     }
@@ -566,9 +570,10 @@ struct ConditionDraft: Identifiable {
     var comparisonType: ComparisonType
     var comparisonValue: String
 
-    // Sun Event fields
-    var sunEventType: SunEventType = .sunrise
-    var sunEventComparison: SunEventComparison = .after
+    // Time Condition fields
+    var timeConditionMode: TimeConditionMode = .afterSunset
+    var timeRangeStart: TimeOfDay = TimeOfDay(hour: 22, minute: 0)
+    var timeRangeEnd: TimeOfDay = TimeOfDay(hour: 6, minute: 0)
 
     // Scene Active fields
     var sceneId: String = ""
@@ -587,18 +592,16 @@ struct ConditionDraft: Identifiable {
         )
     }
 
-    static func emptySunEvent() -> ConditionDraft {
+    static func emptyTimeCondition() -> ConditionDraft {
         ConditionDraft(
             id: UUID(),
             name: "",
-            conditionDraftType: .sunEvent,
+            conditionDraftType: .timeCondition,
             deviceId: "",
             serviceId: nil,
             characteristicType: "",
             comparisonType: .equals,
-            comparisonValue: "",
-            sunEventType: .sunset,
-            sunEventComparison: .after
+            comparisonValue: ""
         )
     }
 
@@ -907,6 +910,7 @@ extension WorkflowDraft {
     }
 
     private static func convertTrigger(_ trigger: WorkflowTrigger) -> TriggerDraft? {
+        let policy = trigger.resolvedRetriggerPolicy
         switch trigger {
         case let .deviceStateChange(t):
             let (condType, condValue, condFrom) = convertTriggerCondition(t.condition)
@@ -914,6 +918,7 @@ extension WorkflowDraft {
                 id: UUID(),
                 name: t.name ?? "",
                 triggerType: .deviceStateChange,
+                retriggerPolicy: policy,
                 deviceId: t.deviceId,
                 serviceId: t.serviceId,
                 characteristicType: t.characteristicType,
@@ -922,7 +927,7 @@ extension WorkflowDraft {
                 conditionFromValue: condFrom
             )
         case let .schedule(t):
-            var draft = TriggerDraft(id: UUID(), name: t.name ?? "", triggerType: .schedule)
+            var draft = TriggerDraft(id: UUID(), name: t.name ?? "", triggerType: .schedule, retriggerPolicy: policy)
             switch t.scheduleType {
             case let .once(date):
                 draft.scheduleType = .once
@@ -952,19 +957,22 @@ extension WorkflowDraft {
                 id: UUID(),
                 name: t.name ?? "",
                 triggerType: .webhook,
+                retriggerPolicy: policy,
                 webhookToken: t.token
             )
         case let .workflow(t):
             return TriggerDraft(
                 id: UUID(),
                 name: t.name ?? "",
-                triggerType: .workflow
+                triggerType: .workflow,
+                retriggerPolicy: policy
             )
         case let .sunEvent(t):
             return TriggerDraft(
                 id: UUID(),
                 name: t.name ?? "",
                 triggerType: .sunEvent,
+                retriggerPolicy: policy,
                 sunEventType: t.event,
                 sunEventOffsetMinutes: t.offsetMinutes
             )
@@ -1043,17 +1051,18 @@ extension WorkflowDraft {
                 comparisonType: compType,
                 comparisonValue: compValue
             ))
-        case let .sunEvent(c):
+        case let .timeCondition(c):
             return .leaf(ConditionDraft(
                 id: UUID(),
-                conditionDraftType: .sunEvent,
+                conditionDraftType: .timeCondition,
                 deviceId: "",
                 serviceId: nil,
                 characteristicType: "",
                 comparisonType: .equals,
                 comparisonValue: "",
-                sunEventType: c.event,
-                sunEventComparison: c.comparison
+                timeConditionMode: c.mode,
+                timeRangeStart: c.startTime ?? TimeOfDay(hour: 22, minute: 0),
+                timeRangeEnd: c.endTime ?? TimeOfDay(hour: 6, minute: 0)
             ))
         case let .sceneActive(c):
             return .leaf(ConditionDraft(
@@ -1210,7 +1219,7 @@ extension WorkflowDraft {
             conditions: conditionRoot.toConditions(devices: devices),
             blocks: blocks.map { $0.toBlock(devices: devices) },
             continueOnError: continueOnError,
-            retriggerPolicy: retriggerPolicy,
+            retriggerPolicy: triggers.first?.retriggerPolicy ?? .ignoreNew,
             metadata: existingMetadata ?? .empty,
             createdAt: createdAt ?? Date(),
             updatedAt: Date()
@@ -1230,27 +1239,32 @@ extension TriggerDraft {
                 condition: toTriggerCondition(),
                 name: name.isEmpty ? nil : name,
                 deviceName: devName,
-                roomName: devRoom
+                roomName: devRoom,
+                retriggerPolicy: retriggerPolicy
             ))
         case .schedule:
             return .schedule(ScheduleTrigger(
                 scheduleType: toScheduleType(),
-                name: name.isEmpty ? nil : name
+                name: name.isEmpty ? nil : name,
+                retriggerPolicy: retriggerPolicy
             ))
         case .webhook:
             return .webhook(WebhookTrigger(
                 token: webhookToken,
-                name: name.isEmpty ? nil : name
+                name: name.isEmpty ? nil : name,
+                retriggerPolicy: retriggerPolicy
             ))
         case .workflow:
             return .workflow(WorkflowCallTrigger(
-                name: name.isEmpty ? nil : name
+                name: name.isEmpty ? nil : name,
+                retriggerPolicy: retriggerPolicy
             ))
         case .sunEvent:
             return .sunEvent(SunEventTrigger(
                 event: sunEventType,
                 offsetMinutes: sunEventOffsetMinutes,
-                name: name.isEmpty ? nil : name
+                name: name.isEmpty ? nil : name,
+                retriggerPolicy: retriggerPolicy
             ))
         }
     }
@@ -1305,10 +1319,11 @@ extension ConditionDraft {
                 deviceName: devName,
                 roomName: devRoom
             ))
-        case .sunEvent:
-            base = .sunEvent(SunEventCondition(
-                event: sunEventType,
-                comparison: sunEventComparison
+        case .timeCondition:
+            base = .timeCondition(TimeCondition(
+                mode: timeConditionMode,
+                startTime: timeConditionMode == .timeRange ? timeRangeStart : nil,
+                endTime: timeConditionMode == .timeRange ? timeRangeEnd : nil
             ))
         case .sceneActive:
             base = .sceneActive(SceneActiveCondition(

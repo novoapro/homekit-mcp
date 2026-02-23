@@ -103,7 +103,6 @@ struct WorkflowDetailView: View {
 
             LabeledContent("Executions", value: "\(workflow.metadata.totalExecutions)")
             LabeledContent("Continue on Error", value: workflow.continueOnError ? "Yes" : "No")
-            LabeledContent("Concurrent Execution", value: workflow.retriggerPolicy.displayName)
 
             if let lastTriggered = workflow.metadata.lastTriggeredAt {
                 LabeledContent("Last Triggered") {
@@ -429,13 +428,19 @@ private struct WorkflowConditionRow: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
             }
-        case let .sunEvent(c):
+        case let .timeCondition(c):
             HStack(spacing: 6) {
-                Image(systemName: "sunrise.fill")
+                Image(systemName: c.mode.icon)
                     .foregroundStyle(.orange)
-                Text("\(c.comparison.displayName) \(c.event.displayName)")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                if c.mode == .timeRange, let start = c.startTime, let end = c.endTime {
+                    Text("\(start.formatted)–\(end.formatted)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                } else {
+                    Text(c.mode.displayName)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
             }
         case let .sceneActive(c):
             HStack(spacing: 6) {

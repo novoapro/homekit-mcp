@@ -12,6 +12,7 @@ enum LogCategoryFilter: String, CaseIterable, Identifiable {
     case serverError = "Server Error"
     case workflowExecution = "Workflow"
     case sceneExecution = "Scene"
+    case backupRestore = "Backup"
 
     var id: String { rawValue }
 
@@ -27,6 +28,7 @@ enum LogCategoryFilter: String, CaseIterable, Identifiable {
         case .serverError: return [.serverError]
         case .workflowExecution: return [.workflowExecution]
         case .sceneExecution: return [.sceneExecution, .sceneError]
+        case .backupRestore: return [.backupRestore]
         }
     }
 
@@ -41,6 +43,7 @@ enum LogCategoryFilter: String, CaseIterable, Identifiable {
         case .serverError: return "xmark.octagon.fill"
         case .workflowExecution: return "bolt.circle.fill"
         case .sceneExecution: return "play.circle.fill"
+        case .backupRestore: return "arrow.triangle.2.circlepath.circle.fill"
         }
     }
 }

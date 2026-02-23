@@ -203,27 +203,33 @@ enum MCPToolDefinitions {
 
                 TOP-LEVEL FIELDS: name (required), description, isEnabled (bool, default true), \
                 continueOnError (bool, default false), \
-                retriggerPolicy ("ignoreNew"|"cancelAndRestart"|"queueAndExecute", default "ignoreNew"), \
                 triggers (array), conditions (optional guard array), blocks (array). \
                 Omit id, createdAt, updatedAt, metadata — they are auto-generated.
 
                 TRIGGER TYPES (triggers array):
-                • deviceStateChange — { "type":"deviceStateChange", "name":"optional", "deviceId":"uuid", \
+                Each trigger accepts an optional "retriggerPolicy" field that controls what happens if \
+                this trigger fires while the workflow is already running: \
+                "ignoreNew" (default) | "cancelAndRestart" | "queueAndExecute" | "cancelOnly".
+                • deviceStateChange — { "type":"deviceStateChange", "name":"optional", "retriggerPolicy":"ignoreNew", \
+                "deviceId":"uuid", \
                 "deviceName":"Room Light", "roomName":"Living Room", "serviceId":"optional-uuid", \
                 "characteristicType":"Power", "condition":{"type":"equals","value":true} } \
                 Trigger condition types: "changed" (no value), "equals"/"notEquals"/"greaterThan"/"lessThan"/ \
                 "greaterThanOrEqual"/"lessThanOrEqual" (with "value"), \
                 "transitioned" (required "to", optional "from").
-                • schedule — { "type":"schedule", "name":"optional", "scheduleType":{ ... } } \
+                • schedule — { "type":"schedule", "name":"optional", "retriggerPolicy":"ignoreNew", "scheduleType":{ ... } } \
                 scheduleType formats: {"type":"once","date":"ISO8601"}, \
                 {"type":"daily","time":{"hour":7,"minute":30}}, \
                 {"type":"weekly","time":{"hour":7,"minute":30},"days":[2,3,4,5,6]} (1=Sun…7=Sat), \
                 {"type":"interval","seconds":300}.
-                • sunEvent — { "type":"sunEvent", "name":"optional", "event":"sunrise"|"sunset", "offsetMinutes":-15 } \
+                • sunEvent — { "type":"sunEvent", "name":"optional", "retriggerPolicy":"ignoreNew", \
+                "event":"sunrise"|"sunset", "offsetMinutes":-15 } \
                 offsetMinutes: negative=before, positive=after, 0=exact.
-                • compound — { "type":"compound", "name":"optional", "operator":"and"|"or", "triggers":[...] }
-                • webhook — { "type":"webhook", "name":"optional", "token":"unique-string" }
-                • workflow — { "type":"workflow", "name":"optional" } (makes this workflow callable by others)
+                • compound — { "type":"compound", "name":"optional", "retriggerPolicy":"ignoreNew", \
+                "operator":"and"|"or", "triggers":[...] }
+                • webhook — { "type":"webhook", "name":"optional", "retriggerPolicy":"ignoreNew", "token":"unique-string" }
+                • workflow — { "type":"workflow", "name":"optional", "retriggerPolicy":"ignoreNew" } \
+                (makes this workflow callable by others)
 
                 BLOCK TYPES (blocks array, use "block" discriminator):
                 Action blocks: { "block":"action", "type":"controlDevice"|"runScene"|"webhook"|"log", ... }
@@ -250,7 +256,11 @@ enum MCPToolDefinitions {
                 "serviceId":"optional", "characteristicType":"Power", \
                 "comparison":{"type":"equals","value":true} }
                   comparison types: equals/notEquals/greaterThan/lessThan/greaterThanOrEqual/lessThanOrEqual (with "value")
-                • { "type":"sunEvent", "event":"sunrise"|"sunset", "sunComparison":"before"|"after" }
+                • { "type":"timeCondition", "mode":"beforeSunrise"|"afterSunrise"|"beforeSunset"|"afterSunset"|"daytime"|"nighttime"|"timeRange", \
+                "startTime":{"hour":23,"minute":0}, "endTime":{"hour":2,"minute":0} }
+                  mode: beforeSunrise, afterSunrise, beforeSunset, afterSunset, daytime (sunrise–sunset), \
+                nighttime (sunset–sunrise), timeRange (custom hours, cross-midnight aware). \
+                startTime/endTime required only for timeRange (hour 0-23, minute 0-59)
                 • { "type":"sceneActive", "sceneId":"uuid", "isActive":true }
                 • { "type":"and", "conditions":[...] } — all must pass
                 • { "type":"or",  "conditions":[...] } — any must pass
@@ -282,8 +292,9 @@ enum MCPToolDefinitions {
                 remain unchanged. Triggers, conditions, and blocks arrays are replaced wholesale when provided.
 
                 Updatable fields: name, description, isEnabled, continueOnError, \
-                retriggerPolicy ("ignoreNew"|"cancelAndRestart"|"queueAndExecute"), \
-                triggers, conditions, blocks.
+                triggers, conditions, blocks. \
+                Per-trigger retriggerPolicy: set on each trigger object \
+                ("ignoreNew"|"cancelAndRestart"|"queueAndExecute"|"cancelOnly").
 
                 The schema for triggers, blocks, and conditions is identical to create_workflow. \
                 Trigger types: deviceStateChange, schedule, sunEvent, compound, webhook, workflow. \
@@ -291,7 +302,7 @@ enum MCPToolDefinitions {
                 controlDevice, runScene, webhook, log, delay, waitForState, conditional, repeat, \
                 repeatWhile, group, stop, executeWorkflow. \
                 Guard/block condition types (WorkflowCondition, nestable via and/or/not): \
-                deviceState, sunEvent, sceneActive, and, or, not. \
+                deviceState, timeCondition, sceneActive, and, or, not. \
                 Always include "deviceName" and "roomName" alongside "deviceId" wherever device references appear.
                 """,
             "inputSchema": [
@@ -360,7 +371,7 @@ enum MCPToolDefinitions {
         ],
         [
             "name": "trigger_workflow",
-            "description": "Schedule a workflow execution immediately (fire-and-forget). Returns the scheduling outcome based on the workflow's retrigger policy: scheduled, replaced (previous cancelled), queued, or ignored (already running).",
+            "description": "Schedule a workflow execution immediately (fire-and-forget). Returns the scheduling outcome based on the trigger's retrigger policy: scheduled, replaced (previous cancelled), queued, cancelled, or ignored (already running).",
             "inputSchema": [
                 "type": "object",
                 "properties": [

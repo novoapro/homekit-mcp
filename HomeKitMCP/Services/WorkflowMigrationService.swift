@@ -1,19 +1,21 @@
 import Foundation
 
-/// Migrates orphaned device/service UUIDs in workflows after a HomeKit backup restore.
+/// Migrates orphaned device/service/scene UUIDs in workflows after a HomeKit backup restore.
 ///
 /// When HomeKit is restored from an iCloud backup to a different machine, the same physical devices
-/// get new UUIDs. This service detects orphaned references and attempts to remap them by matching
-/// on device name + room. If exactly one match is found, the ID is updated silently.
+/// and scenes get new UUIDs. This service detects orphaned references and attempts to remap them
+/// by matching on device name + room (for devices) or scene name (for scenes).
 enum WorkflowMigrationService {
 
-    /// A device reference in a workflow that could not be resolved to any known device.
+    /// A reference in a workflow that could not be resolved to any known device or scene.
     struct OrphanedReference {
-        let deviceId: String
-        let deviceName: String?
+        let referenceId: String
+        let referenceName: String?
         let roomName: String?
-        /// Where in the workflow the orphan was found (e.g. "trigger", "condition", "block").
+        /// Where in the workflow the orphan was found (e.g. "trigger", "condition", "block (runScene)").
         let location: String
+        /// Whether this is a scene reference (vs. device reference).
+        let isScene: Bool
     }
 
     /// Result of a migration attempt on a single workflow.
@@ -21,39 +23,39 @@ enum WorkflowMigrationService {
         let workflow: Workflow
         let remappedDevices: Int
         let remappedServices: Int
+        let remappedScenes: Int
         let orphanedReferences: [OrphanedReference]
     }
 
-    /// Migrate all device/service references in a workflow.
+    /// Migrate all device/service/scene references in a workflow.
     /// Returns the (possibly updated) workflow and a summary of changes.
-    static func migrate(_ workflow: Workflow, using devices: [DeviceModel]) -> MigrationResult {
+    static func migrate(_ workflow: Workflow, using devices: [DeviceModel], scenes: [SceneModel] = []) -> MigrationResult {
         let knownDeviceIds = Set(devices.map(\.id))
+        let knownSceneIds = Set(scenes.map(\.id))
 
-        // Build lookup indices: name+room → device (only if unambiguous)
+        // Build lookup indices
         let devicesByNameRoom = buildDeviceLookup(devices)
+        let scenesByName = buildSceneLookup(scenes)
 
         var remappedDevices = 0
         var remappedServices = 0
+        var remappedScenes = 0
         var orphanedRefs: [OrphanedReference] = []
 
-        // Collect all device references from the workflow
+        // --- Device migration ---
         var idMap: [String: String] = [:]           // oldDeviceId → newDeviceId
         var serviceIdMap: [String: [String: String]] = [:]  // oldDeviceId → (oldServiceId → newServiceId)
 
-        let allRefs = collectDeviceReferences(from: workflow)
+        let allDeviceRefs = collectDeviceReferences(from: workflow)
 
-        for ref in allRefs {
-            // Skip already-known device IDs
+        for ref in allDeviceRefs {
             if knownDeviceIds.contains(ref.deviceId) { continue }
-            // Skip if already resolved in this pass
             if idMap[ref.deviceId] != nil { continue }
 
-            // Try to find a matching device by name+room
             if let match = findMatch(for: ref, in: devices, lookup: devicesByNameRoom) {
                 idMap[ref.deviceId] = match.id
                 remappedDevices += 1
 
-                // Also remap service IDs if possible
                 if let oldServiceId = ref.serviceId {
                     if let newServiceId = matchService(oldServiceId: oldServiceId, oldDeviceRef: ref, newDevice: match) {
                         if serviceIdMap[ref.deviceId] == nil {
@@ -65,26 +67,51 @@ enum WorkflowMigrationService {
                 }
             } else {
                 orphanedRefs.append(OrphanedReference(
-                    deviceId: ref.deviceId,
-                    deviceName: ref.contextName,
+                    referenceId: ref.deviceId,
+                    referenceName: ref.contextName,
                     roomName: ref.contextRoom,
-                    location: ref.location
+                    location: ref.location,
+                    isScene: false
+                ))
+            }
+        }
+
+        // --- Scene migration ---
+        var sceneIdMap: [String: String] = [:]  // oldSceneId → newSceneId
+
+        let allSceneRefs = collectSceneReferences(from: workflow)
+
+        for ref in allSceneRefs {
+            if knownSceneIds.contains(ref.sceneId) { continue }
+            if sceneIdMap[ref.sceneId] != nil { continue }
+
+            if let match = findSceneMatch(for: ref, lookup: scenesByName) {
+                sceneIdMap[ref.sceneId] = match.id
+                remappedScenes += 1
+            } else {
+                orphanedRefs.append(OrphanedReference(
+                    referenceId: ref.sceneId,
+                    referenceName: ref.sceneName,
+                    roomName: nil,
+                    location: ref.location,
+                    isScene: true
                 ))
             }
         }
 
         // If nothing needs remapping, return as-is
-        if idMap.isEmpty {
-            return MigrationResult(workflow: workflow, remappedDevices: 0, remappedServices: 0, orphanedReferences: orphanedRefs)
+        if idMap.isEmpty && sceneIdMap.isEmpty {
+            return MigrationResult(workflow: workflow, remappedDevices: 0, remappedServices: 0, remappedScenes: 0, orphanedReferences: orphanedRefs)
         }
 
         // Apply the remapping by encoding → modifying JSON → decoding
-        let migratedWorkflow = applyRemapping(to: workflow, deviceIdMap: idMap, serviceIdMap: serviceIdMap)
+        let migratedWorkflow = applyRemapping(to: workflow, deviceIdMap: idMap, serviceIdMap: serviceIdMap, sceneIdMap: sceneIdMap)
 
         return MigrationResult(
             workflow: migratedWorkflow ?? workflow,
             remappedDevices: remappedDevices,
             remappedServices: remappedServices,
+            remappedScenes: remappedScenes,
             orphanedReferences: orphanedRefs
         )
     }
@@ -199,6 +226,84 @@ enum WorkflowMigrationService {
         }
     }
 
+    // MARK: - Scene Reference Collection
+
+    /// A lightweight reference to a scene used somewhere in a workflow.
+    struct SceneRef: Hashable {
+        let sceneId: String
+        let sceneName: String?
+        let location: String
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(sceneId)
+        }
+
+        static func == (lhs: SceneRef, rhs: SceneRef) -> Bool {
+            lhs.sceneId == rhs.sceneId
+        }
+    }
+
+    static func collectSceneReferences(from workflow: Workflow) -> Set<SceneRef> {
+        var refs = Set<SceneRef>()
+
+        // Conditions
+        if let conditions = workflow.conditions {
+            for condition in conditions {
+                collectSceneConditionRefs(condition, into: &refs)
+            }
+        }
+
+        // Blocks
+        for block in workflow.blocks {
+            collectSceneBlockRefs(block, into: &refs)
+        }
+
+        return refs
+    }
+
+    private static func collectSceneConditionRefs(_ condition: WorkflowCondition, into refs: inout Set<SceneRef>) {
+        switch condition {
+        case let .sceneActive(c):
+            refs.insert(SceneRef(sceneId: c.sceneId, sceneName: c.sceneName, location: "condition (sceneActive)"))
+        case let .and(conditions):
+            for c in conditions { collectSceneConditionRefs(c, into: &refs) }
+        case let .or(conditions):
+            for c in conditions { collectSceneConditionRefs(c, into: &refs) }
+        case let .not(c):
+            collectSceneConditionRefs(c, into: &refs)
+        default:
+            break
+        }
+    }
+
+    private static func collectSceneBlockRefs(_ block: WorkflowBlock, into refs: inout Set<SceneRef>) {
+        switch block {
+        case let .action(action):
+            switch action {
+            case let .runScene(a):
+                refs.insert(SceneRef(sceneId: a.sceneId, sceneName: a.sceneName, location: "block (runScene)"))
+            default:
+                break
+            }
+        case let .flowControl(fc):
+            switch fc {
+            case let .conditional(b):
+                collectSceneConditionRefs(b.condition, into: &refs)
+                for nested in b.thenBlocks { collectSceneBlockRefs(nested, into: &refs) }
+                for nested in (b.elseBlocks ?? []) { collectSceneBlockRefs(nested, into: &refs) }
+            case let .repeat(b):
+                for nested in b.blocks { collectSceneBlockRefs(nested, into: &refs) }
+            case let .repeatWhile(b):
+                collectSceneConditionRefs(b.condition, into: &refs)
+                for nested in b.blocks { collectSceneBlockRefs(nested, into: &refs) }
+            case let .group(b):
+                for nested in b.blocks { collectSceneBlockRefs(nested, into: &refs) }
+            default:
+                break
+            }
+        }
+    }
+
     // MARK: - Device Matching
 
     /// Key for name+room lookup.
@@ -262,15 +367,36 @@ enum WorkflowMigrationService {
         return nil
     }
 
+    // MARK: - Scene Matching
+
+    /// Build a lookup table: sceneName → scene. Only includes entries where the name is unique.
+    private static func buildSceneLookup(_ scenes: [SceneModel]) -> [String: SceneModel] {
+        var groups: [String: [SceneModel]] = [:]
+        for scene in scenes {
+            groups[scene.name.lowercased(), default: []].append(scene)
+        }
+        var lookup: [String: SceneModel] = [:]
+        for (key, group) in groups where group.count == 1 {
+            lookup[key] = group[0]
+        }
+        return lookup
+    }
+
+    /// Try to find a scene matching the orphaned reference by name.
+    private static func findSceneMatch(for ref: SceneRef, lookup: [String: SceneModel]) -> SceneModel? {
+        guard let name = ref.sceneName else { return nil }
+        return lookup[name.lowercased()]
+    }
+
     // MARK: - JSON-based Remapping
 
-    /// Apply device/service ID remapping by encoding to JSON, doing string replacement, and decoding back.
+    /// Apply device/service/scene ID remapping by encoding to JSON, doing string replacement, and decoding back.
     /// This avoids having to rebuild every nested struct manually.
-    private static func applyRemapping(to workflow: Workflow, deviceIdMap: [String: String], serviceIdMap: [String: [String: String]]) -> Workflow? {
+    private static func applyRemapping(to workflow: Workflow, deviceIdMap: [String: String], serviceIdMap: [String: [String: String]], sceneIdMap: [String: String] = [:]) -> Workflow? {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
 
-        guard var jsonData = try? encoder.encode(workflow),
+        guard let jsonData = try? encoder.encode(workflow),
               var jsonString = String(data: jsonData, encoding: .utf8) else {
             return nil
         }
@@ -287,6 +413,11 @@ enum WorkflowMigrationService {
             }
         }
 
+        // Replace scene IDs
+        for (oldId, newId) in sceneIdMap {
+            jsonString = jsonString.replacingOccurrences(of: "\"\(oldId)\"", with: "\"\(newId)\"")
+        }
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
@@ -299,21 +430,27 @@ enum WorkflowMigrationService {
     }
 }
 
-// MARK: - Device Metadata Enrichment
+// MARK: - Metadata Enrichment
 
 extension WorkflowMigrationService {
-    /// Fill in missing `deviceName` / `roomName` metadata on device references in a workflow.
+    /// Fill in missing `deviceName`/`roomName` and `sceneName` metadata on references in a workflow.
     ///
-    /// Workflows created via AI or MCP may omit this metadata. Without it, cross-machine migration
-    /// cannot resolve orphaned UUIDs. This method walks the workflow's JSON representation and
-    /// fills any missing `deviceName`/`roomName` fields from the current device list.
-    static func enrichDeviceMetadata(in workflow: Workflow, using devices: [DeviceModel]) -> Workflow {
-        guard !devices.isEmpty else { return workflow }
+    /// Without this metadata, cross-machine migration cannot resolve orphaned UUIDs.
+    /// This method walks the workflow's JSON representation and fills any missing fields
+    /// from the current device and scene lists.
+    static func enrichMetadata(in workflow: Workflow, using devices: [DeviceModel], scenes: [SceneModel]) -> Workflow {
+        guard !devices.isEmpty || !scenes.isEmpty else { return workflow }
 
         // Build deviceId → (name, room) lookup
-        var lookup: [String: (name: String, room: String?)] = [:]
+        var deviceLookup: [String: (name: String, room: String?)] = [:]
         for device in devices {
-            lookup[device.id] = (device.name, device.roomName)
+            deviceLookup[device.id] = (device.name, device.roomName)
+        }
+
+        // Build sceneId → name lookup
+        var sceneLookup: [String: String] = [:]
+        for scene in scenes {
+            sceneLookup[scene.id] = scene.name
         }
 
         // Encode to JSON dict
@@ -325,7 +462,7 @@ extension WorkflowMigrationService {
         }
 
         var changed = false
-        enrichDict(&dict, using: lookup, changed: &changed)
+        enrichDict(&dict, deviceLookup: deviceLookup, sceneLookup: sceneLookup, changed: &changed)
 
         guard changed else { return workflow }
 
@@ -339,10 +476,11 @@ extension WorkflowMigrationService {
         return enriched
     }
 
-    /// Recursively walk a JSON dict tree, filling `deviceName`/`roomName` wherever a `deviceId` is present.
-    private static func enrichDict(_ dict: inout [String: Any], using lookup: [String: (name: String, room: String?)], changed: inout Bool) {
+    /// Recursively walk a JSON dict tree, filling metadata wherever device/scene IDs are present.
+    private static func enrichDict(_ dict: inout [String: Any], deviceLookup: [String: (name: String, room: String?)], sceneLookup: [String: String], changed: inout Bool) {
+        // Enrich device metadata
         if let deviceId = dict["deviceId"] as? String,
-           let info = lookup[deviceId] {
+           let info = deviceLookup[deviceId] {
             if dict["deviceName"] == nil || (dict["deviceName"] as? String)?.isEmpty == true {
                 dict["deviceName"] = info.name
                 changed = true
@@ -355,14 +493,23 @@ extension WorkflowMigrationService {
             }
         }
 
+        // Enrich scene metadata
+        if let sceneId = dict["sceneId"] as? String,
+           let name = sceneLookup[sceneId] {
+            if dict["sceneName"] == nil || (dict["sceneName"] as? String)?.isEmpty == true {
+                dict["sceneName"] = name
+                changed = true
+            }
+        }
+
         // Recurse into nested dicts and arrays
         for key in dict.keys {
             if var nested = dict[key] as? [String: Any] {
-                enrichDict(&nested, using: lookup, changed: &changed)
+                enrichDict(&nested, deviceLookup: deviceLookup, sceneLookup: sceneLookup, changed: &changed)
                 dict[key] = nested
             } else if var array = dict[key] as? [[String: Any]] {
                 for i in array.indices {
-                    enrichDict(&array[i], using: lookup, changed: &changed)
+                    enrichDict(&array[i], deviceLookup: deviceLookup, sceneLookup: sceneLookup, changed: &changed)
                 }
                 dict[key] = array
             } else if let mixedArray = dict[key] as? [Any] {
@@ -370,7 +517,7 @@ extension WorkflowMigrationService {
                 var newArray = mixedArray
                 for i in newArray.indices {
                     if var nested = newArray[i] as? [String: Any] {
-                        enrichDict(&nested, using: lookup, changed: &changed)
+                        enrichDict(&nested, deviceLookup: deviceLookup, sceneLookup: sceneLookup, changed: &changed)
                         newArray[i] = nested
                         modified = true
                     }
@@ -386,29 +533,45 @@ extension WorkflowMigrationService {
 // MARK: - Batch Migration
 
 extension WorkflowMigrationService {
-    /// Migrate multiple workflows at once. Returns updated workflows, remapping count, and orphan details.
-    static func migrateAll(_ workflows: [Workflow], using devices: [DeviceModel]) -> (workflows: [Workflow], totalRemapped: Int, orphanedReferences: [String: [OrphanedReference]]) {
+    /// Result of a batch migration across multiple workflows.
+    struct BatchMigrationResult {
+        let workflows: [Workflow]
+        let totalRemappedDevices: Int
+        let totalRemappedScenes: Int
+        let orphanedReferences: [String: [OrphanedReference]]  // workflowName → orphans
+    }
+
+    /// Migrate multiple workflows at once. Returns updated workflows, remapping counts, and orphan details.
+    static func migrateAll(_ workflows: [Workflow], using devices: [DeviceModel], scenes: [SceneModel] = []) -> BatchMigrationResult {
         var result: [Workflow] = []
-        var totalRemapped = 0
-        var allOrphans: [String: [OrphanedReference]] = [:]  // workflowName → orphans
+        var totalRemappedDevices = 0
+        var totalRemappedScenes = 0
+        var allOrphans: [String: [OrphanedReference]] = [:]
 
         for workflow in workflows {
-            let migration = migrate(workflow, using: devices)
+            let migration = migrate(workflow, using: devices, scenes: scenes)
             result.append(migration.workflow)
-            totalRemapped += migration.remappedDevices
+            totalRemappedDevices += migration.remappedDevices
+            totalRemappedScenes += migration.remappedScenes
             if !migration.orphanedReferences.isEmpty {
                 allOrphans[workflow.name] = migration.orphanedReferences
             }
         }
 
+        let totalRemapped = totalRemappedDevices + totalRemappedScenes
         if totalRemapped > 0 {
-            AppLogger.workflow.info("Workflow migration: remapped \(totalRemapped) device reference(s) across \(workflows.count) workflow(s)")
+            AppLogger.workflow.info("Workflow migration: remapped \(totalRemappedDevices) device(s), \(totalRemappedScenes) scene(s) across \(workflows.count) workflow(s)")
         }
         if !allOrphans.isEmpty {
             let totalOrphans = allOrphans.values.map(\.count).reduce(0, +)
-            AppLogger.workflow.warning("Workflow migration: \(totalOrphans) orphaned device reference(s) in \(allOrphans.count) workflow(s) could not be resolved")
+            AppLogger.workflow.warning("Workflow migration: \(totalOrphans) orphaned reference(s) in \(allOrphans.count) workflow(s) could not be resolved")
         }
 
-        return (result, totalRemapped, allOrphans)
+        return BatchMigrationResult(
+            workflows: result,
+            totalRemappedDevices: totalRemappedDevices,
+            totalRemappedScenes: totalRemappedScenes,
+            orphanedReferences: allOrphans
+        )
     }
 }

@@ -67,37 +67,38 @@ actor ScheduleTriggerManager {
     // MARK: - Private
 
     private func createScheduleTask(workflowId: UUID, trigger: ScheduleTrigger) -> Task<Void, Never> {
-        Task { [weak self] in
+        let policy = trigger.retriggerPolicy
+        return Task { [weak self] in
             switch trigger.scheduleType {
             case .once(let date):
-                await self?.scheduleOnce(workflowId: workflowId, trigger: trigger, date: date)
+                await self?.scheduleOnce(workflowId: workflowId, trigger: trigger, date: date, policy: policy)
             case .daily(let time):
-                await self?.scheduleRepeating(workflowId: workflowId, trigger: trigger) {
+                await self?.scheduleRepeating(workflowId: workflowId, trigger: trigger, policy: policy) {
                     Self.nextDailyDate(hour: time.hour, minute: time.minute)
                 }
             case .weekly(let time, let days):
-                await self?.scheduleRepeating(workflowId: workflowId, trigger: trigger) {
+                await self?.scheduleRepeating(workflowId: workflowId, trigger: trigger, policy: policy) {
                     Self.nextWeeklyDate(hour: time.hour, minute: time.minute, days: days)
                 }
             case .interval(let seconds):
-                await self?.scheduleInterval(workflowId: workflowId, trigger: trigger, seconds: seconds)
+                await self?.scheduleInterval(workflowId: workflowId, trigger: trigger, seconds: seconds, policy: policy)
             }
         }
     }
 
-    private func scheduleOnce(workflowId: UUID, trigger: ScheduleTrigger, date: Date) async {
+    private func scheduleOnce(workflowId: UUID, trigger: ScheduleTrigger, date: Date, policy: ConcurrentExecutionPolicy?) async {
         let delay = date.timeIntervalSinceNow
         guard delay > 0 else { return }
 
         do {
             try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            await fireTrigger(workflowId: workflowId, trigger: trigger)
+            await fireTrigger(workflowId: workflowId, trigger: trigger, policy: policy)
         } catch {
             // Task cancelled
         }
     }
 
-    private func scheduleRepeating(workflowId: UUID, trigger: ScheduleTrigger, nextDate: @Sendable () -> Date?) async {
+    private func scheduleRepeating(workflowId: UUID, trigger: ScheduleTrigger, policy: ConcurrentExecutionPolicy?, nextDate: @Sendable () -> Date?) async {
         while !Task.isCancelled {
             guard let next = nextDate() else { return }
             let delay = next.timeIntervalSinceNow
@@ -110,7 +111,7 @@ actor ScheduleTriggerManager {
             do {
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                await fireTrigger(workflowId: workflowId, trigger: trigger)
+                await fireTrigger(workflowId: workflowId, trigger: trigger, policy: policy)
                 // Wait 61 seconds to avoid re-triggering in the same minute
                 try await Task.sleep(nanoseconds: 61_000_000_000)
             } catch {
@@ -119,19 +120,19 @@ actor ScheduleTriggerManager {
         }
     }
 
-    private func scheduleInterval(workflowId: UUID, trigger: ScheduleTrigger, seconds: TimeInterval) async {
+    private func scheduleInterval(workflowId: UUID, trigger: ScheduleTrigger, seconds: TimeInterval, policy: ConcurrentExecutionPolicy?) async {
         while !Task.isCancelled {
             do {
                 try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                await fireTrigger(workflowId: workflowId, trigger: trigger)
+                await fireTrigger(workflowId: workflowId, trigger: trigger, policy: policy)
             } catch {
                 return // Task cancelled
             }
         }
     }
 
-    private func fireTrigger(workflowId: UUID, trigger: ScheduleTrigger) async {
+    private func fireTrigger(workflowId: UUID, trigger: ScheduleTrigger, policy: ConcurrentExecutionPolicy?) async {
         guard let engine else { return }
         guard storage?.readWorkflowsEnabled() == true else { return }
         let description = Self.triggerDescription(trigger)
@@ -144,7 +145,7 @@ actor ScheduleTriggerManager {
             newValue: nil,
             triggerDescription: description
         )
-        _ = await engine.scheduleTrigger(id: workflowId, triggerEvent: event)
+        _ = await engine.scheduleTrigger(id: workflowId, triggerEvent: event, policy: policy)
     }
 
     // MARK: - Date Calculation
@@ -211,12 +212,13 @@ actor ScheduleTriggerManager {
     // MARK: - Sun Event Triggers
 
     private func createSunEventTask(workflowId: UUID, trigger: SunEventTrigger) -> Task<Void, Never> {
-        Task { [weak self] in
-            await self?.scheduleSunEventRepeating(workflowId: workflowId, trigger: trigger)
+        let policy = trigger.retriggerPolicy
+        return Task { [weak self] in
+            await self?.scheduleSunEventRepeating(workflowId: workflowId, trigger: trigger, policy: policy)
         }
     }
 
-    private func scheduleSunEventRepeating(workflowId: UUID, trigger: SunEventTrigger) async {
+    private func scheduleSunEventRepeating(workflowId: UUID, trigger: SunEventTrigger, policy: ConcurrentExecutionPolicy?) async {
         while !Task.isCancelled {
             let latitude = storage?.readSunEventLatitude() ?? 0
             let longitude = storage?.readSunEventLongitude() ?? 0
@@ -269,7 +271,7 @@ actor ScheduleTriggerManager {
             do {
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                await fireSunEventTrigger(workflowId: workflowId, trigger: trigger)
+                await fireSunEventTrigger(workflowId: workflowId, trigger: trigger, policy: policy)
                 // Wait 61 seconds to avoid re-triggering in the same minute
                 try await Task.sleep(nanoseconds: 61_000_000_000)
             } catch {
@@ -278,7 +280,7 @@ actor ScheduleTriggerManager {
         }
     }
 
-    private func fireSunEventTrigger(workflowId: UUID, trigger: SunEventTrigger) async {
+    private func fireSunEventTrigger(workflowId: UUID, trigger: SunEventTrigger, policy: ConcurrentExecutionPolicy?) async {
         guard let engine else { return }
         guard storage?.readWorkflowsEnabled() == true else { return }
         let description = Self.sunEventDescription(trigger)
@@ -291,7 +293,7 @@ actor ScheduleTriggerManager {
             newValue: nil,
             triggerDescription: description
         )
-        _ = await engine.scheduleTrigger(id: workflowId, triggerEvent: event)
+        _ = await engine.scheduleTrigger(id: workflowId, triggerEvent: event, policy: policy)
     }
 
     private static func sunEventDescription(_ trigger: SunEventTrigger) -> String {

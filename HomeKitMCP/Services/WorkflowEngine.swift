@@ -115,12 +115,11 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         for workflow in workflows {
             // Evaluate ALL workflows regardless of slot availability —
             // previously used `break` which silently skipped unevaluated workflows.
-            let triggered = await checkTriggers(workflow.triggers, context: context)
-            guard triggered else { continue }
+            guard let matchedPolicy = await checkTriggers(workflow.triggers, context: context) else { continue }
 
             // Already running?
             if let existingTask = runningTasks[workflow.id] {
-                switch workflow.retriggerPolicy {
+                switch matchedPolicy {
                 case .ignoreNew:
                     AppLogger.workflow.debug("[\(workflow.name)] Ignoring new trigger — workflow already running (ignoreNew policy)")
                     continue
@@ -130,6 +129,11 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                     runningTasks.removeValue(forKey: workflow.id)
                 case .queueAndExecute:
                     enqueueWorkflow(workflow, change: change)
+                    continue
+                case .cancelOnly:
+                    AppLogger.workflow.debug("[\(workflow.name)] Cancelling running execution — no restart (cancelOnly policy)")
+                    existingTask.cancel()
+                    runningTasks.removeValue(forKey: workflow.id)
                     continue
                 }
             }
@@ -143,7 +147,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         guard storage.readWorkflowsEnabled() else { return nil }
         guard let workflow = await workflowStorageService.getWorkflow(id: id) else { return nil }
 
-        // Handle retrigger policy for manual trigger too
+        // Handle retrigger policy for manual trigger (use workflow-level fallback)
         if let existingTask = runningTasks[id] {
             switch workflow.retriggerPolicy {
             case .ignoreNew:
@@ -153,6 +157,10 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 runningTasks.removeValue(forKey: id)
             case .queueAndExecute:
                 enqueueWorkflow(workflow, change: nil)
+                return nil
+            case .cancelOnly:
+                existingTask.cancel()
+                runningTasks.removeValue(forKey: id)
                 return nil
             }
         }
@@ -174,12 +182,19 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
     /// Trigger a workflow from a schedule or webhook with a custom trigger event.
     func triggerWorkflow(id: UUID, triggerEvent: TriggerEvent) async -> WorkflowExecutionLog? {
+        return await triggerWorkflow(id: id, triggerEvent: triggerEvent, policy: nil)
+    }
+
+    /// Trigger a workflow with an explicit retrigger policy from the matched trigger.
+    func triggerWorkflow(id: UUID, triggerEvent: TriggerEvent, policy: ConcurrentExecutionPolicy?) async -> WorkflowExecutionLog? {
         guard storage.readWorkflowsEnabled() else { return nil }
         guard let workflow = await workflowStorageService.getWorkflow(id: id) else { return nil }
         guard workflow.isEnabled else { return nil }
 
+        let effectivePolicy = policy ?? workflow.retriggerPolicy
+
         if let existingTask = runningTasks[id] {
-            switch workflow.retriggerPolicy {
+            switch effectivePolicy {
             case .ignoreNew:
                 return nil
             case .cancelAndRestart:
@@ -187,6 +202,10 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 runningTasks.removeValue(forKey: id)
             case .queueAndExecute:
                 enqueueWorkflow(workflow, change: nil)
+                return nil
+            case .cancelOnly:
+                existingTask.cancel()
+                runningTasks.removeValue(forKey: id)
                 return nil
             }
         }
@@ -225,6 +244,10 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             case .queueAndExecute:
                 enqueueWorkflow(workflow, change: nil)
                 return .queued(workflowId: id, workflowName: workflow.name)
+            case .cancelOnly:
+                runningTasks[id]?.cancel()
+                runningTasks.removeValue(forKey: id)
+                return .cancelled(workflowId: id, workflowName: workflow.name)
             }
         }
 
@@ -234,12 +257,19 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
     /// Fire-and-forget trigger with a custom event — returns immediately with the scheduling outcome.
     func scheduleTrigger(id: UUID, triggerEvent: TriggerEvent) async -> TriggerResult {
+        return await scheduleTrigger(id: id, triggerEvent: triggerEvent, policy: nil)
+    }
+
+    /// Fire-and-forget trigger with a custom event and explicit policy from the matched trigger.
+    func scheduleTrigger(id: UUID, triggerEvent: TriggerEvent, policy: ConcurrentExecutionPolicy?) async -> TriggerResult {
         guard storage.readWorkflowsEnabled() else { return .disabled }
         guard let workflow = await workflowStorageService.getWorkflow(id: id) else { return .notFound }
         guard workflow.isEnabled else { return .workflowDisabled(workflowId: id, workflowName: workflow.name) }
 
+        let effectivePolicy = policy ?? workflow.retriggerPolicy
+
         if runningTasks[id] != nil {
-            switch workflow.retriggerPolicy {
+            switch effectivePolicy {
             case .ignoreNew:
                 return .ignored(workflowId: id, workflowName: workflow.name)
             case .cancelAndRestart:
@@ -250,6 +280,10 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             case .queueAndExecute:
                 enqueueWorkflow(workflow, change: nil, triggerEvent: triggerEvent)
                 return .queued(workflowId: id, workflowName: workflow.name)
+            case .cancelOnly:
+                runningTasks[id]?.cancel()
+                runningTasks.removeValue(forKey: id)
+                return .cancelled(workflowId: id, workflowName: workflow.name)
             }
         }
 
@@ -268,8 +302,14 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             return nil
         }
 
+        // Use the target workflow's .workflow trigger policy if available, else workflow-level fallback
+        let workflowTriggerPolicy = workflow.triggers.first(where: {
+            if case .workflow = $0 { return true }
+            return false
+        })?.resolvedRetriggerPolicy ?? workflow.retriggerPolicy
+
         if let existingTask = runningTasks[id] {
-            switch workflow.retriggerPolicy {
+            switch workflowTriggerPolicy {
             case .ignoreNew:
                 return nil
             case .cancelAndRestart:
@@ -277,6 +317,10 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 runningTasks.removeValue(forKey: id)
             case .queueAndExecute:
                 enqueueWorkflow(workflow, change: nil)
+                return nil
+            case .cancelOnly:
+                existingTask.cancel()
+                runningTasks.removeValue(forKey: id)
                 return nil
             }
         }
@@ -394,17 +438,18 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
     // MARK: - Trigger Evaluation
 
-    private func checkTriggers(_ triggers: [WorkflowTrigger], context: TriggerContext) async -> Bool {
+    /// Returns the retrigger policy of the first matching trigger, or nil if no trigger matched.
+    private func checkTriggers(_ triggers: [WorkflowTrigger], context: TriggerContext) async -> ConcurrentExecutionPolicy? {
         for trigger in triggers {
             for evaluator in evaluators {
                 if evaluator.canEvaluate(trigger) {
                     if await evaluator.evaluate(trigger, context: context) {
-                        return true
+                        return trigger.resolvedRetriggerPolicy
                     }
                 }
             }
         }
-        return false
+        return nil
     }
 
     // MARK: - Workflow Execution

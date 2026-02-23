@@ -86,13 +86,13 @@ struct ConditionEvaluator {
 
     // MARK: - Internal
 
-    /// Evaluate a leaf condition (deviceState, sunEvent, sceneActive). Compound conditions are handled by `evaluate(_:)`.
+    /// Evaluate a leaf condition (deviceState, timeCondition, sceneActive). Compound conditions are handled by `evaluate(_:)`.
     private func evaluateLeaf(_ condition: WorkflowCondition) async -> (Bool, String) {
         switch condition {
         case .deviceState(let cond):
             return await evaluateDeviceState(cond)
-        case .sunEvent(let cond):
-            return evaluateSunEvent(cond)
+        case .timeCondition(let cond):
+            return evaluateTimeCondition(cond)
         case .sceneActive(let cond):
             return await evaluateSceneActive(cond)
         case .and, .or, .not:
@@ -121,36 +121,84 @@ struct ConditionEvaluator {
         return (passed, "\(device.name).\(displayName) \(compDesc) = \(passed)")
     }
 
-    private func evaluateSunEvent(_ condition: SunEventCondition) -> (Bool, String) {
+    private func evaluateTimeCondition(_ condition: TimeCondition) -> (Bool, String) {
+        let modeDesc = condition.mode.displayName
+
+        // Time range mode doesn't need location
+        if condition.mode == .timeRange {
+            return evaluateTimeRange(condition)
+        }
+
+        // All other modes need solar calculations
         let latitude = storage?.readSunEventLatitude() ?? 0
         let longitude = storage?.readSunEventLongitude() ?? 0
 
         guard latitude != 0 || longitude != 0 else {
-            return (false, "\(condition.comparison.displayName) \(condition.event.displayName): location not configured")
+            return (false, "\(modeDesc): location not configured")
         }
 
         let now = Date()
-        let sunTime: Date?
-        switch condition.event {
-        case .sunrise:
-            sunTime = SolarCalculator.sunrise(for: now, latitude: latitude, longitude: longitude)
-        case .sunset:
-            sunTime = SolarCalculator.sunset(for: now, latitude: latitude, longitude: longitude)
+        let (sunrise, sunset) = SolarCalculator.sunTimes(for: now, latitude: latitude, longitude: longitude)
+
+        switch condition.mode {
+        case .beforeSunrise:
+            guard let sunrise else { return (false, "\(modeDesc): cannot compute (polar region)") }
+            let passed = now < sunrise
+            return (passed, "\(modeDesc) = \(passed)")
+
+        case .afterSunrise:
+            guard let sunrise else { return (false, "\(modeDesc): cannot compute (polar region)") }
+            let passed = now > sunrise
+            return (passed, "\(modeDesc) = \(passed)")
+
+        case .beforeSunset:
+            guard let sunset else { return (false, "\(modeDesc): cannot compute (polar region)") }
+            let passed = now < sunset
+            return (passed, "\(modeDesc) = \(passed)")
+
+        case .afterSunset:
+            guard let sunset else { return (false, "\(modeDesc): cannot compute (polar region)") }
+            let passed = now > sunset
+            return (passed, "\(modeDesc) = \(passed)")
+
+        case .daytime:
+            guard let sunrise, let sunset else { return (false, "\(modeDesc): cannot compute (polar region)") }
+            let passed = now > sunrise && now < sunset
+            return (passed, "\(modeDesc) = \(passed)")
+
+        case .nighttime:
+            guard let sunrise, let sunset else { return (false, "\(modeDesc): cannot compute (polar region)") }
+            let passed = now < sunrise || now > sunset
+            return (passed, "\(modeDesc) = \(passed)")
+
+        case .timeRange:
+            return evaluateTimeRange(condition) // unreachable, handled above
+        }
+    }
+
+    private func evaluateTimeRange(_ condition: TimeCondition) -> (Bool, String) {
+        guard let start = condition.startTime, let end = condition.endTime else {
+            return (false, "Time Range: start/end time not configured")
         }
 
-        guard let sunTime else {
-            return (false, "\(condition.comparison.displayName) \(condition.event.displayName): cannot compute (polar region)")
-        }
+        let calendar = Calendar.current
+        let now = Date()
+        let hour = calendar.component(.hour, from: now)
+        let minute = calendar.component(.minute, from: now)
+        let nowMins = hour * 60 + minute
+        let startMins = start.totalMinutes
+        let endMins = end.totalMinutes
 
         let passed: Bool
-        switch condition.comparison {
-        case .before:
-            passed = now < sunTime
-        case .after:
-            passed = now > sunTime
+        if startMins <= endMins {
+            // Same-day range (e.g., 9:00–17:00)
+            passed = nowMins >= startMins && nowMins < endMins
+        } else {
+            // Cross-midnight range (e.g., 23:00–02:00)
+            passed = nowMins >= startMins || nowMins < endMins
         }
 
-        return (passed, "\(condition.comparison.displayName) \(condition.event.displayName) = \(passed)")
+        return (passed, "Time Range \(start.formatted)–\(end.formatted) = \(passed)")
     }
 
     private func evaluateSceneActive(_ condition: SceneActiveCondition) async -> (Bool, String) {

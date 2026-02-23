@@ -116,9 +116,9 @@ struct ConditionGroupEditor: View {
                     Label("Device State", systemImage: "shield.fill")
                 }
                 Button {
-                    group.children.append(.leaf(.emptySunEvent()))
+                    group.children.append(.leaf(.emptyTimeCondition()))
                 } label: {
-                    Label("Sunrise/Sunset", systemImage: "sunrise.fill")
+                    Label("Time Condition", systemImage: "clock.fill")
                 }
                 Button {
                     group.children.append(.leaf(.emptySceneActive()))
@@ -272,7 +272,7 @@ private struct ConditionLeafRow: View {
     private var conditionIconColor: Color {
         switch condition.conditionDraftType {
         case .deviceState: return .indigo
-        case .sunEvent: return .orange
+        case .timeCondition: return .orange
         case .sceneActive: return .green
         }
     }
@@ -328,20 +328,22 @@ private struct ConditionLeafEditSheet: View {
                 devices: devices,
                 deviceId: condition.deviceId
             )
-        case .sunEvent:
-            Picker("Event", selection: $condition.sunEventType) {
-                ForEach(SunEventType.allCases) { eventType in
-                    Text(eventType.displayName).tag(eventType)
+        case .timeCondition:
+            Picker("Mode", selection: $condition.timeConditionMode) {
+                ForEach(TimeConditionMode.allCases) { mode in
+                    Label(mode.displayName, systemImage: mode.icon).tag(mode)
                 }
             }
-            .pickerStyle(.segmented)
 
-            Picker("Timing", selection: $condition.sunEventComparison) {
-                ForEach(SunEventComparison.allCases) { comp in
-                    Text(comp.displayName).tag(comp)
-                }
+            if condition.timeConditionMode == .timeRange {
+                timeRangePickers
             }
-            .pickerStyle(.segmented)
+
+            if condition.timeConditionMode.requiresLocation {
+                Text("Requires location configured in Settings")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         case .sceneActive:
             Picker("Scene", selection: $condition.sceneId) {
                 Text("Select scene\u{2026}").tag("")
@@ -355,6 +357,76 @@ private struct ConditionLeafEditSheet: View {
                 Text("Is Not Active").tag(false)
             }
             .pickerStyle(.segmented)
+        }
+    }
+
+    // MARK: - Time Range Pickers
+
+    @ViewBuilder
+    private var timeRangePickers: some View {
+        let startHour = Binding(
+            get: { condition.timeRangeStart.hour },
+            set: { condition.timeRangeStart = TimeOfDay(hour: $0, minute: condition.timeRangeStart.minute) }
+        )
+        let startMinute = Binding(
+            get: { condition.timeRangeStart.minute },
+            set: { condition.timeRangeStart = TimeOfDay(hour: condition.timeRangeStart.hour, minute: $0) }
+        )
+        let endHour = Binding(
+            get: { condition.timeRangeEnd.hour },
+            set: { condition.timeRangeEnd = TimeOfDay(hour: $0, minute: condition.timeRangeEnd.minute) }
+        )
+        let endMinute = Binding(
+            get: { condition.timeRangeEnd.minute },
+            set: { condition.timeRangeEnd = TimeOfDay(hour: condition.timeRangeEnd.hour, minute: $0) }
+        )
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Start Time")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            HStack(spacing: 4) {
+                Picker("Hour", selection: startHour) {
+                    ForEach(0..<24, id: \.self) { h in
+                        Text(String(format: "%d %@", h == 0 ? 12 : (h > 12 ? h - 12 : h), h < 12 ? "AM" : "PM")).tag(h)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                Text(":")
+                Picker("Minute", selection: startMinute) {
+                    ForEach(Array(stride(from: 0, to: 60, by: 5)), id: \.self) { m in
+                        Text(String(format: ":%02d", m)).tag(m)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("End Time")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            HStack(spacing: 4) {
+                Picker("Hour", selection: endHour) {
+                    ForEach(0..<24, id: \.self) { h in
+                        Text(String(format: "%d %@", h == 0 ? 12 : (h > 12 ? h - 12 : h), h < 12 ? "AM" : "PM")).tag(h)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                Text(":")
+                Picker("Minute", selection: endMinute) {
+                    ForEach(Array(stride(from: 0, to: 60, by: 5)), id: \.self) { m in
+                        Text(String(format: ":%02d", m)).tag(m)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+
+        if condition.timeRangeStart.totalMinutes > condition.timeRangeEnd.totalMinutes {
+            Label("Spans midnight", systemImage: "moon.fill")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
 }

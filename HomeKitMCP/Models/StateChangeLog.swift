@@ -11,6 +11,7 @@ enum LogCategory: String, Codable {
     case workflowError = "workflow_error"
     case sceneExecution = "scene_execution"
     case sceneError = "scene_error"
+    case backupRestore = "backup_restore"
 }
 
 struct StateChangeLog: Identifiable, Codable {

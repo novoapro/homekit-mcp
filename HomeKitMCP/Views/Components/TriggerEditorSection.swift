@@ -131,6 +131,18 @@ private struct TriggerRow: View {
         case .sunEvent:
             sunEventTriggerContent
         }
+
+        Picker("If workflow is running?", selection: $trigger.retriggerPolicy) {
+            ForEach(ConcurrentExecutionPolicy.allCases) { policy in
+                VStack(alignment: .leading) {
+                    Text(policy.displayName)
+                    Text(policy.description)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .tag(policy)
+            }
+        }
     }
 
     // MARK: - Device State Change Content

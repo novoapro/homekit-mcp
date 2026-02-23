@@ -135,18 +135,6 @@ struct WorkflowEditorView: View {
                 .tint(Theme.Tint.main)
             Toggle("Continue on Error", isOn: $draft.continueOnError)
                 .tint(Theme.Tint.main)
-
-            Picker("Concurrent Execution", selection: $draft.retriggerPolicy) {
-                ForEach(ConcurrentExecutionPolicy.allCases) { policy in
-                    VStack(alignment: .leading) {
-                        Text(policy.displayName)
-                        Text(policy.description)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .tag(policy)
-                }
-            }
         } header: {
             Text("Details")
         }

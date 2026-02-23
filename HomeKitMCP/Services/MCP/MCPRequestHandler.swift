@@ -697,9 +697,7 @@ class MCPRequestHandler {
         }
 
         do {
-            var workflow = try parseWorkflowFromDict(workflowDict)
-            let devices = await MainActor.run { homeKitManager.cachedDevices }
-            workflow = WorkflowMigrationService.enrichDeviceMetadata(in: workflow, using: devices)
+            let workflow = try parseWorkflowFromDict(workflowDict)
             let created = await workflowStorageService.createWorkflow(workflow)
             return toolResult(text: "Workflow created successfully.\nID: \(created.id.uuidString)\nName: \(created.name)", id: id)
         } catch {
@@ -745,9 +743,6 @@ class MCPRequestHandler {
                 let data = try JSONSerialization.data(withJSONObject: blocksArray)
                 merged.blocks = try Self.decoder.decode([WorkflowBlock].self, from: data)
             }
-
-            let devices = await MainActor.run { homeKitManager.cachedDevices }
-            merged = WorkflowMigrationService.enrichDeviceMetadata(in: merged, using: devices)
 
             let updated = await workflowStorageService.updateWorkflow(id: workflowId) { workflow in
                 workflow.name = merged.name
@@ -887,6 +882,13 @@ class MCPRequestHandler {
 
         var lines: [String] = []
         for workflow in matchingWorkflows {
+            // Find the specific webhook trigger that matched to get its retrigger policy
+            let matchedTrigger = workflow.triggers.first { trigger in
+                if case .webhook(let wt) = trigger { return wt.token == token }
+                return false
+            }
+            let policy = matchedTrigger?.retriggerPolicy
+
             let triggerEvent = TriggerEvent(
                 deviceId: nil,
                 deviceName: nil,
@@ -896,7 +898,7 @@ class MCPRequestHandler {
                 newValue: nil,
                 triggerDescription: "Webhook received (token \(String(token.prefix(8)))…)"
             )
-            let result = await workflowEngine.scheduleTrigger(id: workflow.id, triggerEvent: triggerEvent)
+            let result = await workflowEngine.scheduleTrigger(id: workflow.id, triggerEvent: triggerEvent, policy: policy)
             lines.append("\(workflow.name): \(result.message)")
         }
 

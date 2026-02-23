@@ -34,6 +34,7 @@ struct LogRow: View {
         if isWebhookCall { return Theme.Tint.secondary }
         if log.category == .workflowExecution { return Theme.Status.active }
         if log.category == .workflowError { return Theme.Status.error }
+        if log.category == .backupRestore { return Color.orange }
         return Theme.Tint.main
     }
 
@@ -136,6 +137,8 @@ struct LogRow: View {
             Image(systemName: "exclamationmark.circle.fill")
         case .sceneExecution:
             Image(systemName: "play.circle.fill")
+        case .backupRestore:
+            Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
         }
     }
 
@@ -160,6 +163,8 @@ struct LogRow: View {
             workflowContent
         case .sceneExecution:
             stateChangeContent
+        case .backupRestore:
+            backupRestoreContent
         }
     }
 
@@ -243,6 +248,18 @@ struct LogRow: View {
             if let responseBody = log.responseBody {
                 Text(responseBody)
                     .font(.system(.caption2, design: .monospaced))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var backupRestoreContent: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let errorDetails = log.errorDetails {
+                let isOrphan = log.characteristicType == "orphan-detection"
+                Text(errorDetails)
+                    .font(.caption)
+                    .foregroundColor(isOrphan ? Theme.Status.error : Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

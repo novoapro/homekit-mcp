@@ -11,19 +11,22 @@ class BackupService: ObservableObject, BackupServiceProtocol {
     private let configService: DeviceConfigurationService
     private let workflowStorageService: WorkflowStorageService
     private let homeKitManager: HomeKitManager
+    private let loggingService: LoggingService
 
     init(
         storage: StorageService,
         keychainService: KeychainService,
         configService: DeviceConfigurationService,
         workflowStorageService: WorkflowStorageService,
-        homeKitManager: HomeKitManager
+        homeKitManager: HomeKitManager,
+        loggingService: LoggingService
     ) {
         self.storage = storage
         self.keychainService = keychainService
         self.configService = configService
         self.workflowStorageService = workflowStorageService
         self.homeKitManager = homeKitManager
+        self.loggingService = loggingService
     }
 
     // MARK: - Create Backup
@@ -62,7 +65,12 @@ class BackupService: ObservableObject, BackupServiceProtocol {
             webhookURL: keychainService.read(key: KeychainService.Keys.webhookURL)
         )
 
-        let workflows = await workflowStorageService.getAllWorkflows()
+        let rawWorkflows = await workflowStorageService.getAllWorkflows()
+        let currentDevices = homeKitManager.cachedDevices
+        let currentScenes = homeKitManager.cachedScenes
+        let workflows = (currentDevices.isEmpty && currentScenes.isEmpty)
+            ? rawWorkflows
+            : rawWorkflows.map { WorkflowMigrationService.enrichMetadata(in: $0, using: currentDevices, scenes: currentScenes) }
         let deviceConfig = await configService.getAllConfigs()
 
         let deviceName = ProcessInfo.processInfo.hostName
@@ -150,19 +158,86 @@ class BackupService: ObservableObject, BackupServiceProtocol {
             storage.webhookURL = nil
         }
 
-        // Restore workflows, then migrate device UUIDs that may differ on this machine
+        // Restore workflows, then migrate device/scene UUIDs that may differ on this machine
         await workflowStorageService.replaceAll(workflows: bundle.workflows)
 
         let currentDevices = homeKitManager.cachedDevices
-        if !currentDevices.isEmpty {
-            let (migratedWorkflows, totalRemapped, _) = WorkflowMigrationService.migrateAll(bundle.workflows, using: currentDevices)
+        let currentScenes = homeKitManager.cachedScenes
+        if !currentDevices.isEmpty || !currentScenes.isEmpty {
+            let migration = WorkflowMigrationService.migrateAll(bundle.workflows, using: currentDevices, scenes: currentScenes)
+            let totalRemapped = migration.totalRemappedDevices + migration.totalRemappedScenes
             if totalRemapped > 0 {
-                await workflowStorageService.replaceAll(workflows: migratedWorkflows)
+                await workflowStorageService.replaceAll(workflows: migration.workflows)
             }
+
+            // Log restore summary
+            let summary = buildRestoreSummary(
+                workflowCount: bundle.workflows.count,
+                remappedDevices: migration.totalRemappedDevices,
+                remappedScenes: migration.totalRemappedScenes,
+                orphanedReferences: migration.orphanedReferences
+            )
+            let summaryEntry = StateChangeLog(
+                id: UUID(), timestamp: Date(),
+                deviceId: "backup-restore", deviceName: "Backup Restore",
+                characteristicType: "restore-summary",
+                oldValue: nil, newValue: nil,
+                category: .backupRestore,
+                errorDetails: summary
+            )
+            await loggingService.logEntry(summaryEntry)
+
+            // Log individual orphans
+            for (workflowName, orphans) in migration.orphanedReferences {
+                for orphan in orphans {
+                    let kind = orphan.isScene ? "scene" : "device"
+                    let desc = orphan.referenceName ?? orphan.referenceId
+                    let roomInfo = orphan.roomName.map { " (\($0))" } ?? ""
+                    let errorDetail = "Workflow '\(workflowName)' → \(orphan.location): \(kind) '\(desc)\(roomInfo)' not found"
+                    let orphanEntry = StateChangeLog(
+                        id: UUID(), timestamp: Date(),
+                        deviceId: "backup-restore", deviceName: workflowName,
+                        characteristicType: "orphan-detection",
+                        oldValue: nil, newValue: nil,
+                        category: .backupRestore,
+                        errorDetails: errorDetail
+                    )
+                    await loggingService.logEntry(orphanEntry)
+                }
+            }
+        } else {
+            // No devices/scenes available yet — log that migration will happen at startup
+            let entry = StateChangeLog(
+                id: UUID(), timestamp: Date(),
+                deviceId: "backup-restore", deviceName: "Backup Restore",
+                characteristicType: "restore-summary",
+                oldValue: nil, newValue: nil,
+                category: .backupRestore,
+                errorDetails: "Restored \(bundle.workflows.count) workflow(s). Device migration deferred — HomeKit devices not yet available."
+            )
+            await loggingService.logEntry(entry)
         }
 
         // Restore device config
         await configService.replaceAll(configs: bundle.deviceConfig)
+    }
+
+    // MARK: - Helpers
+
+    private func buildRestoreSummary(workflowCount: Int, remappedDevices: Int, remappedScenes: Int, orphanedReferences: [String: [WorkflowMigrationService.OrphanedReference]]) -> String {
+        var parts: [String] = ["Restored \(workflowCount) workflow(s)."]
+        let totalRemapped = remappedDevices + remappedScenes
+        if totalRemapped > 0 {
+            parts.append("Remapped \(remappedDevices) device(s), \(remappedScenes) scene(s).")
+        }
+        let totalOrphans = orphanedReferences.values.map(\.count).reduce(0, +)
+        if totalOrphans > 0 {
+            let affectedWorkflows = orphanedReferences.keys.sorted().joined(separator: ", ")
+            parts.append("\(totalOrphans) orphaned reference(s) in: \(affectedWorkflows).")
+        } else if totalRemapped > 0 {
+            parts.append("All references resolved successfully.")
+        }
+        return parts.joined(separator: " ")
     }
 
 }

@@ -9,6 +9,8 @@ enum ConcurrentExecutionPolicy: String, Codable, CaseIterable, Identifiable {
     case cancelAndRestart
     /// Queue the new trigger; it will execute after the current run finishes.
     case queueAndExecute
+    /// Cancel the running execution without restarting.
+    case cancelOnly
 
     var id: String {
         rawValue
@@ -16,9 +18,10 @@ enum ConcurrentExecutionPolicy: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .ignoreNew: return "Ignore New Trigger"
-        case .cancelAndRestart: return "Cancel & Restart"
-        case .queueAndExecute: return "Queue & Execute"
+        case .ignoreNew: return "Ignore trigger"
+        case .cancelAndRestart: return "Restart workflow"
+        case .queueAndExecute: return "Queue new execution"
+        case .cancelOnly: return "Cancel workflow"
         }
     }
 
@@ -27,6 +30,7 @@ enum ConcurrentExecutionPolicy: String, Codable, CaseIterable, Identifiable {
         case .ignoreNew: return "New triggers are ignored while the workflow is running."
         case .cancelAndRestart: return "The running execution is cancelled and restarted with the new trigger."
         case .queueAndExecute: return "New triggers are queued and executed once the current run completes."
+        case .cancelOnly: return "The running execution is cancelled. No new execution starts."
         }
     }
 }
@@ -87,7 +91,7 @@ struct Workflow: Identifiable, Codable {
         name = try container.decode(String.self, forKey: .name)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
-        triggers = try container.decode([WorkflowTrigger].self, forKey: .triggers)
+        let decodedTriggers = try container.decode([WorkflowTrigger].self, forKey: .triggers)
         conditions = try container.decodeIfPresent([WorkflowCondition].self, forKey: .conditions)
         blocks = try container.decode([WorkflowBlock].self, forKey: .blocks)
         continueOnError = try container.decode(Bool.self, forKey: .continueOnError)
@@ -95,6 +99,15 @@ struct Workflow: Identifiable, Codable {
         metadata = try container.decode(WorkflowMetadata.self, forKey: .metadata)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+
+        // Backward compat: migrate workflow-level retriggerPolicy to triggers that don't have one
+        let workflowPolicy = retriggerPolicy
+        triggers = decodedTriggers.map { trigger in
+            if trigger.retriggerPolicy == nil {
+                return trigger.withRetriggerPolicy(workflowPolicy)
+            }
+            return trigger
+        }
     }
 }
 
@@ -175,7 +188,7 @@ enum WorkflowAction: Codable {
         case deviceName, roomName
         case url, method, headers, body
         case message
-        case sceneId
+        case sceneId, sceneName
     }
 
     init(from decoder: Decoder) throws {
@@ -209,7 +222,8 @@ enum WorkflowAction: Codable {
         case .runScene, .activateScene:
             self = try .runScene(RunSceneAction(
                 sceneId: container.decode(String.self, forKey: .sceneId),
-                name: name
+                name: name,
+                sceneName: container.decodeIfPresent(String.self, forKey: .sceneName)
             ))
         }
     }
@@ -241,6 +255,7 @@ enum WorkflowAction: Codable {
             try container.encode(ActionType.runScene, forKey: .type)
             try container.encodeIfPresent(action.name, forKey: .name)
             try container.encode(action.sceneId, forKey: .sceneId)
+            try container.encodeIfPresent(action.sceneName, forKey: .sceneName)
         }
     }
 
@@ -303,10 +318,12 @@ struct LogAction {
 struct RunSceneAction {
     let sceneId: String
     let name: String?
+    let sceneName: String?
 
-    init(sceneId: String, name: String? = nil) {
+    init(sceneId: String, name: String? = nil, sceneName: String? = nil) {
         self.sceneId = sceneId
         self.name = name
+        self.sceneName = sceneName
     }
 }
 
@@ -657,12 +674,14 @@ indirect enum WorkflowTrigger: Codable {
         case triggers
         case scheduleType, token
         case event, offsetMinutes
+        case retriggerPolicy
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(TriggerType.self, forKey: .type)
         let name = try container.decodeIfPresent(String.self, forKey: .name)
+        let policy = try container.decodeIfPresent(ConcurrentExecutionPolicy.self, forKey: .retriggerPolicy)
         switch type {
         case .deviceStateChange:
             self = try .deviceStateChange(DeviceStateTrigger(
@@ -672,31 +691,36 @@ indirect enum WorkflowTrigger: Codable {
                 condition: container.decode(TriggerCondition.self, forKey: .condition),
                 name: name,
                 deviceName: container.decodeIfPresent(String.self, forKey: .deviceName),
-                roomName: container.decodeIfPresent(String.self, forKey: .roomName)
+                roomName: container.decodeIfPresent(String.self, forKey: .roomName),
+                retriggerPolicy: policy
             ))
         case .compound:
             self = try .compound(CompoundTrigger(
                 logicOperator: container.decode(LogicOperator.self, forKey: .logicOperator),
                 triggers: container.decode([WorkflowTrigger].self, forKey: .triggers),
-                name: name
+                name: name,
+                retriggerPolicy: policy
             ))
         case .schedule:
             self = try .schedule(ScheduleTrigger(
                 scheduleType: container.decode(ScheduleType.self, forKey: .scheduleType),
-                name: name
+                name: name,
+                retriggerPolicy: policy
             ))
         case .webhook:
             self = try .webhook(WebhookTrigger(
                 token: container.decode(String.self, forKey: .token),
-                name: name
+                name: name,
+                retriggerPolicy: policy
             ))
         case .workflow:
-            self = .workflow(WorkflowCallTrigger(name: name))
+            self = .workflow(WorkflowCallTrigger(name: name, retriggerPolicy: policy))
         case .sunEvent:
             self = try .sunEvent(SunEventTrigger(
                 event: container.decode(SunEventType.self, forKey: .event),
                 offsetMinutes: container.decodeIfPresent(Int.self, forKey: .offsetMinutes) ?? 0,
-                name: name
+                name: name,
+                retriggerPolicy: policy
             ))
         }
     }
@@ -713,27 +737,84 @@ indirect enum WorkflowTrigger: Codable {
             try container.encode(trigger.condition, forKey: .condition)
             try container.encodeIfPresent(trigger.deviceName, forKey: .deviceName)
             try container.encodeIfPresent(trigger.roomName, forKey: .roomName)
+            try container.encodeIfPresent(trigger.retriggerPolicy, forKey: .retriggerPolicy)
         case let .compound(trigger):
             try container.encode(TriggerType.compound, forKey: .type)
             try container.encodeIfPresent(trigger.name, forKey: .name)
             try container.encode(trigger.logicOperator, forKey: .logicOperator)
             try container.encode(trigger.triggers, forKey: .triggers)
+            try container.encodeIfPresent(trigger.retriggerPolicy, forKey: .retriggerPolicy)
         case let .schedule(trigger):
             try container.encode(TriggerType.schedule, forKey: .type)
             try container.encodeIfPresent(trigger.name, forKey: .name)
             try container.encode(trigger.scheduleType, forKey: .scheduleType)
+            try container.encodeIfPresent(trigger.retriggerPolicy, forKey: .retriggerPolicy)
         case let .webhook(trigger):
             try container.encode(TriggerType.webhook, forKey: .type)
             try container.encodeIfPresent(trigger.name, forKey: .name)
             try container.encode(trigger.token, forKey: .token)
+            try container.encodeIfPresent(trigger.retriggerPolicy, forKey: .retriggerPolicy)
         case let .workflow(trigger):
             try container.encode(TriggerType.workflow, forKey: .type)
             try container.encodeIfPresent(trigger.name, forKey: .name)
+            try container.encodeIfPresent(trigger.retriggerPolicy, forKey: .retriggerPolicy)
         case let .sunEvent(trigger):
             try container.encode(TriggerType.sunEvent, forKey: .type)
             try container.encodeIfPresent(trigger.name, forKey: .name)
             try container.encode(trigger.event, forKey: .event)
             try container.encode(trigger.offsetMinutes, forKey: .offsetMinutes)
+            try container.encodeIfPresent(trigger.retriggerPolicy, forKey: .retriggerPolicy)
+        }
+    }
+    /// The per-trigger retrigger policy, if set.
+    var retriggerPolicy: ConcurrentExecutionPolicy? {
+        switch self {
+        case .deviceStateChange(let t): return t.retriggerPolicy
+        case .compound(let t): return t.retriggerPolicy
+        case .schedule(let t): return t.retriggerPolicy
+        case .webhook(let t): return t.retriggerPolicy
+        case .workflow(let t): return t.retriggerPolicy
+        case .sunEvent(let t): return t.retriggerPolicy
+        }
+    }
+
+    /// Resolved policy: per-trigger if set, otherwise defaults to `.ignoreNew`.
+    var resolvedRetriggerPolicy: ConcurrentExecutionPolicy {
+        retriggerPolicy ?? .ignoreNew
+    }
+
+    /// Returns a copy of this trigger with the given retrigger policy applied.
+    func withRetriggerPolicy(_ policy: ConcurrentExecutionPolicy) -> WorkflowTrigger {
+        switch self {
+        case .deviceStateChange(let t):
+            return .deviceStateChange(DeviceStateTrigger(
+                deviceId: t.deviceId, serviceId: t.serviceId,
+                characteristicType: t.characteristicType, condition: t.condition,
+                name: t.name, deviceName: t.deviceName, roomName: t.roomName,
+                retriggerPolicy: policy
+            ))
+        case .compound(let t):
+            return .compound(CompoundTrigger(
+                logicOperator: t.logicOperator, triggers: t.triggers,
+                name: t.name, retriggerPolicy: policy
+            ))
+        case .schedule(let t):
+            return .schedule(ScheduleTrigger(
+                scheduleType: t.scheduleType, name: t.name, retriggerPolicy: policy
+            ))
+        case .webhook(let t):
+            return .webhook(WebhookTrigger(
+                token: t.token, name: t.name, retriggerPolicy: policy
+            ))
+        case .workflow(let t):
+            return .workflow(WorkflowCallTrigger(
+                name: t.name, retriggerPolicy: policy
+            ))
+        case .sunEvent(let t):
+            return .sunEvent(SunEventTrigger(
+                event: t.event, offsetMinutes: t.offsetMinutes,
+                name: t.name, retriggerPolicy: policy
+            ))
         }
     }
 }
@@ -746,8 +827,9 @@ struct DeviceStateTrigger {
     let name: String?
     let deviceName: String?
     let roomName: String?
+    let retriggerPolicy: ConcurrentExecutionPolicy?
 
-    init(deviceId: String, serviceId: String? = nil, characteristicType: String, condition: TriggerCondition, name: String? = nil, deviceName: String? = nil, roomName: String? = nil) {
+    init(deviceId: String, serviceId: String? = nil, characteristicType: String, condition: TriggerCondition, name: String? = nil, deviceName: String? = nil, roomName: String? = nil, retriggerPolicy: ConcurrentExecutionPolicy? = nil) {
         self.deviceId = deviceId
         self.serviceId = serviceId
         self.characteristicType = characteristicType
@@ -755,6 +837,7 @@ struct DeviceStateTrigger {
         self.name = name
         self.deviceName = deviceName
         self.roomName = roomName
+        self.retriggerPolicy = retriggerPolicy
     }
 }
 
@@ -762,21 +845,25 @@ struct CompoundTrigger {
     let logicOperator: LogicOperator
     let triggers: [WorkflowTrigger]
     let name: String?
+    let retriggerPolicy: ConcurrentExecutionPolicy?
 
-    init(logicOperator: LogicOperator, triggers: [WorkflowTrigger], name: String? = nil) {
+    init(logicOperator: LogicOperator, triggers: [WorkflowTrigger], name: String? = nil, retriggerPolicy: ConcurrentExecutionPolicy? = nil) {
         self.logicOperator = logicOperator
         self.triggers = triggers
         self.name = name
+        self.retriggerPolicy = retriggerPolicy
     }
 }
 
 struct ScheduleTrigger {
     let scheduleType: ScheduleType
     let name: String?
+    let retriggerPolicy: ConcurrentExecutionPolicy?
 
-    init(scheduleType: ScheduleType, name: String? = nil) {
+    init(scheduleType: ScheduleType, name: String? = nil, retriggerPolicy: ConcurrentExecutionPolicy? = nil) {
         self.scheduleType = scheduleType
         self.name = name
+        self.retriggerPolicy = retriggerPolicy
     }
 }
 
@@ -872,18 +959,22 @@ enum ScheduleWeekday: Int, Codable, CaseIterable, Comparable {
 struct WebhookTrigger {
     let token: String
     let name: String?
+    let retriggerPolicy: ConcurrentExecutionPolicy?
 
-    init(token: String = UUID().uuidString, name: String? = nil) {
+    init(token: String = UUID().uuidString, name: String? = nil, retriggerPolicy: ConcurrentExecutionPolicy? = nil) {
         self.token = token
         self.name = name
+        self.retriggerPolicy = retriggerPolicy
     }
 }
 
 struct WorkflowCallTrigger: Codable {
     let name: String?
+    let retriggerPolicy: ConcurrentExecutionPolicy?
 
-    init(name: String? = nil) {
+    init(name: String? = nil, retriggerPolicy: ConcurrentExecutionPolicy? = nil) {
         self.name = name
+        self.retriggerPolicy = retriggerPolicy
     }
 }
 
@@ -905,11 +996,13 @@ struct SunEventTrigger {
     let event: SunEventType
     let offsetMinutes: Int
     let name: String?
+    let retriggerPolicy: ConcurrentExecutionPolicy?
 
-    init(event: SunEventType, offsetMinutes: Int = 0, name: String? = nil) {
+    init(event: SunEventType, offsetMinutes: Int = 0, name: String? = nil, retriggerPolicy: ConcurrentExecutionPolicy? = nil) {
         self.event = event
         self.offsetMinutes = offsetMinutes
         self.name = name
+        self.retriggerPolicy = retriggerPolicy
     }
 }
 
@@ -1006,7 +1099,7 @@ enum TriggerCondition: Codable {
 
 indirect enum WorkflowCondition: Codable {
     case deviceState(DeviceStateCondition)
-    case sunEvent(SunEventCondition)
+    case timeCondition(TimeCondition)
     case sceneActive(SceneActiveCondition)
     case and([WorkflowCondition])
     case or([WorkflowCondition])
@@ -1014,7 +1107,8 @@ indirect enum WorkflowCondition: Codable {
 
     private enum ConditionType: String, Codable {
         case deviceState
-        case sunEvent
+        case timeCondition
+        case sunEvent // backward compat decode only
         case sceneActive
         case and
         case or
@@ -1025,8 +1119,11 @@ indirect enum WorkflowCondition: Codable {
         case type, conditions, condition
         case deviceId, serviceId, characteristicType, comparison
         case deviceName, roomName
+        // timeCondition fields
+        case mode, startTime, endTime
+        // legacy sunEvent fields (decode only)
         case event, sunComparison
-        case sceneId, isActive
+        case sceneId, sceneName, isActive
     }
 
     init(from decoder: Decoder) throws {
@@ -1042,15 +1139,29 @@ indirect enum WorkflowCondition: Codable {
                 deviceName: container.decodeIfPresent(String.self, forKey: .deviceName),
                 roomName: container.decodeIfPresent(String.self, forKey: .roomName)
             ))
-        case .sunEvent:
-            self = try .sunEvent(SunEventCondition(
-                event: container.decode(SunEventType.self, forKey: .event),
-                comparison: container.decode(SunEventComparison.self, forKey: .sunComparison)
+        case .timeCondition:
+            self = try .timeCondition(TimeCondition(
+                mode: container.decode(TimeConditionMode.self, forKey: .mode),
+                startTime: container.decodeIfPresent(TimeOfDay.self, forKey: .startTime),
+                endTime: container.decodeIfPresent(TimeOfDay.self, forKey: .endTime)
             ))
+        case .sunEvent:
+            // Backward compat: map old sunEvent → timeCondition
+            let event = try container.decode(SunEventType.self, forKey: .event)
+            let comp = try container.decode(String.self, forKey: .sunComparison)
+            let mode: TimeConditionMode
+            switch (event, comp) {
+            case (.sunrise, "before"): mode = .beforeSunrise
+            case (.sunrise, _):       mode = .afterSunrise
+            case (.sunset, "before"): mode = .beforeSunset
+            case (.sunset, _):        mode = .afterSunset
+            }
+            self = .timeCondition(TimeCondition(mode: mode))
         case .sceneActive:
             self = try .sceneActive(SceneActiveCondition(
                 sceneId: container.decode(String.self, forKey: .sceneId),
-                isActive: container.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
+                isActive: container.decodeIfPresent(Bool.self, forKey: .isActive) ?? true,
+                sceneName: container.decodeIfPresent(String.self, forKey: .sceneName)
             ))
         case .and:
             self = try .and(container.decode([WorkflowCondition].self, forKey: .conditions))
@@ -1072,14 +1183,16 @@ indirect enum WorkflowCondition: Codable {
             try container.encode(cond.comparison, forKey: .comparison)
             try container.encodeIfPresent(cond.deviceName, forKey: .deviceName)
             try container.encodeIfPresent(cond.roomName, forKey: .roomName)
-        case let .sunEvent(cond):
-            try container.encode(ConditionType.sunEvent, forKey: .type)
-            try container.encode(cond.event, forKey: .event)
-            try container.encode(cond.comparison, forKey: .sunComparison)
+        case let .timeCondition(cond):
+            try container.encode(ConditionType.timeCondition, forKey: .type)
+            try container.encode(cond.mode, forKey: .mode)
+            try container.encodeIfPresent(cond.startTime, forKey: .startTime)
+            try container.encodeIfPresent(cond.endTime, forKey: .endTime)
         case let .sceneActive(cond):
             try container.encode(ConditionType.sceneActive, forKey: .type)
             try container.encode(cond.sceneId, forKey: .sceneId)
             try container.encode(cond.isActive, forKey: .isActive)
+            try container.encodeIfPresent(cond.sceneName, forKey: .sceneName)
         case let .and(conditions):
             try container.encode(ConditionType.and, forKey: .type)
             try container.encode(conditions, forKey: .conditions)
@@ -1111,32 +1224,87 @@ struct DeviceStateCondition {
     }
 }
 
-enum SunEventComparison: String, Codable, CaseIterable, Identifiable {
-    case before
-    case after
+// MARK: - Time Condition Types
+
+enum TimeConditionMode: String, Codable, CaseIterable, Identifiable {
+    case beforeSunrise
+    case afterSunrise
+    case beforeSunset
+    case afterSunset
+    case daytime      // between sunrise and sunset
+    case nighttime    // between sunset and next sunrise
+    case timeRange    // between specific times (cross-midnight aware)
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .before: return "Before"
-        case .after: return "After"
+        case .beforeSunrise: return "Before Sunrise"
+        case .afterSunrise: return "After Sunrise"
+        case .beforeSunset: return "Before Sunset"
+        case .afterSunset: return "After Sunset"
+        case .daytime: return "Daytime"
+        case .nighttime: return "Nighttime"
+        case .timeRange: return "Time Range"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .beforeSunrise, .afterSunrise: return "sunrise.fill"
+        case .beforeSunset, .afterSunset: return "sunset.fill"
+        case .daytime: return "sun.max.fill"
+        case .nighttime: return "moon.stars.fill"
+        case .timeRange: return "clock.fill"
+        }
+    }
+
+    /// Whether this mode requires lat/lon for solar calculation
+    var requiresLocation: Bool {
+        switch self {
+        case .timeRange: return false
+        default: return true
         }
     }
 }
 
-struct SunEventCondition: Codable {
-    let event: SunEventType
-    let comparison: SunEventComparison
+struct TimeOfDay: Codable, Equatable, Hashable {
+    let hour: Int    // 0-23
+    let minute: Int  // 0-59
+
+    /// Minutes since midnight
+    var totalMinutes: Int { hour * 60 + minute }
+
+    /// Formatted as "HH:mm"
+    var formatted: String {
+        String(format: "%d:%02d %@", hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour), minute, hour < 12 ? "AM" : "PM")
+    }
+
+    static let midnight = TimeOfDay(hour: 0, minute: 0)
+    static let noon = TimeOfDay(hour: 12, minute: 0)
+}
+
+struct TimeCondition: Codable {
+    let mode: TimeConditionMode
+    let startTime: TimeOfDay?  // Only for .timeRange
+    let endTime: TimeOfDay?    // Only for .timeRange
+
+    init(mode: TimeConditionMode, startTime: TimeOfDay? = nil, endTime: TimeOfDay? = nil) {
+        self.mode = mode
+        self.startTime = startTime
+        self.endTime = endTime
+    }
 }
 
 struct SceneActiveCondition: Codable {
     let sceneId: String
     let isActive: Bool
+    let sceneName: String?
 
-    init(sceneId: String, isActive: Bool = true) {
+    init(sceneId: String, isActive: Bool = true, sceneName: String? = nil) {
         self.sceneId = sceneId
         self.isActive = isActive
+        self.sceneName = sceneName
     }
 }
 
@@ -1343,6 +1511,7 @@ enum TriggerResult: Codable {
     case replaced(workflowId: UUID, workflowName: String)
     case queued(workflowId: UUID, workflowName: String)
     case ignored(workflowId: UUID, workflowName: String)
+    case cancelled(workflowId: UUID, workflowName: String)
     case notFound
     case disabled
     case workflowDisabled(workflowId: UUID, workflowName: String)
@@ -1357,6 +1526,8 @@ enum TriggerResult: Codable {
             return "Workflow '\(name)' has been queued for execution."
         case .ignored(_, let name):
             return "Trigger ignored: '\(name)' is already running."
+        case .cancelled(_, let name):
+            return "Running execution of '\(name)' was cancelled. No new execution started."
         case .notFound:
             return "Workflow not found."
         case .disabled:
@@ -1368,7 +1539,7 @@ enum TriggerResult: Codable {
 
     var isAccepted: Bool {
         switch self {
-        case .scheduled, .replaced, .queued: return true
+        case .scheduled, .replaced, .queued, .cancelled: return true
         case .ignored, .notFound, .disabled, .workflowDisabled: return false
         }
     }
@@ -1380,7 +1551,7 @@ enum TriggerResult: Codable {
 
     var httpStatusCode: UInt {
         switch self {
-        case .scheduled, .replaced, .queued: return 202
+        case .scheduled, .replaced, .queued, .cancelled: return 202
         case .ignored: return 409
         case .notFound: return 404
         case .disabled, .workflowDisabled: return 503
@@ -1399,6 +1570,7 @@ enum TriggerResult: Codable {
         case .replaced: return "replaced"
         case .queued: return "queued"
         case .ignored: return "ignored"
+        case .cancelled: return "cancelled"
         case .notFound: return "not_found"
         case .disabled: return "disabled"
         case .workflowDisabled: return "workflow_disabled"
@@ -1415,6 +1587,7 @@ enum TriggerResult: Codable {
              .replaced(let id, let name),
              .queued(let id, let name),
              .ignored(let id, let name),
+             .cancelled(let id, let name),
              .workflowDisabled(let id, let name):
             try container.encode(id, forKey: .workflowId)
             try container.encode(name, forKey: .workflowName)
@@ -1444,6 +1617,10 @@ enum TriggerResult: Codable {
             let id = try container.decode(UUID.self, forKey: .workflowId)
             let name = try container.decode(String.self, forKey: .workflowName)
             self = .ignored(workflowId: id, workflowName: name)
+        case "cancelled":
+            let id = try container.decode(UUID.self, forKey: .workflowId)
+            let name = try container.decode(String.self, forKey: .workflowName)
+            self = .cancelled(workflowId: id, workflowName: name)
         case "not_found":
             self = .notFound
         case "disabled":

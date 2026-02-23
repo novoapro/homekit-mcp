@@ -513,13 +513,19 @@ private struct WorkflowBuilderConditionRow: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
             }
-        case .sunEvent(let c):
+        case .timeCondition(let c):
             HStack(spacing: 6) {
-                Image(systemName: "sunrise.fill")
+                Image(systemName: c.mode.icon)
                     .foregroundStyle(.orange)
-                Text("\(c.comparison.displayName) \(c.event.displayName)")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                if c.mode == .timeRange, let start = c.startTime, let end = c.endTime {
+                    Text("\(start.formatted)–\(end.formatted)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                } else {
+                    Text(c.mode.displayName)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
             }
         case .sceneActive(let c):
             HStack(spacing: 6) {

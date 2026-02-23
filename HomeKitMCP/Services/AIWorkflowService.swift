@@ -235,9 +235,7 @@ actor AIWorkflowService {
 
         let duration = CFAbsoluteTimeGetCurrent() - startTime
         do {
-            var workflow = try parseWorkflowFromResponse(response)
-            let devices = await MainActor.run { homeKitManager.cachedDevices }
-            workflow = WorkflowMigrationService.enrichDeviceMetadata(in: workflow, using: devices)
+            let workflow = try parseWorkflowFromResponse(response)
             await interactionLog.log(AIInteractionLog(
                 id: UUID(), timestamp: Date(),
                 provider: provider.rawValue, model: model,
@@ -295,9 +293,7 @@ actor AIWorkflowService {
 
         let duration = CFAbsoluteTimeGetCurrent() - startTime
         do {
-            var refined = try parseWorkflowFromResponse(response)
-            let devices = await MainActor.run { homeKitManager.cachedDevices }
-            refined = WorkflowMigrationService.enrichDeviceMetadata(in: refined, using: devices)
+            let refined = try parseWorkflowFromResponse(response)
             await interactionLog.log(AIInteractionLog(
                 id: UUID(), timestamp: Date(),
                 provider: provider.rawValue, model: model,
@@ -467,26 +463,29 @@ actor AIWorkflowService {
           "description": "string (optional)",
           "isEnabled": true,
           "continueOnError": false,
-          "retriggerPolicy": "ignoreNew",
           "triggers": [ ... ],
           "conditions": [ ... ],
           "blocks": [ ... ]
         }
         ```
 
-        ### retriggerPolicy (optional, defaults to "ignoreNew")
-        Controls what happens if the workflow is triggered while already running:
+        ### retriggerPolicy (per-trigger, optional, defaults to "ignoreNew")
+        Set on each trigger object. Controls what happens if this trigger fires while the workflow is already running:
         - "ignoreNew": ignore the new trigger
         - "cancelAndRestart": cancel the running execution and restart
         - "queueAndExecute": queue the trigger for after the current run
+        - "cancelOnly": cancel the running execution without restarting
 
         ## Trigger Types
+
+        All triggers accept an optional "retriggerPolicy" field (see above).
 
         ### deviceStateChange
         ```json
         {
           "type": "deviceStateChange",
           "name": "optional label",
+          "retriggerPolicy": "ignoreNew",
           "deviceId": "device-uuid",
           "deviceName": "Living Room Light",
           "roomName": "Living Room",
@@ -566,7 +565,7 @@ actor AIWorkflowService {
         using the same format as guard conditions: {"type":"and","conditions":[...]}, \
         {"type":"or","conditions":[...]}, {"type":"not","condition":{...}}. These can be nested \
         to any depth. For example, a conditional block could use \
-        {"type":"and","conditions":[{"type":"deviceState",...},{"type":"sunEvent",...}]} to check \
+        {"type":"and","conditions":[{"type":"deviceState",...},{"type":"timeCondition","mode":"nighttime"}]} to check \
         multiple conditions together.
 
         ### waitForState condition format
@@ -580,7 +579,10 @@ actor AIWorkflowService {
 
         ```json
         { "type": "deviceState", "deviceId": "...", "deviceName": "Living Room Light", "roomName": "Living Room", "serviceId": "optional", "characteristicType": "Power", "comparison": { "type": "equals", "value": true } }
-        { "type": "sunEvent", "event": "sunrise", "sunComparison": "after" }
+        { "type": "timeCondition", "mode": "afterSunset" }
+        { "type": "timeCondition", "mode": "nighttime" }
+        { "type": "timeCondition", "mode": "daytime" }
+        { "type": "timeCondition", "mode": "timeRange", "startTime": { "hour": 22, "minute": 0 }, "endTime": { "hour": 6, "minute": 0 } }
         { "type": "sceneActive", "sceneId": "scene-uuid", "isActive": true }
         { "type": "and", "conditions": [ ... ] }
         { "type": "or", "conditions": [ ... ] }
@@ -588,7 +590,9 @@ actor AIWorkflowService {
         ```
         The "comparison" in deviceState uses ComparisonOperator: "equals", "notEquals", \
         "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual" with "value".
-        sunComparison values: "before", "after".
+        timeCondition modes: "beforeSunrise", "afterSunrise", "beforeSunset", "afterSunset", \
+        "daytime" (sunrise–sunset), "nighttime" (sunset–sunrise), "timeRange" (custom hours, cross-midnight aware). \
+        startTime/endTime required only for timeRange mode (hour 0-23, minute 0-59).
 
         ## Trigger Condition Types (for deviceStateChange triggers only)
         - "changed": fires on any value change (no "value" field needed)
