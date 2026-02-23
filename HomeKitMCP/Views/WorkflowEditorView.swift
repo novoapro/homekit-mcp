@@ -41,7 +41,7 @@ struct WorkflowEditorView: View {
         case let .edit(workflow):
             // Migrate orphaned device/service UUIDs (e.g., after iCloud backup restore to a different machine)
             let migrated = WorkflowMigrationService.migrate(workflow, using: devices)
-            _draft = State(initialValue: WorkflowDraft(from: migrated.workflow))
+            _draft = State(initialValue: WorkflowDraft(from: migrated.workflow, devices: devices))
         }
     }
 

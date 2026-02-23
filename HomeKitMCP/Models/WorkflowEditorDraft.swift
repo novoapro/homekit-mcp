@@ -205,6 +205,12 @@ struct TriggerDraft: Identifiable {
     var conditionValue: String = ""
     var conditionFromValue: String = ""
 
+    // Cached characteristic metadata for UI rendering when device isn't available
+    var characteristicFormat: String?
+    var characteristicMinValue: Double?
+    var characteristicMaxValue: Double?
+    var characteristicValidValues: [Int]?
+
     // Schedule fields
     var scheduleType: ScheduleDraftType = .daily
     var scheduleHour: Int = 8
@@ -570,6 +576,12 @@ struct ConditionDraft: Identifiable {
     var comparisonType: ComparisonType
     var comparisonValue: String
 
+    // Cached characteristic metadata for UI rendering when device isn't available
+    var characteristicFormat: String?
+    var characteristicMinValue: Double?
+    var characteristicMaxValue: Double?
+    var characteristicValidValues: [Int]?
+
     // Time Condition fields
     var timeConditionMode: TimeConditionMode = .afterSunset
     var timeRangeStart: TimeOfDay = TimeOfDay(hour: 22, minute: 0)
@@ -745,6 +757,12 @@ struct ControlDeviceDraft {
     var serviceId: String?
     var characteristicType: String = ""
     var value: String = ""
+
+    // Cached characteristic metadata for UI rendering when device isn't available
+    var characteristicFormat: String?
+    var characteristicMinValue: Double?
+    var characteristicMaxValue: Double?
+    var characteristicValidValues: [Int]?
 }
 
 struct WebhookDraft {
@@ -777,6 +795,12 @@ struct WaitForStateDraft {
     var comparisonType: ComparisonType = .equals
     var comparisonValue: String = ""
     var timeoutSeconds: Double = 30.0
+
+    // Cached characteristic metadata for UI rendering when device isn't available
+    var characteristicFormat: String?
+    var characteristicMinValue: Double?
+    var characteristicMaxValue: Double?
+    var characteristicValidValues: [Int]?
 }
 
 struct ConditionalDraft {
@@ -896,24 +920,39 @@ extension WorkflowDraft {
 
 // MARK: - Conversion: Workflow → WorkflowDraft
 
+/// Look up characteristic metadata from a devices list for UI rendering fallback.
+private func lookupCharacteristicMeta(
+    deviceId: String, characteristicType: String, in devices: [DeviceModel]
+) -> (format: String?, minValue: Double?, maxValue: Double?, validValues: [Int]?) {
+    guard let device = devices.first(where: { $0.id == deviceId }) else {
+        return (nil, nil, nil, nil)
+    }
+    guard let char = device.services.flatMap(\.characteristics)
+        .first(where: { $0.type == characteristicType }) else {
+        return (nil, nil, nil, nil)
+    }
+    return (char.format, char.minValue, char.maxValue, char.validValues)
+}
+
 extension WorkflowDraft {
-    init(from workflow: Workflow) {
+    init(from workflow: Workflow, devices: [DeviceModel] = []) {
         id = workflow.id
         name = workflow.name
         description = workflow.description ?? ""
         isEnabled = workflow.isEnabled
         continueOnError = workflow.continueOnError
         retriggerPolicy = workflow.retriggerPolicy
-        triggers = workflow.triggers.compactMap { Self.convertTrigger($0) }
-        conditionRoot = Self.convertConditionTree(workflow.conditions ?? [])
-        blocks = workflow.blocks.map { Self.convertBlock($0) }
+        triggers = workflow.triggers.compactMap { Self.convertTrigger($0, devices: devices) }
+        conditionRoot = Self.convertConditionTree(workflow.conditions ?? [], devices: devices)
+        blocks = workflow.blocks.map { Self.convertBlock($0, devices: devices) }
     }
 
-    private static func convertTrigger(_ trigger: WorkflowTrigger) -> TriggerDraft? {
+    private static func convertTrigger(_ trigger: WorkflowTrigger, devices: [DeviceModel] = []) -> TriggerDraft? {
         let policy = trigger.resolvedRetriggerPolicy
         switch trigger {
         case let .deviceStateChange(t):
             let (condType, condValue, condFrom) = convertTriggerCondition(t.condition)
+            let meta = lookupCharacteristicMeta(deviceId: t.deviceId, characteristicType: t.characteristicType, in: devices)
             return TriggerDraft(
                 id: UUID(),
                 name: t.name ?? "",
@@ -924,7 +963,11 @@ extension WorkflowDraft {
                 characteristicType: t.characteristicType,
                 conditionType: condType,
                 conditionValue: condValue,
-                conditionFromValue: condFrom
+                conditionFromValue: condFrom,
+                characteristicFormat: meta.format,
+                characteristicMinValue: meta.minValue,
+                characteristicMaxValue: meta.maxValue,
+                characteristicValidValues: meta.validValues
             )
         case let .schedule(t):
             var draft = TriggerDraft(id: UUID(), name: t.name ?? "", triggerType: .schedule, retriggerPolicy: policy)
@@ -1005,7 +1048,7 @@ extension WorkflowDraft {
 
     /// Convert a flat list of `WorkflowCondition` into a `ConditionGroupDraft` tree.
     /// Handles backward-compatible flat lists (implicit AND) and compound conditions.
-    static func convertConditionTree(_ conditions: [WorkflowCondition]) -> ConditionGroupDraft {
+    static func convertConditionTree(_ conditions: [WorkflowCondition], devices: [DeviceModel] = []) -> ConditionGroupDraft {
         guard !conditions.isEmpty else { return .empty() }
 
         // If the workflow stored a single compound condition, use it as the root
@@ -1013,35 +1056,36 @@ extension WorkflowDraft {
             switch conditions[0] {
             case .and(let children):
                 var root = ConditionGroupDraft(id: UUID(), logicOperator: .and)
-                root.children = children.map { convertConditionNode($0) }
+                root.children = children.map { convertConditionNode($0, devices: devices) }
                 return root
             case .or(let children):
                 var root = ConditionGroupDraft(id: UUID(), logicOperator: .or)
-                root.children = children.map { convertConditionNode($0) }
+                root.children = children.map { convertConditionNode($0, devices: devices) }
                 return root
             case .not(let inner):
-                var root = convertConditionTree([inner])
+                var root = convertConditionTree([inner], devices: devices)
                 root.isNegated = true
                 return root
             default:
                 // Single leaf condition
                 var root = ConditionGroupDraft.empty()
-                root.children = [convertConditionNode(conditions[0])]
+                root.children = [convertConditionNode(conditions[0], devices: devices)]
                 return root
             }
         }
 
         // Multiple conditions at root level = implicit AND (backward compatible)
         var root = ConditionGroupDraft(id: UUID(), logicOperator: .and)
-        root.children = conditions.map { convertConditionNode($0) }
+        root.children = conditions.map { convertConditionNode($0, devices: devices) }
         return root
     }
 
     /// Convert a single `WorkflowCondition` into a `ConditionNodeDraft`.
-    static func convertConditionNode(_ condition: WorkflowCondition) -> ConditionNodeDraft {
+    static func convertConditionNode(_ condition: WorkflowCondition, devices: [DeviceModel] = []) -> ConditionNodeDraft {
         switch condition {
         case let .deviceState(c):
             let (compType, compValue) = convertComparison(c.comparison)
+            let meta = lookupCharacteristicMeta(deviceId: c.deviceId, characteristicType: c.characteristicType, in: devices)
             return .leaf(ConditionDraft(
                 id: UUID(),
                 conditionDraftType: .deviceState,
@@ -1049,7 +1093,11 @@ extension WorkflowDraft {
                 serviceId: c.serviceId,
                 characteristicType: c.characteristicType,
                 comparisonType: compType,
-                comparisonValue: compValue
+                comparisonValue: compValue,
+                characteristicFormat: meta.format,
+                characteristicMinValue: meta.minValue,
+                characteristicMaxValue: meta.maxValue,
+                characteristicValidValues: meta.validValues
             ))
         case let .timeCondition(c):
             return .leaf(ConditionDraft(
@@ -1078,16 +1126,16 @@ extension WorkflowDraft {
             ))
         case .not(let inner):
             // NOT always maps to a group with isNegated = true
-            var subGroup = convertConditionTree([inner])
+            var subGroup = convertConditionTree([inner], devices: devices)
             subGroup.isNegated = true
             return .group(subGroup)
         case .and(let children):
             var group = ConditionGroupDraft(id: UUID(), logicOperator: .and)
-            group.children = children.map { convertConditionNode($0) }
+            group.children = children.map { convertConditionNode($0, devices: devices) }
             return .group(group)
         case .or(let children):
             var group = ConditionGroupDraft(id: UUID(), logicOperator: .or)
-            group.children = children.map { convertConditionNode($0) }
+            group.children = children.map { convertConditionNode($0, devices: devices) }
             return .group(group)
         }
     }
@@ -1103,24 +1151,29 @@ extension WorkflowDraft {
         }
     }
 
-    static func convertBlock(_ block: WorkflowBlock) -> BlockDraft {
+    static func convertBlock(_ block: WorkflowBlock, devices: [DeviceModel] = []) -> BlockDraft {
         switch block {
         case let .action(action):
-            return convertAction(action)
+            return convertAction(action, devices: devices)
         case let .flowControl(fc):
-            return convertFlowControl(fc)
+            return convertFlowControl(fc, devices: devices)
         }
     }
 
-    private static func convertAction(_ action: WorkflowAction) -> BlockDraft {
+    private static func convertAction(_ action: WorkflowAction, devices: [DeviceModel] = []) -> BlockDraft {
         switch action {
         case let .controlDevice(a):
+            let meta = lookupCharacteristicMeta(deviceId: a.deviceId, characteristicType: a.characteristicType, in: devices)
             return BlockDraft(id: UUID(), blockType: .controlDevice(ControlDeviceDraft(
                 name: a.name ?? "",
                 deviceId: a.deviceId,
                 serviceId: a.serviceId,
                 characteristicType: a.characteristicType,
-                value: stringFromAny(a.value.value)
+                value: stringFromAny(a.value.value),
+                characteristicFormat: meta.format,
+                characteristicMinValue: meta.minValue,
+                characteristicMaxValue: meta.maxValue,
+                characteristicValidValues: meta.validValues
             )))
         case let .webhook(a):
             return BlockDraft(id: UUID(), blockType: .webhook(WebhookDraft(
@@ -1139,12 +1192,13 @@ extension WorkflowDraft {
         }
     }
 
-    private static func convertFlowControl(_ fc: FlowControlBlock) -> BlockDraft {
+    private static func convertFlowControl(_ fc: FlowControlBlock, devices: [DeviceModel] = []) -> BlockDraft {
         switch fc {
         case let .delay(b):
             return BlockDraft(id: UUID(), blockType: .delay(DelayDraft(name: b.name ?? "", seconds: b.seconds)))
         case let .waitForState(b):
             let (compType, compValue) = convertComparison(b.condition)
+            let meta = lookupCharacteristicMeta(deviceId: b.deviceId, characteristicType: b.characteristicType, in: devices)
             return BlockDraft(id: UUID(), blockType: .waitForState(WaitForStateDraft(
                 name: b.name ?? "",
                 deviceId: b.deviceId,
@@ -1152,33 +1206,37 @@ extension WorkflowDraft {
                 characteristicType: b.characteristicType,
                 comparisonType: compType,
                 comparisonValue: compValue,
-                timeoutSeconds: b.timeoutSeconds
+                timeoutSeconds: b.timeoutSeconds,
+                characteristicFormat: meta.format,
+                characteristicMinValue: meta.minValue,
+                characteristicMaxValue: meta.maxValue,
+                characteristicValidValues: meta.validValues
             )))
         case let .conditional(b):
             var draft = ConditionalDraft(name: b.name ?? "")
-            draft.conditionRoot = convertConditionTree([b.condition])
-            draft.thenBlocks = b.thenBlocks.map { convertBlock($0) }
-            draft.elseBlocks = (b.elseBlocks ?? []).map { convertBlock($0) }
+            draft.conditionRoot = convertConditionTree([b.condition], devices: devices)
+            draft.thenBlocks = b.thenBlocks.map { convertBlock($0, devices: devices) }
+            draft.elseBlocks = (b.elseBlocks ?? []).map { convertBlock($0, devices: devices) }
             return BlockDraft(id: UUID(), blockType: .conditional(draft))
         case let .repeat(b):
             return BlockDraft(id: UUID(), blockType: .repeatBlock(RepeatDraft(
                 name: b.name ?? "",
                 count: b.count,
                 delayBetweenSeconds: b.delayBetweenSeconds ?? 0,
-                blocks: b.blocks.map { convertBlock($0) }
+                blocks: b.blocks.map { convertBlock($0, devices: devices) }
             )))
         case let .repeatWhile(b):
             var draft = RepeatWhileDraft(name: b.name ?? "")
-            draft.conditionRoot = convertConditionTree([b.condition])
+            draft.conditionRoot = convertConditionTree([b.condition], devices: devices)
             draft.maxIterations = b.maxIterations
             draft.delayBetweenSeconds = b.delayBetweenSeconds ?? 0
-            draft.blocks = b.blocks.map { convertBlock($0) }
+            draft.blocks = b.blocks.map { convertBlock($0, devices: devices) }
             return BlockDraft(id: UUID(), blockType: .repeatWhile(draft))
         case let .group(b):
             return BlockDraft(id: UUID(), blockType: .group(GroupDraft(
                 name: b.name ?? "",
                 label: b.label ?? "",
-                blocks: b.blocks.map { convertBlock($0) }
+                blocks: b.blocks.map { convertBlock($0, devices: devices) }
             )))
         case let .stop(b):
             return BlockDraft(id: UUID(), blockType: .stop(StopDraft(

@@ -5,6 +5,7 @@ struct DeviceCharacteristicPicker: View {
     @Binding var selectedDeviceId: String
     @Binding var selectedServiceId: String?
     @Binding var selectedCharacteristicType: String
+    var onCharacteristicSelected: ((CharacteristicModel?) -> Void)? = nil
 
     @State private var showDevicePicker = false
 
@@ -53,11 +54,13 @@ struct DeviceCharacteristicPicker: View {
                     Button("None") {
                         selectedCharacteristicType = ""
                         selectedServiceId = nil
+                        onCharacteristicSelected?(nil)
                     }
                     ForEach(characteristics) { item in
                         Button {
                             selectedCharacteristicType = item.characteristic.type
                             selectedServiceId = item.serviceId
+                            onCharacteristicSelected?(item.characteristic)
                         } label: {
                             if showServicePrefix {
                                 Text("\(item.serviceName) › \(CharacteristicTypes.displayName(for: item.characteristic.type))")

@@ -121,7 +121,7 @@ class WorkflowViewModel: ObservableObject {
     func cloneWorkflow(id: UUID) {
         Task {
             guard let original = await storageService.getWorkflow(id: id) else { return }
-            var draft = WorkflowDraft(from: original)
+            var draft = WorkflowDraft(from: original, devices: devices)
             draft.id = UUID()
             draft.name = "\(original.name) (Copy)"
             draft.isEnabled = false

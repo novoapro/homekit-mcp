@@ -284,13 +284,23 @@ private struct ControlDeviceEditor: View {
             devices: devices,
             selectedDeviceId: draft.deviceId,
             selectedServiceId: draft.serviceId,
-            selectedCharacteristicType: draft.characteristicType
+            selectedCharacteristicType: draft.characteristicType,
+            onCharacteristicSelected: { char in
+                draft.wrappedValue.characteristicFormat = char?.format
+                draft.wrappedValue.characteristicMinValue = char?.minValue
+                draft.wrappedValue.characteristicMaxValue = char?.maxValue
+                draft.wrappedValue.characteristicValidValues = char?.validValues
+            }
         )
         ValueEditor(
             value: draft.value,
             characteristicType: draft.wrappedValue.characteristicType,
             devices: devices,
-            deviceId: draft.wrappedValue.deviceId
+            deviceId: draft.wrappedValue.deviceId,
+            fallbackFormat: draft.wrappedValue.characteristicFormat,
+            fallbackMinValue: draft.wrappedValue.characteristicMinValue,
+            fallbackMaxValue: draft.wrappedValue.characteristicMaxValue,
+            fallbackValidValues: draft.wrappedValue.characteristicValidValues
         )
     }
 }
@@ -435,7 +445,13 @@ private struct WaitForStateEditor: View {
             devices: devices,
             selectedDeviceId: draft.deviceId,
             selectedServiceId: draft.serviceId,
-            selectedCharacteristicType: draft.characteristicType
+            selectedCharacteristicType: draft.characteristicType,
+            onCharacteristicSelected: { char in
+                draft.wrappedValue.characteristicFormat = char?.format
+                draft.wrappedValue.characteristicMinValue = char?.minValue
+                draft.wrappedValue.characteristicMaxValue = char?.maxValue
+                draft.wrappedValue.characteristicValidValues = char?.validValues
+            }
         )
 
         ComparisonValueRow(
@@ -443,7 +459,11 @@ private struct WaitForStateEditor: View {
             value: draft.comparisonValue,
             characteristicType: draft.wrappedValue.characteristicType,
             devices: devices,
-            deviceId: draft.wrappedValue.deviceId
+            deviceId: draft.wrappedValue.deviceId,
+            fallbackFormat: draft.wrappedValue.characteristicFormat,
+            fallbackMinValue: draft.wrappedValue.characteristicMinValue,
+            fallbackMaxValue: draft.wrappedValue.characteristicMaxValue,
+            fallbackValidValues: draft.wrappedValue.characteristicValidValues
         )
 
         HStack {

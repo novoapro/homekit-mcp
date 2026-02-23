@@ -153,7 +153,13 @@ private struct TriggerRow: View {
             devices: devices,
             selectedDeviceId: $trigger.deviceId,
             selectedServiceId: $trigger.serviceId,
-            selectedCharacteristicType: $trigger.characteristicType
+            selectedCharacteristicType: $trigger.characteristicType,
+            onCharacteristicSelected: { char in
+                trigger.characteristicFormat = char?.format
+                trigger.characteristicMinValue = char?.minValue
+                trigger.characteristicMaxValue = char?.maxValue
+                trigger.characteristicValidValues = char?.validValues
+            }
         )
 
         Picker("Condition", selection: $trigger.conditionType) {
@@ -185,7 +191,11 @@ private struct TriggerRow: View {
                     value: $trigger.conditionValue,
                     characteristicType: trigger.characteristicType,
                     devices: devices,
-                    deviceId: trigger.deviceId
+                    deviceId: trigger.deviceId,
+                    fallbackFormat: trigger.characteristicFormat,
+                    fallbackMinValue: trigger.characteristicMinValue,
+                    fallbackMaxValue: trigger.characteristicMaxValue,
+                    fallbackValidValues: trigger.characteristicValidValues
                 )
             }
         }

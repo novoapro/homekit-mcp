@@ -374,7 +374,13 @@ private struct ConditionLeafEditSheet: View {
                 devices: devices,
                 selectedDeviceId: $condition.deviceId,
                 selectedServiceId: $condition.serviceId,
-                selectedCharacteristicType: $condition.characteristicType
+                selectedCharacteristicType: $condition.characteristicType,
+                onCharacteristicSelected: { char in
+                    condition.characteristicFormat = char?.format
+                    condition.characteristicMinValue = char?.minValue
+                    condition.characteristicMaxValue = char?.maxValue
+                    condition.characteristicValidValues = char?.validValues
+                }
             )
 
             ComparisonValueRow(
@@ -382,7 +388,11 @@ private struct ConditionLeafEditSheet: View {
                 value: $condition.comparisonValue,
                 characteristicType: condition.characteristicType,
                 devices: devices,
-                deviceId: condition.deviceId
+                deviceId: condition.deviceId,
+                fallbackFormat: condition.characteristicFormat,
+                fallbackMinValue: condition.characteristicMinValue,
+                fallbackMaxValue: condition.characteristicMaxValue,
+                fallbackValidValues: condition.characteristicValidValues
             )
         case .timeCondition:
             Picker("Mode", selection: $condition.timeConditionMode) {

@@ -6,24 +6,34 @@ struct ValueEditor: View {
     let devices: [DeviceModel]
     let deviceId: String
 
+    // Fallback metadata used when live device lookup fails (e.g., after backup restore)
+    var fallbackFormat: String? = nil
+    var fallbackMinValue: Double? = nil
+    var fallbackMaxValue: Double? = nil
+    var fallbackValidValues: [Int]? = nil
+
     private var characteristic: CharacteristicModel? {
         devices.first(where: { $0.id == deviceId })?
             .services.flatMap(\.characteristics)
             .first(where: { $0.type == characteristicType })
     }
 
-    private var format: String? { characteristic?.format }
+    private var format: String? { characteristic?.format ?? fallbackFormat }
 
     private var inputControlType: InputControlType {
-        guard let char = characteristic else {
+        let fmt = characteristic?.format ?? fallbackFormat
+        let minVal = characteristic?.minValue ?? fallbackMinValue
+        let maxVal = characteristic?.maxValue ?? fallbackMaxValue
+        let validVals = characteristic?.validValues ?? fallbackValidValues
+        guard let fmt else {
             return .textField(inputType: .text)
         }
         return CharacteristicInputConfig.getInputType(
             for: characteristicType,
-            format: char.format,
-            minValue: char.minValue,
-            maxValue: char.maxValue,
-            validValues: char.validValues
+            format: fmt,
+            minValue: minVal,
+            maxValue: maxVal,
+            validValues: validVals
         )
     }
 

@@ -1260,43 +1260,55 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         // Start time for progress tracking
         let startTime = Date()
 
-        // Register a waiter and track the progress task so we can cancel it on completion
+        // Pre-generate waiter ID so the cancellation handler can reference it
+        let waiterId = UUID()
         var progressTask: Task<Void, Never>?
+        var timeoutTask: Task<Void, Never>?
 
-        let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
-            let waiter = StateWaiter(
-                deviceId: block.deviceId,
-                characteristicType: resolvedType,
-                serviceId: block.serviceId,
-                condition: block.condition,
-                continuation: continuation
-            )
+        let result = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
+                let waiter = StateWaiter(
+                    id: waiterId,
+                    deviceId: block.deviceId,
+                    characteristicType: resolvedType,
+                    serviceId: block.serviceId,
+                    condition: block.condition,
+                    continuation: continuation
+                )
 
-            if stateWaiters[key] == nil {
-                stateWaiters[key] = []
-            }
-            stateWaiters[key]?.append(waiter)
+                if stateWaiters[key] == nil {
+                    stateWaiters[key] = []
+                }
+                stateWaiters[key]?.append(waiter)
 
-            // Progress reporting task
-            progressTask = Task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-                    if !Task.isCancelled {
-                        let elapsedSeconds = Date().timeIntervalSince(startTime)
-                        await onProgress?(elapsedSeconds)
+                // Progress reporting task
+                progressTask = Task {
+                    while !Task.isCancelled {
+                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                        if !Task.isCancelled {
+                            let elapsedSeconds = Date().timeIntervalSince(startTime)
+                            await onProgress?(elapsedSeconds)
+                        }
                     }
                 }
-            }
 
-            // Timeout
-            Task {
-                try await Task.sleep(nanoseconds: UInt64(block.timeoutSeconds * 1_000_000_000))
-                self.timeoutWaiter(waiter, key: key)
+                // Timeout task (stored so it can be cancelled)
+                timeoutTask = Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(block.timeoutSeconds * 1_000_000_000))
+                    guard !Task.isCancelled else { return }
+                    await self?.timeoutWaiter(waiter, key: key)
+                }
+            }
+        } onCancel: { [weak self] in
+            // Runs on arbitrary thread — dispatch to actor for safe stateWaiters access
+            Task { [weak self] in
+                await self?.cancelWaiter(id: waiterId, key: key)
             }
         }
 
-        // Stop progress reporting now that the wait is done
+        // Stop progress and timeout now that the wait resolved
         progressTask?.cancel()
+        timeoutTask?.cancel()
 
         return result
     }
@@ -1322,6 +1334,18 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             waiters.remove(at: index)
             stateWaiters[key] = waiters.isEmpty ? nil : waiters
             waiter.continuation.resume(returning: false)
+        }
+    }
+
+    /// Cancel a waiter due to task cancellation. Actor-isolated so access to
+    /// `stateWaiters` is safe. If the waiter was already removed by
+    /// `notifyStateWaiters` or `timeoutWaiter`, this is a no-op (no double-resume).
+    private func cancelWaiter(id: UUID, key: String) {
+        guard var waiters = stateWaiters[key] else { return }
+        if let index = waiters.firstIndex(where: { $0.id == id }) {
+            let waiter = waiters.remove(at: index)
+            stateWaiters[key] = waiters.isEmpty ? nil : waiters
+            waiter.continuation.resume(throwing: CancellationError())
         }
     }
 
@@ -1368,7 +1392,7 @@ private struct ExecutionContext {
 }
 
 private struct StateWaiter {
-    let id = UUID()
+    let id: UUID
     let deviceId: String
     let characteristicType: String
     let serviceId: String?

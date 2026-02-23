@@ -324,12 +324,19 @@ struct ConditionEvaluator {
         return false
     }
 
-    /// Convert a value to Double for numeric comparison. Supports Bool, Int, Double.
+    /// Convert a value to Double for numeric comparison.
+    /// Supports Bool, Int, Double, Float, and String (including "true"/"false").
     static func toDouble(_ value: Any) -> Double? {
         if let v = value as? Double { return v }
         if let v = value as? Int { return Double(v) }
         if let v = value as? Bool { return v ? 1.0 : 0.0 }
         if let v = value as? Float { return Double(v) }
+        if let v = value as? String {
+            if let d = Double(v) { return d }
+            let lowered = v.lowercased()
+            if lowered == "true" { return 1.0 }
+            if lowered == "false" { return 0.0 }
+        }
         return nil
     }
 
