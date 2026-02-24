@@ -34,6 +34,7 @@
 		4CBCDA18CAC3DA7956656054 /* SceneModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D80E05BA3017B0C138675049 /* SceneModel.swift */; };
 		51A187B90F4E3EDDC080B196 /* BackupModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE15813B56DFFF40650A9AE /* BackupModels.swift */; };
 		51C0DE923950F0CD447D8FB1 /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DACEDBAF625BF4BAAF80017 /* BackupService.swift */; };
+		51D65E0D80FAEBF11D00DC67 /* OrphanedDevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECB228F0485D9ED0E614C0F /* OrphanedDevicesView.swift */; };
 		54475060D52E744734FF1DA1 /* WorkflowBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F36D48D99BFA9E35B9E383 /* WorkflowBuilderView.swift */; };
 		59ACF5B7B3FBF3AD9500E27C /* ComparisonValueRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7743F38F9749DE64A8E45679 /* ComparisonValueRow.swift */; };
 		5AE43961CFE3A9DEE90C7522 /* AIWorkflowService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB96C0E817BA1FAEA56BE62 /* AIWorkflowService.swift */; };
@@ -67,8 +68,6 @@
 		B2C3D4E5F6A7B8C9D0E1F2A3 /* ServerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* ServerSettingsView.swift */; };
 		B2C3D4E5F6A7B8C9D0E1F2A4 /* WebhookSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F3 /* WebhookSettingsView.swift */; };
 		B2C3D4E5F6A7B8C9D0E1F2A5 /* WorkflowSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F4 /* WorkflowSettingsView.swift */; };
-		51D65E0D80FAEBF11D00DC67 /* OrphanedDevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECB228F0485D9ED0E614C0F /* OrphanedDevicesView.swift */; };
-		7ECB228F0485D9ED0E614C0F /* OrphanedDevicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrphanedDevicesView.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A7B8C9D0E1F2A6 /* AIAssistantSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F5 /* AIAssistantSettingsView.swift */; };
 		B2C3D4E5F6A7B8C9D0E1F2A7 /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F6 /* GeneralSettingsView.swift */; };
 		B2C3D4E5F6A7B8C9D0E1F2A8 /* AccountSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F7 /* AccountSettingsView.swift */; };
@@ -161,6 +160,7 @@
 		77E7DB8F5E5A2E47859F9BE1 /* PreviewData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewData.swift; sourceTree = "<group>"; };
 		7CEF09F6533382426171A5CC /* ConditionEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConditionEvaluator.swift; sourceTree = "<group>"; };
 		7DB96C0E817BA1FAEA56BE62 /* AIWorkflowService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIWorkflowService.swift; sourceTree = "<group>"; };
+		7ECB228F0485D9ED0E614C0F /* OrphanedDevicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrphanedDevicesView.swift; sourceTree = "<group>"; };
 		8366906C5A636699025C0DE1 /* WorkflowListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowListView.swift; sourceTree = "<group>"; };
 		8520B3C8169ADBD675E1136B /* AnyCodable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyCodable.swift; sourceTree = "<group>"; };
 		88A5A04A534224C9C7A8E939 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -514,7 +514,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					009CD10E8A4755D65A95A81E = {
 						ProvisioningStyle = Automatic;
@@ -685,6 +685,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -715,9 +716,12 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = KT7JRD4C5Y;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -738,6 +742,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -750,7 +755,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = KT7JRD4C5Y;
+				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = MenuBarPlugin/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -771,7 +776,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = KT7JRD4C5Y;
+				DEAD_CODE_STRIPPING = YES;
 				INFOPLIST_FILE = MenuBarPlugin/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -790,6 +795,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -820,9 +826,12 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = KT7JRD4C5Y;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -836,6 +845,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
@@ -851,8 +861,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
-				DEVELOPMENT_TEAM = KT7JRD4C5Y;
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				INFOPLIST_FILE = HomeKitMCP/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -880,8 +892,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
-				DEVELOPMENT_TEAM = KT7JRD4C5Y;
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				INFOPLIST_FILE = HomeKitMCP/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
