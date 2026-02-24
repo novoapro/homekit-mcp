@@ -225,25 +225,15 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
     /// Called when accessories change, characteristic values are read, or settings change.
     private func rebuildDeviceCache() {
         let devices = allAccessories.compactMap { accessory -> DeviceModel? in
-            // Read hardware identity from AccessoryInformation service
-            var manufacturer: String?
-            var model: String?
+            // Read hardware identity from HMAccessory properties (iOS 11+)
+            let manufacturer = accessory.manufacturer
+            let model = accessory.model
+            let firmwareRevision = accessory.firmwareVersion
+            // Serial number has no replacement property; read from characteristic
             var serialNumber: String?
-            var firmwareRevision: String?
             if let infoService = accessory.services.first(where: { $0.serviceType == HMServiceTypeAccessoryInformation }) {
-                for char in infoService.characteristics {
-                    switch char.characteristicType {
-                    case HMCharacteristicTypeManufacturer:
-                        manufacturer = char.value as? String
-                    case HMCharacteristicTypeModel:
-                        model = char.value as? String
-                    case HMCharacteristicTypeSerialNumber:
-                        serialNumber = char.value as? String
-                    case HMCharacteristicTypeFirmwareVersion:
-                        firmwareRevision = char.value as? String
-                    default:
-                        break
-                    }
+                for char in infoService.characteristics where char.characteristicType == "00000030-0000-1000-8000-0026BB765291" {
+                    serialNumber = char.value as? String
                 }
             }
 
@@ -789,21 +779,16 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
         // Build initial cache with stale/nil values while reads happen
         rebuildDeviceCache()
 
-        // Read AccessoryInformation characteristics (serial, manufacturer, model, firmware)
-        // so hardware identity is available when the cache rebuilds after all reads complete.
-        let accessoryInfoTypes: Set<String> = [
-            HMCharacteristicTypeManufacturer,
-            HMCharacteristicTypeModel,
-            HMCharacteristicTypeSerialNumber,
-            HMCharacteristicTypeFirmwareVersion
-        ]
+        // Read serial number characteristic so hardware identity is available when the cache rebuilds.
+        // (manufacturer, model, firmwareVersion are read from HMAccessory properties directly)
+        let serialNumberType = "00000030-0000-1000-8000-0026BB765291"
         for accessory in accessories where accessory.isReachable {
             if let infoService = accessory.services.first(where: { $0.serviceType == HMServiceTypeAccessoryInformation }) {
-                for char in infoService.characteristics where accessoryInfoTypes.contains(char.characteristicType) {
+                for char in infoService.characteristics where char.characteristicType == serialNumberType {
                     if char.properties.contains(HMCharacteristicPropertyReadable) {
                         char.readValue { error in
                             if let error {
-                                AppLogger.homeKit.warning("Failed to read AccessoryInfo \(char.characteristicType) on \(accessory.name): \(error)")
+                                AppLogger.homeKit.warning("Failed to read serial number on \(accessory.name): \(error)")
                             }
                         }
                     }

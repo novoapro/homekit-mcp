@@ -143,9 +143,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                         await registry.syncDevices(devices)
                         await registry.syncScenes(scenes)
 
-                        let (migratedWorkflows, count) = WorkflowMigrationService.migrateToStableIds(workflows, registry: registry)
+                        var currentWorkflows = workflows
+                        let (migratedWorkflows, count) = WorkflowMigrationService.migrateToStableIds(currentWorkflows, registry: registry)
                         if count > 0 {
                             await self.container.workflowStorageService.replaceAll(workflows: migratedWorkflows)
+                            currentWorkflows = migratedWorkflows
                             AppLogger.registry.info("Startup normalization: converted \(count) reference(s) to stable IDs")
                         }
                         if !self.container.storageService.readRegistryMigrationCompleted() {
@@ -153,6 +155,29 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                                 self.container.storageService.registryMigrationCompleted = true
                             }
                             AppLogger.registry.info("Registry migration completed")
+                        }
+
+                        // Deep validation: check serviceId + characteristicType references against registry
+                        let validation = await WorkflowMigrationService.validateAndRepairReferences(
+                            currentWorkflows, registry: registry
+                        )
+                        if !validation.autoFixed.isEmpty {
+                            await self.container.workflowStorageService.replaceAll(workflows: validation.updatedWorkflows)
+                            AppLogger.registry.info("Startup validation: auto-fixed \(validation.autoFixed.count) issue(s)")
+                        }
+                        if !validation.unresolvable.isEmpty {
+                            AppLogger.registry.warning("Startup validation: \(validation.unresolvable.count) unresolvable issue(s)")
+                            for issue in validation.unresolvable {
+                                let logEntry = StateChangeLog(
+                                    id: UUID(), timestamp: Date(),
+                                    deviceId: issue.workflowId.uuidString, deviceName: issue.workflowName,
+                                    characteristicType: "validation-error",
+                                    oldValue: nil, newValue: nil,
+                                    category: .workflowError,
+                                    errorDetails: "[\(issue.location)] \(issue.detail)"
+                                )
+                                await self.container.loggingService.logEntry(logEntry)
+                            }
                         }
                     }
                 }

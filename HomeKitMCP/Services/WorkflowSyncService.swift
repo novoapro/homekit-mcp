@@ -126,7 +126,7 @@ class WorkflowSyncService: ObservableObject {
 
                 record["workflowId"] = workflow.id.uuidString as CKRecordValue
                 record["workflowData"] = CKAsset(fileURL: tempURL)
-                record["updatedAt"] = (workflow.updatedAt ?? workflow.createdAt) as CKRecordValue
+                record["updatedAt"] = workflow.updatedAt as CKRecordValue
                 record["syncVersion"] = 1 as CKRecordValue
                 record["originDeviceId"] = deviceId as CKRecordValue
                 record["isDeleted"] = 0 as CKRecordValue
@@ -260,7 +260,7 @@ class WorkflowSyncService: ObservableObject {
                 }
 
                 if let localWorkflow = localById[id] {
-                    let localUpdatedAt = localWorkflow.updatedAt ?? localWorkflow.createdAt
+                    let localUpdatedAt = localWorkflow.updatedAt
                     // Last-writer-wins: only apply if remote is newer
                     if remoteUpdatedAt > localUpdatedAt {
                         await workflowStorageService.updateWorkflow(id: id) { workflow in

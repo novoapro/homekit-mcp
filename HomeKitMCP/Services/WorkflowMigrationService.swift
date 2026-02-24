@@ -575,3 +575,287 @@ extension WorkflowMigrationService {
         )
     }
 }
+
+// MARK: - Deep Validation & Auto-Repair
+
+extension WorkflowMigrationService {
+
+    /// Result of validating a single workflow reference against the registry.
+    struct ValidationIssue {
+        let workflowId: UUID
+        let workflowName: String
+        let location: String
+        let issueType: IssueType
+        let detail: String
+
+        enum IssueType {
+            case unresolvedDevice(stableId: String)
+            case unresolvedService(stableId: String, deviceStableId: String)
+            case serviceRemapped(oldServiceId: String, newServiceId: String)
+            case characteristicTypeNormalized(displayName: String, uuid: String)
+        }
+    }
+
+    /// Result of validating and repairing all workflow references.
+    struct ValidationResult {
+        let updatedWorkflows: [Workflow]
+        let autoFixed: [ValidationIssue]
+        let unresolvable: [ValidationIssue]
+    }
+
+    /// Validates ALL workflow references (deviceId, serviceId, characteristicType)
+    /// against the device registry. Auto-repairs where possible:
+    /// - Remaps serviceId by matching serviceType within a resolved device
+    /// - Normalizes characteristicType from display names to HomeKit UUIDs
+    static func validateAndRepairReferences(
+        _ workflows: [Workflow],
+        registry: DeviceRegistryService
+    ) async -> ValidationResult {
+        var autoFixed: [ValidationIssue] = []
+        var unresolvable: [ValidationIssue] = []
+        var serviceRemapTable: [String: String] = [:]
+        var charTypeRemapTable: [String: String] = [:]
+
+        var processedServiceIds = Set<String>()
+
+        for workflow in workflows {
+            let deviceRefs = collectDeviceReferences(from: workflow)
+
+            for ref in deviceRefs {
+                // 1. Check device resolution
+                guard let deviceEntry = await registry.deviceEntry(for: ref.deviceId) else {
+                    unresolvable.append(ValidationIssue(
+                        workflowId: workflow.id,
+                        workflowName: workflow.name,
+                        location: ref.location,
+                        issueType: .unresolvedDevice(stableId: ref.deviceId),
+                        detail: "Device '\(ref.contextName ?? ref.deviceId)' not found in registry"
+                    ))
+                    continue
+                }
+
+                guard deviceEntry.isResolved else { continue }
+
+                // 2. Check service resolution
+                guard let serviceId = ref.serviceId else { continue }
+                guard !processedServiceIds.contains(serviceId) else { continue }
+                processedServiceIds.insert(serviceId)
+
+                let serviceExists = deviceEntry.services.contains { $0.stableServiceId == serviceId }
+                if serviceExists { continue }
+
+                // Service ID not found — try to remap by service type
+                if let serviceType = ref.contextServiceType {
+                    let matchingServices = deviceEntry.services.filter { $0.serviceType == serviceType }
+                    if matchingServices.count == 1 {
+                        let newServiceId = matchingServices[0].stableServiceId
+                        serviceRemapTable[serviceId] = newServiceId
+                        autoFixed.append(ValidationIssue(
+                            workflowId: workflow.id,
+                            workflowName: workflow.name,
+                            location: ref.location,
+                            issueType: .serviceRemapped(oldServiceId: serviceId, newServiceId: newServiceId),
+                            detail: "Service remapped by type '\(serviceType)' on device '\(deviceEntry.name)'"
+                        ))
+                    } else if matchingServices.isEmpty {
+                        unresolvable.append(ValidationIssue(
+                            workflowId: workflow.id,
+                            workflowName: workflow.name,
+                            location: ref.location,
+                            issueType: .unresolvedService(stableId: serviceId, deviceStableId: ref.deviceId),
+                            detail: "Service '\(serviceId)' not found in device '\(deviceEntry.name)'; no service of type '\(serviceType)' exists"
+                        ))
+                    } else {
+                        let newServiceId = matchingServices[0].stableServiceId
+                        serviceRemapTable[serviceId] = newServiceId
+                        autoFixed.append(ValidationIssue(
+                            workflowId: workflow.id,
+                            workflowName: workflow.name,
+                            location: ref.location,
+                            issueType: .serviceRemapped(oldServiceId: serviceId, newServiceId: newServiceId),
+                            detail: "Service remapped by type '\(serviceType)' on device '\(deviceEntry.name)' (first of \(matchingServices.count))"
+                        ))
+                    }
+                } else if deviceEntry.services.count == 1 {
+                    let newServiceId = deviceEntry.services[0].stableServiceId
+                    serviceRemapTable[serviceId] = newServiceId
+                    autoFixed.append(ValidationIssue(
+                        workflowId: workflow.id,
+                        workflowName: workflow.name,
+                        location: ref.location,
+                        issueType: .serviceRemapped(oldServiceId: serviceId, newServiceId: newServiceId),
+                        detail: "Service remapped (single-service device '\(deviceEntry.name)')"
+                    ))
+                } else {
+                    unresolvable.append(ValidationIssue(
+                        workflowId: workflow.id,
+                        workflowName: workflow.name,
+                        location: ref.location,
+                        issueType: .unresolvedService(stableId: serviceId, deviceStableId: ref.deviceId),
+                        detail: "Service '\(serviceId)' not found in device '\(deviceEntry.name)' (\(deviceEntry.services.count) services, no type context)"
+                    ))
+                }
+            }
+        }
+
+        // 3. Normalize characteristicType display names → HomeKit UUIDs
+        let charTypes = collectAllCharacteristicTypes(from: workflows)
+        for charType in charTypes {
+            if looksLikeUUID(charType) { continue }
+            if charTypeRemapTable[charType] != nil { continue }
+            if let uuid = CharacteristicTypes.characteristicType(forName: charType) {
+                charTypeRemapTable[charType] = uuid
+                autoFixed.append(ValidationIssue(
+                    workflowId: UUID(),
+                    workflowName: "(all)",
+                    location: "characteristicType",
+                    issueType: .characteristicTypeNormalized(displayName: charType, uuid: uuid),
+                    detail: "'\(charType)' → '\(CharacteristicTypes.displayName(for: uuid))' (\(uuid))"
+                ))
+            }
+        }
+
+        // 4. Apply remapping if anything needs fixing
+        if serviceRemapTable.isEmpty && charTypeRemapTable.isEmpty {
+            return ValidationResult(
+                updatedWorkflows: workflows,
+                autoFixed: autoFixed,
+                unresolvable: unresolvable
+            )
+        }
+
+        var result: [Workflow] = []
+        for workflow in workflows {
+            result.append(applyValidationRemapping(
+                to: workflow,
+                serviceIdMap: serviceRemapTable,
+                charTypeMap: charTypeRemapTable
+            ) ?? workflow)
+        }
+
+        let totalServiceRemaps = serviceRemapTable.count
+        let totalCharNormalizations = charTypeRemapTable.count
+        if totalServiceRemaps > 0 || totalCharNormalizations > 0 {
+            AppLogger.registry.info("Validation repair: remapped \(totalServiceRemaps) service(s), normalized \(totalCharNormalizations) characteristic type(s)")
+        }
+
+        return ValidationResult(
+            updatedWorkflows: result,
+            autoFixed: autoFixed,
+            unresolvable: unresolvable
+        )
+    }
+
+    // MARK: - Characteristic Type Collection
+
+    /// Collects ALL characteristicType strings from all workflow triggers, conditions, and blocks.
+    static func collectAllCharacteristicTypes(from workflows: [Workflow]) -> Set<String> {
+        var types = Set<String>()
+        for workflow in workflows {
+            for trigger in workflow.triggers {
+                collectTriggerCharTypes(trigger, into: &types)
+            }
+            if let conditions = workflow.conditions {
+                for condition in conditions {
+                    collectConditionCharTypes(condition, into: &types)
+                }
+            }
+            for block in workflow.blocks {
+                collectBlockCharTypes(block, into: &types)
+            }
+        }
+        return types
+    }
+
+    private static func collectTriggerCharTypes(_ trigger: WorkflowTrigger, into types: inout Set<String>) {
+        switch trigger {
+        case .deviceStateChange(let t):
+            types.insert(t.characteristicType)
+        case .compound(let c):
+            for t in c.triggers { collectTriggerCharTypes(t, into: &types) }
+        default: break
+        }
+    }
+
+    private static func collectConditionCharTypes(_ condition: WorkflowCondition, into types: inout Set<String>) {
+        switch condition {
+        case .deviceState(let c):
+            types.insert(c.characteristicType)
+        case .and(let conditions):
+            for c in conditions { collectConditionCharTypes(c, into: &types) }
+        case .or(let conditions):
+            for c in conditions { collectConditionCharTypes(c, into: &types) }
+        case .not(let c):
+            collectConditionCharTypes(c, into: &types)
+        default: break
+        }
+    }
+
+    private static func collectBlockCharTypes(_ block: WorkflowBlock, into types: inout Set<String>) {
+        switch block {
+        case .action(let action):
+            switch action {
+            case .controlDevice(let a): types.insert(a.characteristicType)
+            default: break
+            }
+        case .flowControl(let fc):
+            switch fc {
+            case .waitForState(let b): types.insert(b.characteristicType)
+            case .conditional(let b):
+                collectConditionCharTypes(b.condition, into: &types)
+                for nested in b.thenBlocks { collectBlockCharTypes(nested, into: &types) }
+                for nested in (b.elseBlocks ?? []) { collectBlockCharTypes(nested, into: &types) }
+            case .repeat(let b):
+                for nested in b.blocks { collectBlockCharTypes(nested, into: &types) }
+            case .repeatWhile(let b):
+                collectConditionCharTypes(b.condition, into: &types)
+                for nested in b.blocks { collectBlockCharTypes(nested, into: &types) }
+            case .group(let b):
+                for nested in b.blocks { collectBlockCharTypes(nested, into: &types) }
+            default: break
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    /// Checks whether a string looks like a HomeKit UUID (36-char format with dashes, or a known HM type).
+    static func looksLikeUUID(_ string: String) -> Bool {
+        if string.count >= 36 && string.contains("-") { return true }
+        if CharacteristicTypes.isSupported(string) { return true }
+        return false
+    }
+
+    /// Apply service ID and characteristicType remapping via JSON replacement.
+    private static func applyValidationRemapping(
+        to workflow: Workflow,
+        serviceIdMap: [String: String],
+        charTypeMap: [String: String]
+    ) -> Workflow? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        guard let jsonData = try? encoder.encode(workflow),
+              var jsonString = String(data: jsonData, encoding: .utf8) else {
+            return nil
+        }
+
+        for (oldId, newId) in serviceIdMap {
+            jsonString = jsonString.replacingOccurrences(of: "\"\(oldId)\"", with: "\"\(newId)\"")
+        }
+
+        for (displayName, uuid) in charTypeMap {
+            jsonString = jsonString.replacingOccurrences(of: "\"\(displayName)\"", with: "\"\(uuid)\"")
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        guard let updatedData = jsonString.data(using: .utf8),
+              let updatedWorkflow = try? decoder.decode(Workflow.self, from: updatedData) else {
+            return nil
+        }
+
+        return updatedWorkflow
+    }
+}

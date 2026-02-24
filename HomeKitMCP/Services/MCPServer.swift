@@ -365,7 +365,6 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
     private func handleRestGetLogs(_ req: Request) async throws -> Response {
         var logs = await loggingService.getLogs()
-        let allCount = logs.count
 
         // Category filtering: ?categories=mcp_call,rest_call
         if let categoriesParam = req.query[String.self, at: "categories"] {

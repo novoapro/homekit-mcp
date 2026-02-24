@@ -190,6 +190,30 @@ class BackupService: ObservableObject, BackupServiceProtocol {
             AppLogger.registry.info("Backup restore: normalized \(restoreNormalizedCount) workflow ID reference(s) to stable IDs")
         }
 
+        // Deep validation: check all serviceId + characteristicType references against the registry.
+        let latestWorkflows = await workflowStorageService.getAllWorkflows()
+        let validation = await WorkflowMigrationService.validateAndRepairReferences(
+            latestWorkflows, registry: deviceRegistryService
+        )
+        if !validation.autoFixed.isEmpty {
+            await workflowStorageService.replaceAll(workflows: validation.updatedWorkflows)
+            AppLogger.registry.info("Backup restore validation: auto-fixed \(validation.autoFixed.count) issue(s)")
+        }
+        if !validation.unresolvable.isEmpty {
+            AppLogger.registry.warning("Backup restore validation: \(validation.unresolvable.count) unresolvable issue(s)")
+            for issue in validation.unresolvable {
+                let logEntry = StateChangeLog(
+                    id: UUID(), timestamp: Date(),
+                    deviceId: issue.workflowId.uuidString, deviceName: issue.workflowName,
+                    characteristicType: "validation-error",
+                    oldValue: nil, newValue: nil,
+                    category: .workflowError,
+                    errorDetails: "[\(issue.location)] \(issue.detail)"
+                )
+                await loggingService.logEntry(logEntry)
+            }
+        }
+
         // Restore device config: keys are stable IDs, transform back to local HomeKit UUIDs
         let localConfig = transformConfigKeysToHomeKitIds(bundle.deviceConfig)
         await configService.replaceAll(configs: localConfig)
@@ -197,7 +221,9 @@ class BackupService: ObservableObject, BackupServiceProtocol {
         // Log consolidation summary
         let summary = buildConsolidationSummary(
             workflowCount: bundle.workflows.count,
-            consolidation: consolidation
+            consolidation: consolidation,
+            validationAutoFixed: validation.autoFixed.count,
+            validationUnresolvable: validation.unresolvable.count
         )
         let summaryEntry = StateChangeLog(
             id: UUID(), timestamp: Date(),
@@ -250,10 +276,16 @@ class BackupService: ObservableObject, BackupServiceProtocol {
         return result
     }
 
-    private func buildConsolidationSummary(workflowCount: Int, consolidation: ConsolidationResult) -> String {
+    private func buildConsolidationSummary(workflowCount: Int, consolidation: ConsolidationResult, validationAutoFixed: Int = 0, validationUnresolvable: Int = 0) -> String {
         var parts: [String] = ["Restored \(workflowCount) workflow(s) with registry."]
         parts.append("Devices: \(consolidation.matchedDevices) matched, \(consolidation.unmatchedDevices) unresolved, \(consolidation.newDevices) new local.")
         parts.append("Scenes: \(consolidation.matchedScenes) matched, \(consolidation.unmatchedScenes) unresolved, \(consolidation.newScenes) new local.")
+        if validationAutoFixed > 0 {
+            parts.append("Validation: auto-fixed \(validationAutoFixed) workflow reference(s).")
+        }
+        if validationUnresolvable > 0 {
+            parts.append("Validation: \(validationUnresolvable) unresolvable reference(s) — check Settings > Device Registry.")
+        }
         if consolidation.unmatchedDevices > 0 || consolidation.unmatchedScenes > 0 {
             parts.append("Unresolved entries can be remapped in Settings > Device Registry.")
         }

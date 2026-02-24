@@ -8,12 +8,15 @@ struct OrphanedDevicesView: View {
 
     @State private var orphanedDevices: [DeviceRegistryEntry] = []
     @State private var orphanedScenes: [SceneRegistryEntry] = []
+    @State private var unresolvedServiceRefs: [(workflowName: String, deviceName: String, serviceId: String, location: String)] = []
     @State private var replaceDeviceEntry: DeviceRegistryEntry?
     @State private var replaceSceneEntry: SceneRegistryEntry?
     @State private var removeDeviceEntry: DeviceRegistryEntry?
     @State private var removeSceneEntry: SceneRegistryEntry?
     @State private var affectedWorkflowNames: [String] = []
     @State private var showingResetConfirmation = false
+    @State private var isValidating = false
+    @State private var lastValidationMessage: String?
 
     var body: some View {
         Form {
@@ -54,7 +57,7 @@ struct OrphanedDevicesView: View {
                 }
             }
 
-            if orphanedDevices.isEmpty && orphanedScenes.isEmpty {
+            if orphanedDevices.isEmpty && orphanedScenes.isEmpty && unresolvedServiceRefs.isEmpty {
                 Section {
                     HStack {
                         Spacer()
@@ -62,10 +65,10 @@ struct OrphanedDevicesView: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 36))
                                 .foregroundStyle(.green)
-                            Text("All Devices Resolved")
+                            Text("All Entities Resolved")
                                 .font(.headline)
                                 .foregroundStyle(Theme.Text.primary)
-                            Text("Every registry entry is mapped to a HomeKit device.")
+                            Text("Every device, service, and scene reference is valid.")
                                 .font(.subheadline)
                                 .foregroundStyle(Theme.Text.secondary)
                                 .multilineTextAlignment(.center)
@@ -98,6 +101,54 @@ struct OrphanedDevicesView: View {
                 } footer: {
                     Text("These scenes were previously registered but can no longer be found in HomeKit.")
                 }
+            }
+
+            if !unresolvedServiceRefs.isEmpty {
+                Section {
+                    ForEach(Array(unresolvedServiceRefs.enumerated()), id: \.offset) { _, ref in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(ref.workflowName)
+                                .font(.body)
+                                .foregroundStyle(Theme.Text.primary)
+                            HStack(spacing: 4) {
+                                Text("Device: \(ref.deviceName)")
+                                Text("in \(ref.location)")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(Theme.Text.secondary)
+                            Text("Service ID: \(ref.serviceId)")
+                                .font(.caption2)
+                                .foregroundStyle(Theme.Text.tertiary)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } header: {
+                    Label("Orphaned Service References (\(unresolvedServiceRefs.count))", systemImage: "exclamationmark.triangle")
+                } footer: {
+                    Text("These workflows reference service IDs that don't exist in their device's registry entry. Use \"Validate & Repair\" below to attempt auto-repair.")
+                }
+            }
+
+            Section {
+                Button {
+                    Task { await runValidation() }
+                } label: {
+                    HStack {
+                        Label("Validate & Repair Workflows", systemImage: "wrench.and.screwdriver")
+                        if isValidating {
+                            Spacer()
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isValidating)
+                if let message = lastValidationMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(Theme.Text.secondary)
+                }
+            } footer: {
+                Text("Checks all workflow references against the device registry and auto-repairs mismatched service IDs and characteristic type formats.")
             }
         }
         .formStyle(.grouped)
@@ -288,6 +339,36 @@ struct OrphanedDevicesView: View {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         orphanedScenes = await registryService.unresolvedScenes()
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        let workflows = await workflowStorageService.getAllWorkflows()
+        unresolvedServiceRefs = await registryService.unresolvedServiceReferences(in: workflows)
+    }
+
+    private func runValidation() async {
+        isValidating = true
+        defer { isValidating = false }
+
+        let workflows = await workflowStorageService.getAllWorkflows()
+        let validation = await WorkflowMigrationService.validateAndRepairReferences(
+            workflows, registry: registryService
+        )
+
+        if !validation.autoFixed.isEmpty {
+            await workflowStorageService.replaceAll(workflows: validation.updatedWorkflows)
+        }
+
+        let fixedCount = validation.autoFixed.count
+        let unresolvedCount = validation.unresolvable.count
+        if fixedCount == 0 && unresolvedCount == 0 {
+            lastValidationMessage = "All workflow references are valid."
+        } else {
+            var parts: [String] = []
+            if fixedCount > 0 { parts.append("Auto-fixed \(fixedCount) issue(s).") }
+            if unresolvedCount > 0 { parts.append("\(unresolvedCount) issue(s) need manual reconfiguration.") }
+            lastValidationMessage = parts.joined(separator: " ")
+        }
+
+        await loadOrphans()
     }
 
     private func categoryIcon(for categoryType: String) -> String {
@@ -315,11 +396,11 @@ struct OrphanedDevicesView: View {
 
 // MARK: - Identifiable Conformances
 
-extension DeviceRegistryEntry: @retroactive Identifiable {
+extension DeviceRegistryEntry: Identifiable {
     var id: String { stableId }
 }
 
-extension SceneRegistryEntry: @retroactive Identifiable {
+extension SceneRegistryEntry: Identifiable {
     var id: String { stableId }
 }
 

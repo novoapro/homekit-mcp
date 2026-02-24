@@ -82,7 +82,7 @@ actor DeviceRegistryService {
     // These allow synchronous callers (e.g., HomeKitManager on MainActor) to resolve IDs
     // without awaiting the actor. Marked nonisolated(unsafe) because thread safety is
     // manually managed via syncLock.
-    private nonisolated(unsafe) let syncLock = NSLock()
+    private let syncLock = NSLock()
     private nonisolated(unsafe) var _stableToHkDevice: [String: String] = [:]
     private nonisolated(unsafe) var _hkToStableDevice: [String: String] = [:]
     private nonisolated(unsafe) var _stableToHkService: [String: String] = [:]
@@ -115,7 +115,6 @@ actor DeviceRegistryService {
            let saved = try? JSONDecoder().decode(RegistrySnapshot.self, from: data) {
             self.devices = saved.devices
             self.scenes = saved.scenes
-            rebuildReverseLookups()
         }
     }
 
@@ -389,6 +388,33 @@ actor DeviceRegistryService {
 
     func unresolvedDevices() -> [DeviceRegistryEntry] { devices.values.filter { !$0.isResolved } }
     func unresolvedScenes() -> [SceneRegistryEntry] { scenes.values.filter { !$0.isResolved } }
+
+    /// Returns workflow service references that point to a serviceId not present in the registry.
+    /// Only checks resolved devices (unresolved devices are handled by existing orphan detection).
+    func unresolvedServiceReferences(in workflows: [Workflow]) -> [(workflowName: String, deviceName: String, serviceId: String, location: String)] {
+        var results: [(workflowName: String, deviceName: String, serviceId: String, location: String)] = []
+
+        for workflow in workflows {
+            let refs = WorkflowMigrationService.collectDeviceReferences(from: workflow)
+            for ref in refs {
+                guard let serviceId = ref.serviceId else { continue }
+                guard let deviceEntry = devices[ref.deviceId] else { continue }
+                guard deviceEntry.isResolved else { continue }
+
+                let serviceExists = deviceEntry.services.contains { $0.stableServiceId == serviceId }
+                if !serviceExists {
+                    results.append((
+                        workflowName: workflow.name,
+                        deviceName: deviceEntry.name,
+                        serviceId: serviceId,
+                        location: ref.location
+                    ))
+                }
+            }
+        }
+
+        return results
+    }
 
     // MARK: - Manual Remap & Remove
 
