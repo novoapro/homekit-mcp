@@ -319,7 +319,7 @@ class HomeKitViewModel: ObservableObject {
     private func updateErrorForStatus(_ status: HMHomeManagerAuthorizationStatus) {
         if status == .restricted {
             errorMessage = "HomeKit access is restricted on this device."
-        } else if !status.contains(.authorized), homeKitManager.isReady {
+        } else if status.contains(.determined), !status.contains(.authorized) {
             errorMessage = "HomeKit access was denied. Grant access in System Settings > Privacy & Security > HomeKit."
         } else {
             errorMessage = nil

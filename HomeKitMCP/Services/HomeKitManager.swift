@@ -5,7 +5,7 @@ import Combine
 class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
     @Published var homes: [HMHome] = []
     @Published var allAccessories: [HMAccessory] = []
-    @Published var authorizationStatus: HMHomeManagerAuthorizationStatus = .determined
+    @Published var authorizationStatus: HMHomeManagerAuthorizationStatus = []
     @Published var isReady = false
     @Published var isReadingValues = false
 
@@ -859,6 +859,7 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
 extension HomeKitManager: HMHomeManagerDelegate {
     func homeManagerDidUpdateHomes(_ manager: HMHomeManager) {
         DispatchQueue.main.async {
+            self.authorizationStatus = manager.authorizationStatus
             self.homes = manager.homes
             self.refreshAccessories()
         }
