@@ -111,6 +111,7 @@ struct SettingsView: View {
                     OrphanedDevicesView(
                         registryService: viewModel.deviceRegistryService,
                         homeKitManager: viewModel.homeKitManager,
+                        workflowStorageService: viewModel.workflowStorageService,
                         viewModel: viewModel
                     )
                 } label: {

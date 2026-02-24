@@ -234,7 +234,7 @@ enum MCPToolDefinitions {
                 BLOCK TYPES (blocks array, use "block" discriminator):
                 Action blocks: { "block":"action", "type":"controlDevice"|"runScene"|"webhook"|"log", ... }
                 • controlDevice: + deviceId, deviceName, roomName, serviceId?, characteristicType, value
-                • runScene: + sceneId
+                • runScene: + sceneId, sceneName (optional, cached display name)
                 • webhook: + url, method, headers?, body?
                 • log: + message
                 Flow control blocks: { "block":"flowControl", "type":"...", ... }

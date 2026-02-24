@@ -111,6 +111,7 @@ class SettingsViewModel: ObservableObject {
     let appleSignInService: AppleSignInService
     let deviceRegistryService: DeviceRegistryService
     let homeKitManager: HomeKitManager
+    let workflowStorageService: WorkflowStorageService
     private var cancellables = Set<AnyCancellable>()
 
     init(
@@ -124,7 +125,8 @@ class SettingsViewModel: ObservableObject {
         cloudBackupService: CloudBackupService,
         appleSignInService: AppleSignInService,
         deviceRegistryService: DeviceRegistryService,
-        homeKitManager: HomeKitManager
+        homeKitManager: HomeKitManager,
+        workflowStorageService: WorkflowStorageService
     ) {
         self.storage = storage
         self.webhookService = webhookService
@@ -137,6 +139,7 @@ class SettingsViewModel: ObservableObject {
         self.appleSignInService = appleSignInService
         self.deviceRegistryService = deviceRegistryService
         self.homeKitManager = homeKitManager
+        self.workflowStorageService = workflowStorageService
         self.webhookEnabled = storage.webhookEnabled
         self.hideRoomNameInTheApp = storage.hideRoomNameInTheApp
         self.detailedLogsEnabled = storage.detailedLogsEnabled

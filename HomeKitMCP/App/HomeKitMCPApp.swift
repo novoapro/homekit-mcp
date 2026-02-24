@@ -262,6 +262,7 @@ struct ContentView: View {
                     viewModel: logViewModel,
                     registryService: settingsViewModel.deviceRegistryService,
                     homeKitManager: settingsViewModel.homeKitManager,
+                    workflowStorageService: settingsViewModel.workflowStorageService,
                     onCancelExecution: { executionId in
                         workflowViewModel.cancelExecution(executionId: executionId)
                     }

@@ -297,6 +297,7 @@ class MCPRequestHandler {
 
     private func handleToolsList(id: JSONRPCId?) -> JSONRPCResponse {
         var tools = MCPToolDefinitions.deviceTools
+        tools += MCPToolDefinitions.sceneTools
         if storage.readWorkflowsEnabled() {
             tools += MCPToolDefinitions.workflowTools
         }
@@ -504,7 +505,8 @@ class MCPRequestHandler {
         }
 
         let filteredDevices = await filterDevicesByConfig(group.devices)
-        return toolResult(encoding: filteredDevices, id: id)
+        let restDevices = filteredDevices.map { RESTDevice.from($0) }
+        return toolResult(encoding: restDevices, id: id)
     }
 
     private func handleGetDevicesInRooms(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {

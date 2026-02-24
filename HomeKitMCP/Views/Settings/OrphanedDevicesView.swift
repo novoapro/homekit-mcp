@@ -3,6 +3,7 @@ import SwiftUI
 struct OrphanedDevicesView: View {
     let registryService: DeviceRegistryService
     let homeKitManager: HomeKitManager
+    let workflowStorageService: WorkflowStorageService
     var viewModel: SettingsViewModel?
 
     @State private var orphanedDevices: [DeviceRegistryEntry] = []
@@ -11,6 +12,7 @@ struct OrphanedDevicesView: View {
     @State private var replaceSceneEntry: SceneRegistryEntry?
     @State private var removeDeviceEntry: DeviceRegistryEntry?
     @State private var removeSceneEntry: SceneRegistryEntry?
+    @State private var affectedWorkflowNames: [String] = []
     @State private var showingResetConfirmation = false
 
     var body: some View {
@@ -129,7 +131,7 @@ struct OrphanedDevicesView: View {
             "Remove Device",
             isPresented: Binding(
                 get: { removeDeviceEntry != nil },
-                set: { if !$0 { removeDeviceEntry = nil } }
+                set: { if !$0 { removeDeviceEntry = nil; affectedWorkflowNames = [] } }
             ),
             presenting: removeDeviceEntry
         ) { entry in
@@ -141,13 +143,17 @@ struct OrphanedDevicesView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: { entry in
-            Text("Remove \"\(entry.name)\" from the registry? Any workflows referencing this device will no longer resolve.")
+            if affectedWorkflowNames.isEmpty {
+                Text("Remove \"\(entry.name)\" from the registry? No workflows reference this device.")
+            } else {
+                Text("Remove \"\(entry.name)\"? The following workflows reference this device and will need to be updated:\n\n\(affectedWorkflowNames.joined(separator: "\n"))")
+            }
         }
         .alert(
             "Remove Scene",
             isPresented: Binding(
                 get: { removeSceneEntry != nil },
-                set: { if !$0 { removeSceneEntry = nil } }
+                set: { if !$0 { removeSceneEntry = nil; affectedWorkflowNames = [] } }
             ),
             presenting: removeSceneEntry
         ) { entry in
@@ -159,7 +165,11 @@ struct OrphanedDevicesView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: { entry in
-            Text("Remove \"\(entry.name)\" from the registry? Any workflows referencing this scene will no longer resolve.")
+            if affectedWorkflowNames.isEmpty {
+                Text("Remove \"\(entry.name)\" from the registry? No workflows reference this scene.")
+            } else {
+                Text("Remove \"\(entry.name)\"? The following workflows reference this scene and will need to be updated:\n\n\(affectedWorkflowNames.joined(separator: "\n"))")
+            }
         }
         .alert("Reset Device Configuration?", isPresented: $showingResetConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -215,7 +225,12 @@ struct OrphanedDevicesView: View {
                 .buttonStyle(.borderless)
 
                 Button(role: .destructive) {
-                    removeDeviceEntry = entry
+                    Task {
+                        let workflows = await workflowStorageService.getAllWorkflows()
+                        let affected = registryService.findWorkflowsReferencing(deviceStableId: entry.stableId, in: workflows)
+                        affectedWorkflowNames = affected.map { "\($0.workflowName) (\($0.locations.joined(separator: ", ")))" }
+                        removeDeviceEntry = entry
+                    }
                 } label: {
                     Label("Remove", systemImage: "trash")
                         .font(.subheadline)
@@ -250,7 +265,12 @@ struct OrphanedDevicesView: View {
                 .buttonStyle(.borderless)
 
                 Button(role: .destructive) {
-                    removeSceneEntry = entry
+                    Task {
+                        let workflows = await workflowStorageService.getAllWorkflows()
+                        let affected = registryService.findWorkflowsReferencing(sceneStableId: entry.stableId, in: workflows)
+                        affectedWorkflowNames = affected.map { "\($0.workflowName) (\($0.locations.joined(separator: ", ")))" }
+                        removeSceneEntry = entry
+                    }
                 } label: {
                     Label("Remove", systemImage: "trash")
                         .font(.subheadline)

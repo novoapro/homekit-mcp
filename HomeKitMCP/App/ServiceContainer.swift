@@ -49,7 +49,8 @@ final class ServiceContainer {
         storage: storageService,
         homeKitManager: homeKitManager,
         keychainService: keychainService,
-        interactionLog: aiInteractionLogService
+        interactionLog: aiInteractionLogService,
+        registry: deviceRegistryService
     )
 
     lazy var mcpServer: MCPServer = MCPServer(
@@ -118,7 +119,8 @@ final class ServiceContainer {
         cloudBackupService: cloudBackupService,
         appleSignInService: appleSignInService,
         deviceRegistryService: deviceRegistryService,
-        homeKitManager: homeKitManager
+        homeKitManager: homeKitManager,
+        workflowStorageService: workflowStorageService
     )
 
     lazy var workflowViewModel: WorkflowViewModel = WorkflowViewModel(

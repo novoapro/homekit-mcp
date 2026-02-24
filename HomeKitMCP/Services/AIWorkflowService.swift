@@ -189,6 +189,7 @@ actor AIWorkflowService {
     private let storage: StorageService
     private let homeKitManager: HomeKitManager
     private let keychainService: KeychainService
+    private let registry: DeviceRegistryService?
     let interactionLog: AIInteractionLogService
 
     private static let decoder: JSONDecoder = {
@@ -197,11 +198,12 @@ actor AIWorkflowService {
         return decoder
     }()
 
-    init(storage: StorageService, homeKitManager: HomeKitManager, keychainService: KeychainService, interactionLog: AIInteractionLogService) {
+    init(storage: StorageService, homeKitManager: HomeKitManager, keychainService: KeychainService, interactionLog: AIInteractionLogService, registry: DeviceRegistryService? = nil) {
         self.storage = storage
         self.homeKitManager = homeKitManager
         self.keychainService = keychainService
         self.interactionLog = interactionLog
+        self.registry = registry
     }
 
     /// Generate a Workflow from a natural language description.
@@ -539,7 +541,7 @@ actor AIWorkflowService {
 
         ```json
         { "block": "action", "type": "controlDevice", "name": "optional", "deviceId": "...", "deviceName": "Living Room Light", "roomName": "Living Room", "serviceId": "optional-service-uuid", "characteristicType": "Power", "value": true }
-        { "block": "action", "type": "runScene", "name": "optional", "sceneId": "scene-uuid" }
+        { "block": "action", "type": "runScene", "name": "optional", "sceneId": "scene-uuid", "sceneName": "Scene Name" }
         { "block": "action", "type": "webhook", "name": "optional", "url": "https://...", "method": "POST", "headers": {}, "body": {} }
         { "block": "action", "type": "log", "name": "optional", "message": "Something happened" }
         ```
@@ -583,7 +585,7 @@ actor AIWorkflowService {
         { "type": "timeCondition", "mode": "nighttime" }
         { "type": "timeCondition", "mode": "daytime" }
         { "type": "timeCondition", "mode": "timeRange", "startTime": { "hour": 22, "minute": 0 }, "endTime": { "hour": 6, "minute": 0 } }
-        { "type": "sceneActive", "sceneId": "scene-uuid", "isActive": true }
+        { "type": "sceneActive", "sceneId": "scene-uuid", "sceneName": "Scene Name", "isActive": true }
         { "type": "and", "conditions": [ ... ] }
         { "type": "or", "conditions": [ ... ] }
         { "type": "not", "condition": { ... } }
@@ -612,6 +614,7 @@ actor AIWorkflowService {
         Use short, descriptive names like "Turn on lamp", "Wait for door", "Check temperature"
         - The "serviceId" field is optional; use it only for devices with multiple services of the same type
         - Always include "deviceName" and "roomName" alongside "deviceId" in triggers, conditions, and blocks — copy them from the available devices list. This metadata enables cross-device migration
+        - Always include "sceneName" alongside "sceneId" in runScene actions and sceneActive conditions — copy the name from the available scenes list
         - Do not include "id", "createdAt", "updatedAt", or "metadata" — they are auto-generated
         """
 
@@ -622,10 +625,21 @@ actor AIWorkflowService {
         return custom.isEmpty ? Self.defaultSystemPrompt : custom
     }
 
-    private func buildUserMessage(description: String) async -> String {
-        let (devices, scenes) = await MainActor.run {
+    /// Transforms devices and scenes to use stable registry IDs for AI context,
+    /// so AI-generated workflows reference stable IDs (consistent with MCP-created workflows).
+    private func stableContext() async -> (devices: [DeviceModel], scenes: [SceneModel]) {
+        let (rawDevices, rawScenes) = await MainActor.run {
             (homeKitManager.cachedDevices, homeKitManager.cachedScenes)
         }
+        if let registry {
+            return (rawDevices.map { registry.withStableIds($0) },
+                    rawScenes.map { registry.withStableIds($0) })
+        }
+        return (rawDevices, rawScenes)
+    }
+
+    private func buildUserMessage(description: String) async -> String {
+        let (devices, scenes) = await stableContext()
         let deviceContext = buildDeviceContext(devices)
         let sceneContext = buildSceneContext(scenes)
 
@@ -643,9 +657,7 @@ actor AIWorkflowService {
     }
 
     private func buildRefinementMessage(workflowJSON: String, feedback: String) async -> String {
-        let (devices, scenes) = await MainActor.run {
-            (homeKitManager.cachedDevices, homeKitManager.cachedScenes)
-        }
+        let (devices, scenes) = await stableContext()
         let deviceContext = buildDeviceContext(devices)
         let sceneContext = buildSceneContext(scenes)
 

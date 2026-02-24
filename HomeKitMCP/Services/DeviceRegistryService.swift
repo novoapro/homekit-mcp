@@ -44,6 +44,16 @@ struct RegistrySnapshot: Codable {
     var scenes: [String: SceneRegistryEntry]
 }
 
+/// Result of importing a backup registry and consolidating with local HomeKit.
+struct ConsolidationResult {
+    let matchedDevices: Int
+    let unmatchedDevices: Int
+    let newDevices: Int
+    let matchedScenes: Int
+    let unmatchedScenes: Int
+    let newScenes: Int
+}
+
 // MARK: - Device Registry Service
 
 /// Maintains a stable identity registry that maps app-generated stable IDs to HomeKit's device-local UUIDs.
@@ -556,6 +566,207 @@ actor DeviceRegistryService {
         scenes = snapshot.scenes
         rebuildReverseLookups()
         saveNow()
+    }
+
+    // MARK: - Backup Import & Consolidation
+
+    /// Imports a backup registry and consolidates it with the current HomeKit state.
+    ///
+    /// 1. Replaces the current registry with the backup snapshot
+    /// 2. Clears all HomeKit UUIDs (they're from the source machine)
+    /// 3. Matches each backup entry against local HomeKit devices by:
+    ///    - Hardware key (manufacturer:model:serial) — unambiguous only
+    ///    - Name + room + category — unique matches only
+    /// 4. Updates HomeKit UUIDs for matched entries
+    /// 5. Marks unmatched entries as `isResolved = false`
+    /// 6. Adds local HomeKit devices not in the backup as new entries
+    /// 7. Same for scenes (matched by name)
+    func importAndConsolidate(
+        _ backupSnapshot: RegistrySnapshot,
+        currentDevices: [DeviceModel],
+        currentScenes: [SceneModel]
+    ) -> ConsolidationResult {
+        // Step 1: Replace registry with backup
+        devices = backupSnapshot.devices
+        scenes = backupSnapshot.scenes
+
+        // Step 2: Clear HomeKit UUIDs (they're from the source machine)
+        for (stableId, var entry) in devices {
+            entry.homeKitId = nil
+            entry.isResolved = false
+            for i in entry.services.indices {
+                entry.services[i].homeKitServiceId = nil
+                for j in entry.services[i].characteristics.indices {
+                    entry.services[i].characteristics[j].homeKitCharacteristicId = nil
+                }
+            }
+            devices[stableId] = entry
+        }
+        for (stableId, var entry) in scenes {
+            entry.homeKitId = nil
+            entry.isResolved = false
+            scenes[stableId] = entry
+        }
+
+        // Step 3-4: Match backup device entries against local HomeKit devices
+        var matchedDeviceCount = 0
+        var matchedLocalDeviceIds = Set<String>()
+
+        // Detect ambiguous hardware keys among LOCAL devices
+        var hwKeyCount: [String: Int] = [:]
+        for device in currentDevices {
+            if let key = device.hardwareKey { hwKeyCount[key, default: 0] += 1 }
+        }
+        let ambiguousHwKeys = Set(hwKeyCount.filter { $0.value > 1 }.keys)
+
+        // Build local lookup indices
+        var localByHwKey: [String: DeviceModel] = [:]
+        for device in currentDevices {
+            if let key = device.hardwareKey, !ambiguousHwKeys.contains(key) {
+                localByHwKey[key] = device
+            }
+        }
+
+        var localNameKeyCounts: [String: Int] = [:]
+        for device in currentDevices {
+            localNameKeyCounts[deviceNameKey(device), default: 0] += 1
+        }
+        var localByNameKey: [String: DeviceModel] = [:]
+        for device in currentDevices {
+            let nk = deviceNameKey(device)
+            if localNameKeyCounts[nk] == 1 { localByNameKey[nk] = device }
+        }
+
+        for (stableId, entry) in devices {
+            var matched: DeviceModel?
+
+            // Priority 1: Hardware key (unambiguous)
+            if let hwKey = entry.hardwareKey, let local = localByHwKey[hwKey] {
+                matched = local
+                AppLogger.registry.info("Consolidation: '\(entry.name)' matched via hardware key")
+            }
+
+            // Priority 2: Name + room + category
+            if matched == nil {
+                let nk = deviceNameKey(entry)
+                if let local = localByNameKey[nk] {
+                    matched = local
+                    AppLogger.registry.info("Consolidation: '\(entry.name)' matched via name+room")
+                }
+            }
+
+            if let match = matched {
+                devices[stableId] = buildDeviceEntry(stableId: stableId, from: match, existing: entry)
+                matchedLocalDeviceIds.insert(match.id)
+                matchedDeviceCount += 1
+            }
+            // Unmatched entries remain with isResolved=false from step 2
+        }
+
+        let unmatchedDeviceCount = devices.values.filter { !$0.isResolved }.count
+
+        // Step 6: Add local HomeKit devices NOT in the backup
+        var newDeviceCount = 0
+        for device in currentDevices where !matchedLocalDeviceIds.contains(device.id) {
+            let newStableId = UUID().uuidString
+            devices[newStableId] = buildDeviceEntry(stableId: newStableId, from: device, existing: nil)
+            newDeviceCount += 1
+            AppLogger.registry.info("Consolidation: new local device '\(device.name)' → \(newStableId)")
+        }
+
+        // Step 7: Scenes — match by name
+        var matchedSceneCount = 0
+        var matchedLocalSceneIds = Set<String>()
+
+        var sceneNameCounts: [String: Int] = [:]
+        for scene in currentScenes {
+            sceneNameCounts[scene.name.lowercased(), default: 0] += 1
+        }
+        var localScenesByName: [String: SceneModel] = [:]
+        for scene in currentScenes {
+            if sceneNameCounts[scene.name.lowercased()] == 1 {
+                localScenesByName[scene.name.lowercased()] = scene
+            }
+        }
+
+        for (stableId, entry) in scenes {
+            if let local = localScenesByName[entry.name.lowercased()] {
+                scenes[stableId] = SceneRegistryEntry(
+                    stableId: stableId,
+                    homeKitId: local.id,
+                    name: local.name,
+                    isResolved: true
+                )
+                matchedLocalSceneIds.insert(local.id)
+                matchedSceneCount += 1
+                AppLogger.registry.info("Consolidation: scene '\(entry.name)' matched")
+            }
+        }
+
+        let unmatchedSceneCount = scenes.values.filter { !$0.isResolved }.count
+
+        var newSceneCount = 0
+        for scene in currentScenes where !matchedLocalSceneIds.contains(scene.id) {
+            let newStableId = UUID().uuidString
+            scenes[newStableId] = SceneRegistryEntry(
+                stableId: newStableId,
+                homeKitId: scene.id,
+                name: scene.name,
+                isResolved: true
+            )
+            newSceneCount += 1
+            AppLogger.registry.info("Consolidation: new local scene '\(scene.name)' → \(newStableId)")
+        }
+
+        // Step 8: Rebuild and persist
+        rebuildReverseLookups()
+        saveNow()
+
+        let result = ConsolidationResult(
+            matchedDevices: matchedDeviceCount,
+            unmatchedDevices: unmatchedDeviceCount,
+            newDevices: newDeviceCount,
+            matchedScenes: matchedSceneCount,
+            unmatchedScenes: unmatchedSceneCount,
+            newScenes: newSceneCount
+        )
+        AppLogger.registry.info("Consolidation complete: \(result.matchedDevices) devices matched, \(result.unmatchedDevices) unresolved, \(result.newDevices) new; \(result.matchedScenes) scenes matched, \(result.unmatchedScenes) unresolved, \(result.newScenes) new")
+        return result
+    }
+
+    // MARK: - Workflow Dependency Tracking
+
+    /// Finds all workflows that reference a given device stable ID.
+    /// Returns tuples of (workflowName, locations) where locations describe where in the workflow the reference appears.
+    nonisolated func findWorkflowsReferencing(
+        deviceStableId: String,
+        in workflows: [Workflow]
+    ) -> [(workflowName: String, locations: [String])] {
+        var results: [(workflowName: String, locations: [String])] = []
+        for workflow in workflows {
+            let refs = WorkflowMigrationService.collectDeviceReferences(from: workflow)
+            let matchingLocations = refs.filter { $0.deviceId == deviceStableId }.map(\.location)
+            if !matchingLocations.isEmpty {
+                results.append((workflowName: workflow.name, locations: matchingLocations))
+            }
+        }
+        return results
+    }
+
+    /// Finds all workflows that reference a given scene stable ID.
+    nonisolated func findWorkflowsReferencing(
+        sceneStableId: String,
+        in workflows: [Workflow]
+    ) -> [(workflowName: String, locations: [String])] {
+        var results: [(workflowName: String, locations: [String])] = []
+        for workflow in workflows {
+            let refs = WorkflowMigrationService.collectSceneReferences(from: workflow)
+            let matchingLocations = refs.filter { $0.sceneId == sceneStableId }.map(\.location)
+            if !matchingLocations.isEmpty {
+                results.append((workflowName: workflow.name, locations: matchingLocations))
+            }
+        }
+        return results
     }
 
     // MARK: - Private Helpers

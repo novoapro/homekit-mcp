@@ -4,6 +4,7 @@ struct LogViewerView: View {
     @ObservedObject var viewModel: LogViewModel
     var registryService: DeviceRegistryService?
     var homeKitManager: HomeKitManager?
+    var workflowStorageService: WorkflowStorageService?
     var onCancelExecution: ((UUID) -> Void)?
     @State private var showingClearConfirmation = false
 
@@ -42,9 +43,10 @@ struct LogViewerView: View {
                                 case .stateChange(let log):
                                     if log.category == .backupRestore,
                                        let registry = registryService,
-                                       let hkManager = homeKitManager {
+                                       let hkManager = homeKitManager,
+                                       let wfStorage = workflowStorageService {
                                         NavigationLink {
-                                            OrphanedDevicesView(registryService: registry, homeKitManager: hkManager)
+                                            OrphanedDevicesView(registryService: registry, homeKitManager: hkManager, workflowStorageService: wfStorage)
                                         } label: {
                                             LogRow(log: log, detailedLogsEnabled: viewModel.detailedLogsEnabled)
                                         }

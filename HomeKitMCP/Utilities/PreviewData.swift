@@ -392,7 +392,8 @@ enum PreviewData {
             storage: storage, webhookService: webhookService, mcpServer: mcpServer, configService: configService,
             keychainService: keychainService, aiWorkflowService: aiWorkflowService,
             backupService: backupService, cloudBackupService: cloudBackupService, appleSignInService: appleSignInService,
-            deviceRegistryService: registryService, homeKitManager: manager
+            deviceRegistryService: registryService, homeKitManager: manager,
+            workflowStorageService: workflowStorage
         )
     }
 

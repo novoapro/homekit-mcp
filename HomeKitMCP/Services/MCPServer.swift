@@ -368,13 +368,14 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             throw Abort(.badRequest)
         }
 
-        let scene = await MainActor.run { homeKitManager.getScene(id: sceneId) }
+        let rawScene = await MainActor.run { homeKitManager.getScene(id: sceneId) }
 
-        guard let scene else {
+        guard let rawScene else {
             logRESTCall(method: "GET", path: "/scenes/\(sceneId)", statusCode: 404, resultSummary: "Not Found")
             throw Abort(.notFound, reason: "Scene not found")
         }
 
+        let scene = registry?.withStableIds(rawScene) ?? rawScene
         let restScene = RESTScene.from(scene)
         let data = try Self.encoder.encode(restScene)
         logRESTCall(method: "GET", path: "/scenes/\(sceneId)", statusCode: 200,

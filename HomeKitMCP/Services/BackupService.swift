@@ -68,37 +68,25 @@ class BackupService: ObservableObject, BackupServiceProtocol {
             webhookURL: keychainService.read(key: KeychainService.Keys.webhookURL)
         )
 
-        let rawWorkflows = await workflowStorageService.getAllWorkflows()
-        let currentDevices = homeKitManager.cachedDevices
-        let currentScenes = homeKitManager.cachedScenes
+        // Workflows already use stable IDs — include as-is
+        let workflows = await workflowStorageService.getAllWorkflows()
 
-        // Use stable-ID versions for enrichment so lookup keys match workflow stable IDs
-        let stableDevices: [DeviceModel]
-        let stableScenes: [SceneModel]
-        if let registry = homeKitManager.deviceRegistryService {
-            stableDevices = currentDevices.map { registry.withStableIds($0) }
-            stableScenes = currentScenes.map { registry.withStableIds($0) }
-        } else {
-            stableDevices = currentDevices
-            stableScenes = currentScenes
-        }
+        // Capture the full registry snapshot
+        let registrySnapshot = await deviceRegistryService.snapshot()
 
-        let workflows = (currentDevices.isEmpty && currentScenes.isEmpty)
-            ? rawWorkflows
-            : rawWorkflows.map { WorkflowMigrationService.enrichMetadata(in: $0, using: stableDevices, scenes: stableScenes) }
-        let deviceConfig = await configService.getAllConfigs()
-
-        let deviceName = ProcessInfo.processInfo.hostName
+        // Device config keys transformed from HomeKit UUIDs to stable IDs
+        let deviceConfig = transformConfigKeysToStableIds(await configService.getAllConfigs())
 
         return BackupBundle(
             formatVersion: BackupBundle.currentFormatVersion,
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0",
             createdAt: Date(),
-            deviceName: deviceName,
+            deviceName: ProcessInfo.processInfo.hostName,
             backupId: UUID(),
             settings: settings,
             secrets: secrets,
             workflows: workflows,
+            registry: registrySnapshot,
             deviceConfig: deviceConfig
         )
     }
@@ -173,96 +161,83 @@ class BackupService: ObservableObject, BackupServiceProtocol {
             storage.webhookURL = nil
         }
 
-        // Restore workflows, then migrate device/scene UUIDs that may differ on this machine
+        // Restore workflows (they contain only stable IDs)
         await workflowStorageService.replaceAll(workflows: bundle.workflows)
 
-        let currentDevices = homeKitManager.cachedDevices
-        let currentScenes = homeKitManager.cachedScenes
-        if !currentDevices.isEmpty || !currentScenes.isEmpty {
-            let migration = WorkflowMigrationService.migrateAll(bundle.workflows, using: currentDevices, scenes: currentScenes)
-            let totalRemapped = migration.totalRemappedDevices + migration.totalRemappedScenes
-            if totalRemapped > 0 {
-                await workflowStorageService.replaceAll(workflows: migration.workflows)
-            }
-
-            // Log restore summary
-            let summary = buildRestoreSummary(
-                workflowCount: bundle.workflows.count,
-                remappedDevices: migration.totalRemappedDevices,
-                remappedScenes: migration.totalRemappedScenes,
-                orphanedReferences: migration.orphanedReferences
-            )
-            let summaryEntry = StateChangeLog(
-                id: UUID(), timestamp: Date(),
-                deviceId: "backup-restore", deviceName: "Backup Restore",
-                characteristicType: "restore-summary",
-                oldValue: nil, newValue: nil,
-                category: .backupRestore,
-                errorDetails: summary
-            )
-            await loggingService.logEntry(summaryEntry)
-
-            // Log individual orphans
-            for (workflowName, orphans) in migration.orphanedReferences {
-                for orphan in orphans {
-                    let kind = orphan.isScene ? "scene" : "device"
-                    let desc = orphan.referenceName ?? orphan.referenceId
-                    let roomInfo = orphan.roomName.map { " (\($0))" } ?? ""
-                    let errorDetail = "Workflow '\(workflowName)' → \(orphan.location): \(kind) '\(desc)\(roomInfo)' not found"
-                    let orphanEntry = StateChangeLog(
-                        id: UUID(), timestamp: Date(),
-                        deviceId: "backup-restore", deviceName: workflowName,
-                        characteristicType: "orphan-detection",
-                        oldValue: nil, newValue: nil,
-                        category: .backupRestore,
-                        errorDetails: errorDetail
-                    )
-                    await loggingService.logEntry(orphanEntry)
-                }
-            }
-        } else {
-            // No devices/scenes available yet — log that migration will happen at startup
-            let entry = StateChangeLog(
-                id: UUID(), timestamp: Date(),
-                deviceId: "backup-restore", deviceName: "Backup Restore",
-                characteristicType: "restore-summary",
-                oldValue: nil, newValue: nil,
-                category: .backupRestore,
-                errorDetails: "Restored \(bundle.workflows.count) workflow(s). Device migration deferred — HomeKit devices not yet available."
-            )
-            await loggingService.logEntry(entry)
-        }
-
-        // Reconcile foreign stable IDs from restored workflows against local registry.
-        // This handles workflows that already use stable IDs (post-registry backup or synced).
-        let restoredWorkflows = await workflowStorageService.getAllWorkflows()
-        let reconciledCount = await deviceRegistryService.reconcileWorkflowReferences(
-            restoredWorkflows,
+        // Import the backup's registry and consolidate with local HomeKit devices.
+        // Workflows already have the right stable IDs — no migration needed.
+        let consolidation = await deviceRegistryService.importAndConsolidate(
+            bundle.registry,
             currentDevices: homeKitManager.cachedDevices,
             currentScenes: homeKitManager.cachedScenes
         )
-        if reconciledCount > 0 {
-            AppLogger.workflow.info("Backup restore: reconciled \(reconciledCount) foreign registry references")
-        }
 
-        // Restore device config
-        await configService.replaceAll(configs: bundle.deviceConfig)
+        // Restore device config: keys are stable IDs, transform back to local HomeKit UUIDs
+        let localConfig = transformConfigKeysToHomeKitIds(bundle.deviceConfig)
+        await configService.replaceAll(configs: localConfig)
+
+        // Log consolidation summary
+        let summary = buildConsolidationSummary(
+            workflowCount: bundle.workflows.count,
+            consolidation: consolidation
+        )
+        let summaryEntry = StateChangeLog(
+            id: UUID(), timestamp: Date(),
+            deviceId: "backup-restore", deviceName: "Backup Restore",
+            characteristicType: "restore-summary",
+            oldValue: nil, newValue: nil,
+            category: .backupRestore,
+            errorDetails: summary
+        )
+        await loggingService.logEntry(summaryEntry)
     }
 
     // MARK: - Helpers
 
-    private func buildRestoreSummary(workflowCount: Int, remappedDevices: Int, remappedScenes: Int, orphanedReferences: [String: [WorkflowMigrationService.OrphanedReference]]) -> String {
-        var parts: [String] = ["Restored \(workflowCount) workflow(s)."]
-        let totalRemapped = remappedDevices + remappedScenes
-        if totalRemapped > 0 {
-            parts.append("Remapped \(remappedDevices) device(s), \(remappedScenes) scene(s).")
+    /// Transforms device config keys from HomeKit UUIDs to stable IDs for backup export.
+    private func transformConfigKeysToStableIds(_ configs: [String: CharacteristicConfiguration]) -> [String: CharacteristicConfiguration] {
+        var result: [String: CharacteristicConfiguration] = [:]
+        for (key, value) in configs {
+            let parts = key.split(separator: ":", maxSplits: 2).map(String.init)
+            guard parts.count == 3 else {
+                result[key] = value
+                continue
+            }
+            let stableDeviceId = deviceRegistryService.readStableDeviceId(parts[0]) ?? parts[0]
+            let stableServiceId = deviceRegistryService.readStableServiceId(parts[1]) ?? parts[1]
+            let stableCharId = deviceRegistryService.readStableCharacteristicId(parts[2]) ?? parts[2]
+            result["\(stableDeviceId):\(stableServiceId):\(stableCharId)"] = value
         }
-        let totalOrphans = orphanedReferences.values.map(\.count).reduce(0, +)
-        if totalOrphans > 0 {
-            let affectedWorkflows = orphanedReferences.keys.sorted().joined(separator: ", ")
-            parts.append("\(totalOrphans) orphaned reference(s) in: \(affectedWorkflows).")
-        } else if totalRemapped > 0 {
-            parts.append("All references resolved successfully.")
+        return result
+    }
+
+    /// Transforms device config keys from stable IDs back to HomeKit UUIDs for restore.
+    /// Uses the registry (already consolidated) to resolve stable → HomeKit IDs.
+    /// Entries that can't be resolved (unresolved devices) are dropped.
+    private func transformConfigKeysToHomeKitIds(_ configs: [String: CharacteristicConfiguration]) -> [String: CharacteristicConfiguration] {
+        var result: [String: CharacteristicConfiguration] = [:]
+        for (key, value) in configs {
+            let parts = key.split(separator: ":", maxSplits: 2).map(String.init)
+            guard parts.count == 3 else {
+                result[key] = value
+                continue
+            }
+            guard let hkDeviceId = deviceRegistryService.readHomeKitDeviceId(parts[0]),
+                  let hkServiceId = deviceRegistryService.readHomeKitServiceId(parts[1]),
+                  let hkCharId = deviceRegistryService.readHomeKitCharacteristicId(parts[2]) else {
+                continue // Device is unresolved — skip this config entry
+            }
+            result["\(hkDeviceId):\(hkServiceId):\(hkCharId)"] = value
+        }
+        return result
+    }
+
+    private func buildConsolidationSummary(workflowCount: Int, consolidation: ConsolidationResult) -> String {
+        var parts: [String] = ["Restored \(workflowCount) workflow(s) with registry."]
+        parts.append("Devices: \(consolidation.matchedDevices) matched, \(consolidation.unmatchedDevices) unresolved, \(consolidation.newDevices) new local.")
+        parts.append("Scenes: \(consolidation.matchedScenes) matched, \(consolidation.unmatchedScenes) unresolved, \(consolidation.newScenes) new local.")
+        if consolidation.unmatchedDevices > 0 || consolidation.unmatchedScenes > 0 {
+            parts.append("Unresolved entries can be remapped in Settings > Device Registry.")
         }
         return parts.joined(separator: " ")
     }

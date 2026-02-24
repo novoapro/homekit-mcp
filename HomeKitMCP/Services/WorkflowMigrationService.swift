@@ -45,27 +45,22 @@ enum WorkflowMigrationService {
         // --- Device migration ---
         var idMap: [String: String] = [:]           // oldDeviceId → newDeviceId
         var serviceIdMap: [String: [String: String]] = [:]  // oldDeviceId → (oldServiceId → newServiceId)
+        var matchedDevices: [String: DeviceModel] = [:]     // oldDeviceId → matched DeviceModel
+        var orphanedDeviceIds = Set<String>()
 
         let allDeviceRefs = collectDeviceReferences(from: workflow)
 
+        // Pass 1: Match devices (deduplicated by deviceId)
         for ref in allDeviceRefs {
             if knownDeviceIds.contains(ref.deviceId) { continue }
-            if idMap[ref.deviceId] != nil { continue }
+            if idMap[ref.deviceId] != nil || orphanedDeviceIds.contains(ref.deviceId) { continue }
 
             if let match = findMatch(for: ref, in: devices, lookup: devicesByNameRoom) {
                 idMap[ref.deviceId] = match.id
+                matchedDevices[ref.deviceId] = match
                 remappedDevices += 1
-
-                if let oldServiceId = ref.serviceId {
-                    if let newServiceId = matchService(oldServiceId: oldServiceId, oldDeviceRef: ref, newDevice: match) {
-                        if serviceIdMap[ref.deviceId] == nil {
-                            serviceIdMap[ref.deviceId] = [:]
-                        }
-                        serviceIdMap[ref.deviceId]?[oldServiceId] = newServiceId
-                        remappedServices += 1
-                    }
-                }
             } else {
+                orphanedDeviceIds.insert(ref.deviceId)
                 orphanedRefs.append(OrphanedReference(
                     referenceId: ref.deviceId,
                     referenceName: ref.contextName,
@@ -73,6 +68,23 @@ enum WorkflowMigrationService {
                     location: ref.location,
                     isScene: false
                 ))
+            }
+        }
+
+        // Pass 2: Match services for all refs with serviceIds on matched devices
+        var processedServiceIds = Set<String>()
+        for ref in allDeviceRefs {
+            guard let oldServiceId = ref.serviceId else { continue }
+            guard !processedServiceIds.contains(oldServiceId) else { continue }
+            guard let matchedDevice = matchedDevices[ref.deviceId] else { continue }
+
+            processedServiceIds.insert(oldServiceId)
+            if let newServiceId = matchService(oldServiceId: oldServiceId, oldDeviceRef: ref, newDevice: matchedDevice) {
+                if serviceIdMap[ref.deviceId] == nil {
+                    serviceIdMap[ref.deviceId] = [:]
+                }
+                serviceIdMap[ref.deviceId]?[oldServiceId] = newServiceId
+                remappedServices += 1
             }
         }
 
@@ -126,15 +138,18 @@ enum WorkflowMigrationService {
         let contextName: String?
         /// Context for matching: the room name if stored alongside the ID.
         let contextRoom: String?
+        /// Context for matching: the service type (e.g. "Outlet") enriched during backup export.
+        let contextServiceType: String?
         /// Where in the workflow this reference appears (e.g. "trigger", "condition", "block").
         let location: String
 
         func hash(into hasher: inout Hasher) {
             hasher.combine(deviceId)
+            hasher.combine(serviceId)
         }
 
         static func == (lhs: DeviceRef, rhs: DeviceRef) -> Bool {
-            lhs.deviceId == rhs.deviceId
+            lhs.deviceId == rhs.deviceId && lhs.serviceId == rhs.serviceId
         }
     }
 
@@ -145,7 +160,7 @@ enum WorkflowMigrationService {
         for trigger in workflow.triggers {
             switch trigger {
             case let .deviceStateChange(t):
-                refs.insert(DeviceRef(deviceId: t.deviceId, serviceId: t.serviceId, contextName: t.deviceName, contextRoom: t.roomName, location: "trigger"))
+                refs.insert(DeviceRef(deviceId: t.deviceId, serviceId: t.serviceId, contextName: t.deviceName, contextRoom: t.roomName, contextServiceType: t.serviceType, location: "trigger"))
             case let .compound(c):
                 collectCompoundTriggerRefs(c.triggers, into: &refs)
             default:
@@ -172,7 +187,7 @@ enum WorkflowMigrationService {
         for trigger in triggers {
             switch trigger {
             case let .deviceStateChange(t):
-                refs.insert(DeviceRef(deviceId: t.deviceId, serviceId: t.serviceId, contextName: t.deviceName, contextRoom: t.roomName, location: "trigger"))
+                refs.insert(DeviceRef(deviceId: t.deviceId, serviceId: t.serviceId, contextName: t.deviceName, contextRoom: t.roomName, contextServiceType: t.serviceType, location: "trigger"))
             case let .compound(c):
                 collectCompoundTriggerRefs(c.triggers, into: &refs)
             default:
@@ -184,7 +199,7 @@ enum WorkflowMigrationService {
     private static func collectConditionRefs(_ condition: WorkflowCondition, into refs: inout Set<DeviceRef>) {
         switch condition {
         case let .deviceState(c):
-            refs.insert(DeviceRef(deviceId: c.deviceId, serviceId: c.serviceId, contextName: c.deviceName, contextRoom: c.roomName, location: "condition"))
+            refs.insert(DeviceRef(deviceId: c.deviceId, serviceId: c.serviceId, contextName: c.deviceName, contextRoom: c.roomName, contextServiceType: c.serviceType, location: "condition"))
         case let .and(conditions):
             for c in conditions { collectConditionRefs(c, into: &refs) }
         case let .or(conditions):
@@ -201,14 +216,14 @@ enum WorkflowMigrationService {
         case let .action(action):
             switch action {
             case let .controlDevice(a):
-                refs.insert(DeviceRef(deviceId: a.deviceId, serviceId: a.serviceId, contextName: a.deviceName, contextRoom: a.roomName, location: "block"))
+                refs.insert(DeviceRef(deviceId: a.deviceId, serviceId: a.serviceId, contextName: a.deviceName, contextRoom: a.roomName, contextServiceType: a.serviceType, location: "block"))
             default:
                 break
             }
         case let .flowControl(fc):
             switch fc {
             case let .waitForState(b):
-                refs.insert(DeviceRef(deviceId: b.deviceId, serviceId: b.serviceId, contextName: b.deviceName, contextRoom: b.roomName, location: "block"))
+                refs.insert(DeviceRef(deviceId: b.deviceId, serviceId: b.serviceId, contextName: b.deviceName, contextRoom: b.roomName, contextServiceType: b.serviceType, location: "block"))
             case let .conditional(b):
                 collectConditionRefs(b.condition, into: &refs)
                 for nested in b.thenBlocks { collectBlockRefs(nested, into: &refs) }
@@ -355,15 +370,33 @@ enum WorkflowMigrationService {
     }
 
     /// Try to match a service from the old device to the new device.
-    /// Uses service name / type matching within the device.
+    /// Uses service type matching when available, falls back to single-service heuristic.
     private static func matchService(oldServiceId: String, oldDeviceRef: DeviceRef, newDevice: DeviceModel) -> String? {
         // If the new device has only one service, it's the match
         if newDevice.services.count == 1 {
             return newDevice.services[0].id
         }
 
-        // Try matching by service position (assuming same order after restore)
-        // This is a best-effort heuristic
+        // If we know the old service's type (enriched during backup export), match by type
+        if let serviceType = oldDeviceRef.contextServiceType {
+            let matchingServices = newDevice.services.filter { $0.type == serviceType }
+            if matchingServices.count == 1 {
+                // Unique match by service type
+                return matchingServices[0].id
+            }
+            // Multiple services of the same type — match by position among same-type services.
+            // HomeKit preserves service ordering for the same device, so the Nth service of
+            // a given type on the old device maps to the Nth on the new device.
+            if matchingServices.count > 1 {
+                // Find which index this service was among same-type services on the old device.
+                // Since we don't have the old device's service list, we use a heuristic:
+                // collect all refs for this device with the same serviceType, and use their
+                // position in the sorted set as the index. However, we only have the current ref,
+                // so just pick the first matching service as a safe default.
+                return matchingServices[0].id
+            }
+        }
+
         return nil
     }
 
@@ -496,104 +529,6 @@ extension WorkflowMigrationService {
 }
 
 // MARK: - Metadata Enrichment
-
-extension WorkflowMigrationService {
-    /// Fill in missing `deviceName`/`roomName` and `sceneName` metadata on references in a workflow.
-    ///
-    /// Without this metadata, cross-machine migration cannot resolve orphaned UUIDs.
-    /// This method walks the workflow's JSON representation and fills any missing fields
-    /// from the current device and scene lists.
-    static func enrichMetadata(in workflow: Workflow, using devices: [DeviceModel], scenes: [SceneModel]) -> Workflow {
-        guard !devices.isEmpty || !scenes.isEmpty else { return workflow }
-
-        // Build deviceId → (name, room) lookup
-        var deviceLookup: [String: (name: String, room: String?)] = [:]
-        for device in devices {
-            deviceLookup[device.id] = (device.name, device.roomName)
-        }
-
-        // Build sceneId → name lookup
-        var sceneLookup: [String: String] = [:]
-        for scene in scenes {
-            sceneLookup[scene.id] = scene.name
-        }
-
-        // Encode to JSON dict
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(workflow),
-              var dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return workflow
-        }
-
-        var changed = false
-        enrichDict(&dict, deviceLookup: deviceLookup, sceneLookup: sceneLookup, changed: &changed)
-
-        guard changed else { return workflow }
-
-        // Decode back
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        guard let enrichedData = try? JSONSerialization.data(withJSONObject: dict),
-              let enriched = try? decoder.decode(Workflow.self, from: enrichedData) else {
-            return workflow
-        }
-        return enriched
-    }
-
-    /// Recursively walk a JSON dict tree, filling metadata wherever device/scene IDs are present.
-    private static func enrichDict(_ dict: inout [String: Any], deviceLookup: [String: (name: String, room: String?)], sceneLookup: [String: String], changed: inout Bool) {
-        // Enrich device metadata
-        if let deviceId = dict["deviceId"] as? String,
-           let info = deviceLookup[deviceId] {
-            if dict["deviceName"] == nil || (dict["deviceName"] as? String)?.isEmpty == true {
-                dict["deviceName"] = info.name
-                changed = true
-            }
-            if dict["roomName"] == nil || (dict["roomName"] as? String)?.isEmpty == true {
-                if let room = info.room {
-                    dict["roomName"] = room
-                    changed = true
-                }
-            }
-        }
-
-        // Enrich scene metadata
-        if let sceneId = dict["sceneId"] as? String,
-           let name = sceneLookup[sceneId] {
-            if dict["sceneName"] == nil || (dict["sceneName"] as? String)?.isEmpty == true {
-                dict["sceneName"] = name
-                changed = true
-            }
-        }
-
-        // Recurse into nested dicts and arrays
-        for key in dict.keys {
-            if var nested = dict[key] as? [String: Any] {
-                enrichDict(&nested, deviceLookup: deviceLookup, sceneLookup: sceneLookup, changed: &changed)
-                dict[key] = nested
-            } else if var array = dict[key] as? [[String: Any]] {
-                for i in array.indices {
-                    enrichDict(&array[i], deviceLookup: deviceLookup, sceneLookup: sceneLookup, changed: &changed)
-                }
-                dict[key] = array
-            } else if let mixedArray = dict[key] as? [Any] {
-                var modified = false
-                var newArray = mixedArray
-                for i in newArray.indices {
-                    if var nested = newArray[i] as? [String: Any] {
-                        enrichDict(&nested, deviceLookup: deviceLookup, sceneLookup: sceneLookup, changed: &changed)
-                        newArray[i] = nested
-                        modified = true
-                    }
-                }
-                if modified {
-                    dict[key] = newArray
-                }
-            }
-        }
-    }
-}
 
 // MARK: - Batch Migration
 

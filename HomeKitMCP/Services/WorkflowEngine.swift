@@ -1196,8 +1196,9 @@ actor WorkflowEngine: WorkflowEngineProtocol {
     // MARK: - Helpers
 
     private func resolveDeviceName(_ deviceId: String) async -> String {
-        let devices = await MainActor.run { homeKitManager.cachedDevices }
-        if let device = devices.first(where: { $0.id == deviceId }) {
+        // Use getDeviceState which resolves both stable registry IDs and HomeKit UUIDs
+        let device = await MainActor.run { homeKitManager.getDeviceState(id: deviceId) }
+        if let device {
             if let room = device.roomName, !room.isEmpty {
                 return "\(room) \(device.name)"
             }
@@ -1323,6 +1324,13 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
         var remainingWaiters: [StateWaiter] = []
         for waiter in waiters {
+            // If waiter targets a specific service, skip changes from other services
+            if let waiterServiceId = waiter.serviceId,
+               let changeServiceId = change.serviceId,
+               waiterServiceId != changeServiceId {
+                remainingWaiters.append(waiter)
+                continue
+            }
             if ConditionEvaluator.compare(change.newValue, using: waiter.condition) {
                 waiter.continuation.resume(returning: true)
             } else {

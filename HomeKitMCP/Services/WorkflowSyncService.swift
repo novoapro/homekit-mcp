@@ -285,11 +285,29 @@ class WorkflowSyncService: ObservableObject {
             lastSyncError = nil
 
             if changed {
-                // Reconcile foreign stable IDs from synced workflows against local registry
+                // Remap foreign stable IDs to local stable IDs so triggers fire correctly.
+                // Imported workflows from other machines use that machine's stable IDs, which
+                // differ from local ones. Migration matches by name/room and remaps to local IDs.
+                let rawDevices = homeKitManager.getAllDevices()
+                let rawScenes = homeKitManager.getAllScenes()
+                let stableDevices = rawDevices.map { deviceRegistryService.withStableIds($0) }
+                let stableScenes = rawScenes.map { deviceRegistryService.withStableIds($0) }
+
+                if !stableDevices.isEmpty || !stableScenes.isEmpty {
+                    let migration = WorkflowMigrationService.migrateAll(allLocal, using: stableDevices, scenes: stableScenes)
+                    let totalRemapped = migration.totalRemappedDevices + migration.totalRemappedScenes
+                    if totalRemapped > 0 {
+                        await workflowStorageService.replaceAll(workflows: migration.workflows)
+                        AppLogger.workflow.info("Workflow sync: remapped \(migration.totalRemappedDevices) device(s), \(migration.totalRemappedScenes) scene(s)")
+                    }
+                }
+
+                // Reconcile any remaining foreign stable IDs against local registry
+                let workflowsForReconciliation = await workflowStorageService.getAllWorkflows()
                 let reconciledCount = await deviceRegistryService.reconcileWorkflowReferences(
-                    allLocal,
-                    currentDevices: homeKitManager.getAllDevices(),
-                    currentScenes: homeKitManager.getAllScenes()
+                    workflowsForReconciliation,
+                    currentDevices: rawDevices,
+                    currentScenes: rawScenes
                 )
                 if reconciledCount > 0 {
                     AppLogger.workflow.info("Workflow sync: reconciled \(reconciledCount) foreign registry references")
