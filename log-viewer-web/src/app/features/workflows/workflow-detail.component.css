@@ -120,7 +120,7 @@
 
 .outcome-message {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
   margin-top: var(--spacing-sm);
   padding: var(--spacing-sm);

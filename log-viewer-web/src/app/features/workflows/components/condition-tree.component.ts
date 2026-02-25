@@ -14,15 +14,12 @@ import { IconComponent } from '../../../shared/components/icon.component';
           <div class="connector-line" [style.background-color]="'var(--tint-secondary)'"></div>
         }
 
-        <!-- Pass/fail icon -->
-        <span class="status-icon" [class.passed]="result().passed" [class.failed]="!result().passed">
-          @if (result().passed) {
-            <app-icon name="checkmark-circle-fill" [size]="16" />
-          } @else {
-            <app-icon name="xmark-circle-fill" [size]="16" />
-          }
-        </span>
-
+      <!-- Pass/fail icon -->
+        @if (result().passed) {
+          <app-icon name="checkmark-circle-fill" class="status-icon passed" [size]="16" />
+        } @else {
+          <app-icon name="xmark-circle-fill" class="status-icon failed" [size]="16" />
+        }
         <!-- Logic operator badge -->
         @if (result().logicOperator) {
           <span class="logic-badge">{{ result().logicOperator }}</span>
