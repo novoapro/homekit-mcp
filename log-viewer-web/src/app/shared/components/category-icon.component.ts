@@ -7,7 +7,7 @@ import { LogCategory, CATEGORY_META } from '../../core/models/state-change-log.m
   standalone: true,
   imports: [IconComponent],
   template: `
-    <div class="icon-circle" [style.background-color]="bgColor()" [style.color]="color()">
+    <div class="icon-circle" [style.color]="color()">
       <app-icon [name]="iconName()" [size]="iconSize()" />
     </div>
   `,
@@ -16,7 +16,7 @@ import { LogCategory, CATEGORY_META } from '../../core/models/state-change-log.m
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 50%;
+      border-radius: var(--radius-sm);
       flex-shrink: 0;
     }
   `],

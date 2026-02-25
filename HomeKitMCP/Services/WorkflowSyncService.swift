@@ -42,12 +42,6 @@ class WorkflowSyncService: ObservableObject {
         return encoder
     }()
 
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }()
-
     init(workflowStorageService: WorkflowStorageService, storage: StorageService, deviceRegistryService: DeviceRegistryService, homeKitManager: HomeKitManager) {
         self.workflowStorageService = workflowStorageService
         self.storage = storage
@@ -236,7 +230,7 @@ class WorkflowSyncService: ObservableObject {
                 guard let asset = record["workflowData"] as? CKAsset,
                       let fileURL = asset.fileURL,
                       let data = try? Data(contentsOf: fileURL),
-                      let workflow = try? Self.decoder.decode(Workflow.self, from: data) else { continue }
+                      let workflow = try? JSONDecoder.iso8601.decode(Workflow.self, from: data) else { continue }
 
                 remoteWorkflows[workflowId] = (workflow, updatedAt, false)
             }

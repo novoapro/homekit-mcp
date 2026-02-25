@@ -19,8 +19,10 @@ import { ExecutionStatus } from '../../core/models/workflow-log.model';
       gap: 4px;
       padding: 2px 8px;
       border-radius: var(--radius-full);
-      font-size: var(--font-size-xs);
-      font-weight: var(--font-weight-semibold);
+      font-size: 10px;
+      font-weight: var(--font-weight-bold);
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
       white-space: nowrap;
       line-height: 1.4;
     }

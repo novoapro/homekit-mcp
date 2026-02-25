@@ -37,8 +37,11 @@ import { ConfigService } from '../../core/services/config.service';
     .bottom-tabs {
       display: flex;
       align-items: stretch;
-      background: var(--bg-content);
-      border-top: 1px solid var(--border-color);
+      background: var(--glass-bg);
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      border-top: none;
+      box-shadow: var(--shadow-bottom-bar);
       padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
@@ -72,8 +75,10 @@ import { ConfigService } from '../../core/services/config.service';
     }
 
     .tab-label {
-      font-size: 10px;
-      letter-spacing: 0.02em;
+      font-size: 9px;
+      font-weight: var(--font-weight-bold);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
     }
 
     /* Only show on mobile */

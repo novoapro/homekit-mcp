@@ -1,7 +1,9 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ConfigService } from '../../core/services/config.service';
 import { ApiService } from '../../core/services/api.service';
+import { WebSocketService } from '../../core/services/websocket.service';
+import { MobileTopBarService } from '../../core/services/mobile-topbar.service';
 import { IconComponent } from '../../shared/components/icon.component';
 
 @Component({
@@ -11,14 +13,21 @@ import { IconComponent } from '../../shared/components/icon.component';
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.css',
 })
-export class SettingsComponent {
+export class SettingsComponent implements OnInit {
   protected config = inject(ConfigService);
   private api = inject(ApiService);
+  private wsService = inject(WebSocketService);
+  private topBar = inject(MobileTopBarService);
+
+  ngOnInit(): void {
+    this.topBar.set('Settings');
+  }
 
   serverAddress = '';
   serverPort = 3000;
   bearerToken = '';
-  pollingInterval = 10;
+  pollingInterval = 300;
+  websocketEnabled = true;
 
   connectionStatus = signal<'idle' | 'testing' | 'success' | 'error'>('idle');
   saved = signal(false);
@@ -28,6 +37,7 @@ export class SettingsComponent {
     this.serverPort = this.config.serverPort();
     this.bearerToken = this.config.bearerToken();
     this.pollingInterval = this.config.pollingInterval();
+    this.websocketEnabled = this.config.websocketEnabled();
   }
 
   testConnection(): void {
@@ -42,6 +52,13 @@ export class SettingsComponent {
   save(): void {
     this.applyToConfig();
     this.config.save();
+
+    if (this.config.websocketEnabled()) {
+      this.wsService.reconnect();
+    } else {
+      this.wsService.disconnect();
+    }
+
     this.saved.set(true);
     setTimeout(() => this.saved.set(false), 2000);
   }
@@ -51,5 +68,6 @@ export class SettingsComponent {
     this.config.serverPort.set(this.serverPort);
     this.config.bearerToken.set(this.bearerToken);
     this.config.pollingInterval.set(this.pollingInterval);
+    this.config.websocketEnabled.set(this.websocketEnabled);
   }
 }

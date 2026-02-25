@@ -2,8 +2,6 @@ import { Component, input, output, inject, ElementRef, AfterViewInit, OnDestroy 
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { IconComponent } from './icon.component';
 import { ThemeService } from '../../core/services/theme.service';
-import { ConfigService } from '../../core/services/config.service';
-import { PollingService } from '../../core/services/polling.service';
 
 @Component({
   selector: 'app-sidebar',
@@ -19,8 +17,8 @@ import { PollingService } from '../../core/services/polling.service';
     <nav class="sidebar" [class.collapsed]="collapsed()" [class.mobile-open]="isOpen()">
       <!-- Logo -->
       <div class="sidebar-logo">
-        <img src="favicon-192.png" alt="HomeKit" class="logo-img" />
-        <span class="logo-text">HomeKit</span>
+        <img src="logo.svg" alt="HomeKit MCP Dashboard" class="logo-img" />
+        <span class="logo-text">HomeKit MCP<br>Dashboard</span>
       </div>
 
       <!-- Mobile close -->
@@ -53,19 +51,6 @@ import { PollingService } from '../../core/services/polling.service';
           <span class="nav-label">{{ theme.isDarkMode() ? 'Light Mode' : 'Dark Mode' }}</span>
         </button>
 
-        <!-- Connection status -->
-        <div class="nav-item footer-item status-item">
-          <div class="connection-dot" [class.connected]="config.isConfigured()"></div>
-          <span class="nav-label status-label">{{ config.isConfigured() ? 'Connected' : 'Not configured' }}</span>
-        </div>
-
-        @if (polling.lastPollTime()) {
-          <div class="nav-item footer-item status-item muted">
-            <app-icon name="clock" [size]="16" />
-            <span class="nav-label">Updated {{ polling.lastPollTime()!.toLocaleTimeString() }}</span>
-          </div>
-        }
-
         <!-- Settings -->
         <a routerLink="/settings" routerLinkActive="active" class="nav-item footer-item" (click)="onNavClick()">
           <app-icon name="gear" [size]="20" />
@@ -89,7 +74,8 @@ import { PollingService } from '../../core/services/polling.service';
       bottom: 0;
       width: var(--sidebar-width);
       background: var(--bg-content);
-      border-right: 1px solid var(--border-color);
+      border-right: none;
+      box-shadow: var(--shadow-sidebar);
       display: flex;
       flex-direction: column;
       z-index: 200;
@@ -120,10 +106,11 @@ import { PollingService } from '../../core/services/polling.service';
     }
 
     .logo-text {
-      font-size: var(--font-size-lg);
-      font-weight: var(--font-weight-bold);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-black);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
       color: var(--text-primary);
-      white-space: nowrap;
       overflow: hidden;
       transition: opacity 150ms ease;
     }
@@ -164,8 +151,8 @@ import { PollingService } from '../../core/services/polling.service';
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 10px 12px;
-      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
       font-size: var(--font-size-sm);
       font-weight: var(--font-weight-medium);
       color: var(--text-secondary);
@@ -239,36 +226,6 @@ import { PollingService } from '../../core/services/polling.service';
       font-size: var(--font-size-xs);
     }
 
-    .status-item {
-      cursor: default;
-    }
-
-    .status-item:hover {
-      background: transparent;
-      color: var(--text-secondary);
-    }
-
-    .muted {
-      color: var(--text-tertiary);
-    }
-
-    .muted:hover {
-      color: var(--text-tertiary);
-    }
-
-    .connection-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--status-error);
-      flex-shrink: 0;
-    }
-
-    .connection-dot.connected {
-      background: var(--status-active);
-      animation: connectionPulse 2s ease-in-out infinite;
-    }
-
     /* Collapsed state */
     .sidebar.collapsed .nav-item {
       justify-content: center;
@@ -282,10 +239,6 @@ import { PollingService } from '../../core/services/polling.service';
 
     .sidebar.collapsed .sidebar-divider {
       margin: var(--spacing-xs) 8px var(--spacing-sm);
-    }
-
-    .sidebar.collapsed .status-item {
-      justify-content: center;
     }
 
     .sidebar.collapsed .collapse-toggle {
@@ -341,10 +294,6 @@ import { PollingService } from '../../core/services/polling.service';
         padding: var(--spacing-md);
       }
 
-      .sidebar.collapsed .status-item {
-        justify-content: flex-start;
-      }
-
       .desktop-only {
         display: none;
       }
@@ -383,8 +332,6 @@ export class SidebarComponent implements AfterViewInit, OnDestroy {
   collapseToggled = output<void>();
 
   protected theme = inject(ThemeService);
-  protected config = inject(ConfigService);
-  protected polling = inject(PollingService);
   private el = inject(ElementRef);
 
   private touchStartX = 0;

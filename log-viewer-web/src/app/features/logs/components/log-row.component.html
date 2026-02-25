@@ -1,5 +1,6 @@
 <div class="log-card"
      [class.expandable]="isExpandable()"
+     [class.clickable]="isWorkflowLog()"
      [class.error]="isError()"
      [style.--accent-color]="categoryColor()"
      [style.animation-delay.ms]="index() * 30"
@@ -160,19 +161,19 @@
   </div>
 
   <!-- Chevron -->
-  @if (isExpandable()) {
+  @if (isExpandable() || isWorkflowLog()) {
     <div class="chevron" [class.expanded]="expanded()">
       <app-icon name="chevron-right" [size]="14" />
     </div>
   }
-</div>
 
-<!-- Expandable Detail Panel -->
-@if (expanded() && isExpandable()) {
-  <div class="detail-wrapper" @expandCollapse>
-    <app-log-detail-panel
-      [requestBody]="log().detailedRequestBody || log().requestBody || ''"
-      [responseBody]="log().responseBody || ''"
-    />
-  </div>
-}
+  <!-- Expandable Detail Panel (inside card) -->
+  @if (expanded() && isExpandable()) {
+    <div class="detail-inline" @expandCollapse>
+      <app-log-detail-panel
+        [requestBody]="log().detailedRequestBody || log().requestBody || ''"
+        [responseBody]="log().responseBody || ''"
+      />
+    </div>
+  }
+</div>

@@ -20,6 +20,7 @@ export class PollingService {
 
   private latestTimestamp: string | null = null;
   private isDocumentVisible = true;
+  private activeParams: { categories?: string[]; device_name?: string; from?: string; to?: string } = {};
 
   constructor() {
     // Pause polling when tab hidden
@@ -56,6 +57,7 @@ export class PollingService {
 
   /** Full reset + fetch (used when filters change) */
   loadFresh(params: { categories?: string[]; device_name?: string; from?: string; to?: string } = {}): void {
+    this.activeParams = params;
     this.latestTimestamp = null;
     this.logs.set([]);
     this.totalCount.set(0);
@@ -99,8 +101,18 @@ export class PollingService {
     ).subscribe();
   }
 
+  /** Merge a single log entry pushed via WebSocket into the current log list. */
+  injectLog(log: StateChangeLog): void {
+    const current = this.logs();
+    if (current.some(l => l.id === log.id)) return;
+    this.logs.set([log, ...current]);
+    this.totalCount.update(c => c + 1);
+    this.updateLatestTimestamp([log]);
+  }
+
   private fetchLogs() {
     return this.api.getLogs({
+      ...this.activeParams,
       ...(this.latestTimestamp ? { from: this.latestTimestamp } : {}),
       limit: 200
     }).pipe(

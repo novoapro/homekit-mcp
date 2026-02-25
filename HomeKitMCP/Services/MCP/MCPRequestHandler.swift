@@ -11,18 +11,6 @@ class MCPRequestHandler {
     private let workflowExecutionLogService: WorkflowExecutionLogService
     private let registry: DeviceRegistryService?
 
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }()
-
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }()
-
     init(homeKitManager: HomeKitManager, loggingService: LoggingService, configService: DeviceConfigurationService, storage: StorageService,
          workflowStorageService: WorkflowStorageService, workflowEngine: WorkflowEngine, workflowExecutionLogService: WorkflowExecutionLogService,
          registry: DeviceRegistryService? = nil) {
@@ -246,7 +234,7 @@ class MCPRequestHandler {
             let devices = await filterDevicesByConfig(allDevices)
             let restDevices = devices.map { RESTDevice.from($0) }
 
-            guard let jsonData = try? Self.encoder.encode(restDevices),
+            guard let jsonData = try? JSONEncoder.iso8601.encode(restDevices),
                   let jsonString = String(data: jsonData, encoding: .utf8) else {
                 return JSONRPCResponse.error(
                     id: id,
@@ -269,7 +257,7 @@ class MCPRequestHandler {
             let scenes = toStableIds(await MainActor.run { homeKitManager.getAllScenes() })
             let restScenes = scenes.map { RESTScene.from($0) }
 
-            guard let jsonData = try? Self.encoder.encode(restScenes),
+            guard let jsonData = try? JSONEncoder.iso8601.encode(restScenes),
                   let jsonString = String(data: jsonData, encoding: .utf8) else {
                 return JSONRPCResponse.error(
                     id: id,
@@ -546,7 +534,7 @@ class MCPRequestHandler {
         let filteredDevices = await filterDevicesByConfig(resultDevices)
         let restDevices = filteredDevices.map { RESTDevice.from($0) }
 
-        guard let jsonData = try? Self.encoder.encode(restDevices),
+        guard let jsonData = try? JSONEncoder.iso8601.encode(restDevices),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
             return toolResult(text: "Failed to encode device data", isError: true, id: id)
         }
@@ -827,15 +815,15 @@ class MCPRequestHandler {
             // For triggers/conditions/blocks, re-parse from JSON if provided
             if let triggersArray = updates["triggers"] {
                 let data = try JSONSerialization.data(withJSONObject: triggersArray)
-                merged.triggers = try Self.decoder.decode([WorkflowTrigger].self, from: data)
+                merged.triggers = try JSONDecoder.iso8601.decode([WorkflowTrigger].self, from: data)
             }
             if let conditionsArray = updates["conditions"] {
                 let data = try JSONSerialization.data(withJSONObject: conditionsArray)
-                merged.conditions = try Self.decoder.decode([WorkflowCondition].self, from: data)
+                merged.conditions = try JSONDecoder.iso8601.decode([WorkflowCondition].self, from: data)
             }
             if let blocksArray = updates["blocks"] {
                 let data = try JSONSerialization.data(withJSONObject: blocksArray)
-                merged.blocks = try Self.decoder.decode([WorkflowBlock].self, from: data)
+                merged.blocks = try JSONDecoder.iso8601.decode([WorkflowBlock].self, from: data)
             }
 
             let updated = await workflowStorageService.updateWorkflow(id: workflowId) { workflow in
@@ -1050,7 +1038,7 @@ class MCPRequestHandler {
         }
 
         let jsonData = try JSONSerialization.data(withJSONObject: workflowDict, options: [])
-        return try Self.decoder.decode(Workflow.self, from: jsonData)
+        return try JSONDecoder.iso8601.decode(Workflow.self, from: jsonData)
     }
 
     // MARK: - Metadata Hints
@@ -1092,7 +1080,7 @@ class MCPRequestHandler {
     }
 
     private func toolResult<T: Encodable>(encoding value: T, isError: Bool = false, id: JSONRPCId?) -> JSONRPCResponse {
-        guard let jsonData = try? Self.encoder.encode(value),
+        guard let jsonData = try? JSONEncoder.iso8601.encode(value),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
             return toolResult(text: "Failed to encode response data", isError: true, id: id)
         }
@@ -1106,7 +1094,7 @@ class MCPRequestHandler {
         var detailedReq: String?
 
         if storage.readDetailedLogsEnabled() {
-            if let fullRequest, let data = try? Self.encoder.encode(fullRequest) {
+            if let fullRequest, let data = try? JSONEncoder.iso8601.encode(fullRequest) {
                 detailedReq = String(data: data, encoding: .utf8)
             }
         }

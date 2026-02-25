@@ -41,6 +41,7 @@ struct BackupSettings: Codable {
     let workflowsEnabled: Bool
     let autoBackupEnabled: Bool
     let deviceStateLoggingEnabled: Bool?
+    let logOnlyWebhookDevices: Bool?
     let logCacheSize: Int?
 }
 

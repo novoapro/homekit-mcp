@@ -615,7 +615,9 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
             )
 
             if self.storage.readDeviceStateLoggingEnabled() {
-                await self.loggingService.logEntry(logEntry)
+                if !self.storage.readLogOnlyWebhookDevices() || config.webhookEnabled {
+                    await self.loggingService.logEntry(logEntry)
+                }
             }
 
             if config.webhookEnabled {
@@ -972,7 +974,9 @@ extension HomeKitManager: HMAccessoryDelegate {
             )
 
             if self.storage.readDeviceStateLoggingEnabled() {
-                await loggingService.logEntry(logEntry)
+                if !self.storage.readLogOnlyWebhookDevices() || config.webhookEnabled {
+                    await loggingService.logEntry(logEntry)
+                }
             }
 
             if config.webhookEnabled {

@@ -11,30 +11,16 @@ actor LoggingService: LoggingServiceProtocol {
     private var maxLogs: Int { storage.readLogCacheSize() }
 
     nonisolated let logsSubject = PassthroughSubject<[StateChangeLog], Never>()
-
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }()
-
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }()
+    nonisolated let logEntrySubject = PassthroughSubject<StateChangeLog, Never>()
 
     init(storage: StorageService) {
         self.storage = storage
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let appDir = appSupport.appendingPathComponent("HomeKitMCP")
-        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: appDir.path)
+        let appDir = FileManager.appSupportDirectory
         self.fileURL = appDir.appendingPathComponent("logs.json")
 
         let limit = storage.readLogCacheSize()
         if let data = try? Data(contentsOf: fileURL),
-           var saved = try? Self.decoder.decode([StateChangeLog].self, from: data) {
+           var saved = try? JSONDecoder.iso8601.decode([StateChangeLog].self, from: data) {
             // Trim to current cache size in case user reduced it
             if saved.count > limit {
                 saved = Array(saved.suffix(limit))
@@ -67,6 +53,7 @@ actor LoggingService: LoggingServiceProtocol {
             logs.removeFirst()  // O(n) but rare — only when buffer is full
         }
         logsSubject.send(logs.reversed())
+        logEntrySubject.send(entry)
         debouncedSave()
     }
 
@@ -94,7 +81,7 @@ actor LoggingService: LoggingServiceProtocol {
 
     private func saveNow() {
         do {
-            let data = try Self.encoder.encode(logs)
+            let data = try JSONEncoder.iso8601.encode(logs)
             try data.write(to: fileURL, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         } catch {

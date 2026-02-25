@@ -60,6 +60,7 @@ class BackupService: ObservableObject, BackupServiceProtocol {
             workflowsEnabled: storage.workflowsEnabled,
             autoBackupEnabled: storage.autoBackupEnabled,
             deviceStateLoggingEnabled: storage.deviceStateLoggingEnabled,
+            logOnlyWebhookDevices: storage.logOnlyWebhookDevices,
             logCacheSize: storage.logCacheSize
         )
 
@@ -137,6 +138,7 @@ class BackupService: ObservableObject, BackupServiceProtocol {
         storage.workflowsEnabled = s.workflowsEnabled
         storage.autoBackupEnabled = s.autoBackupEnabled
         storage.deviceStateLoggingEnabled = s.deviceStateLoggingEnabled ?? true
+        storage.logOnlyWebhookDevices = s.logOnlyWebhookDevices ?? false
         storage.logCacheSize = s.logCacheSize ?? 500
 
         // Restore secrets

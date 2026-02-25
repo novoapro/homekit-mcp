@@ -1,6 +1,8 @@
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Location } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { MobileTopBarService } from '../../core/services/mobile-topbar.service';
 import { WorkflowExecutionLog, ExecutionStatus } from '../../core/models/workflow-log.model';
 import { IconComponent } from '../../shared/components/icon.component';
 import { StatusBadgeComponent } from '../../shared/components/status-badge.component';
@@ -19,7 +21,9 @@ import { PullToRefreshDirective } from '../../shared/directives/pull-to-refresh.
 export class WorkflowDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private location = inject(Location);
   private api = inject(ApiService);
+  private topBar = inject(MobileTopBarService);
 
   log = signal<WorkflowExecutionLog | null>(null);
   isLoading = signal(true);
@@ -92,7 +96,11 @@ export class WorkflowDetailComponent implements OnInit {
   }
 
   goBack(): void {
-    this.router.navigate(['/workflows']);
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      this.router.navigate(['/workflows']);
+    }
   }
 
   formatDate(iso: string): string {

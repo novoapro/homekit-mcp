@@ -8,28 +8,15 @@ actor WorkflowExecutionLogService: WorkflowExecutionLogServiceProtocol {
     private var saveTask: Task<Void, Never>?
 
     nonisolated let logsSubject = PassthroughSubject<[WorkflowExecutionLog], Never>()
-
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }()
-
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }()
+    nonisolated let logAddedSubject = PassthroughSubject<WorkflowExecutionLog, Never>()
+    nonisolated let logUpdatedSubject = PassthroughSubject<WorkflowExecutionLog, Never>()
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let appDir = appSupport.appendingPathComponent("HomeKitMCP")
-        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: appDir.path)
+        let appDir = FileManager.appSupportDirectory
         fileURL = appDir.appendingPathComponent("workflow-logs.json")
 
         if let data = try? Data(contentsOf: fileURL),
-           let saved = try? Self.decoder.decode([WorkflowExecutionLog].self, from: data)
+           let saved = try? JSONDecoder.iso8601.decode([WorkflowExecutionLog].self, from: data)
         {
             logs = saved
         }
@@ -43,6 +30,7 @@ actor WorkflowExecutionLogService: WorkflowExecutionLogServiceProtocol {
         }
 
         logsSubject.send(logs)
+        logAddedSubject.send(execution)
         debouncedSave()
     }
 
@@ -55,6 +43,7 @@ actor WorkflowExecutionLogService: WorkflowExecutionLogServiceProtocol {
         }
 
         logsSubject.send(logs)
+        logUpdatedSubject.send(execution)
         debouncedSave()
     }
 
@@ -89,7 +78,7 @@ actor WorkflowExecutionLogService: WorkflowExecutionLogServiceProtocol {
 
     private func saveNow() {
         do {
-            let data = try Self.encoder.encode(logs)
+            let data = try JSONEncoder.iso8601.encode(logs)
             try data.write(to: fileURL, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         } catch {

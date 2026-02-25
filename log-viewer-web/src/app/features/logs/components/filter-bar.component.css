@@ -31,7 +31,7 @@
   font-weight: var(--font-weight-medium);
   background: var(--bg-chip-inactive);
   color: var(--text-secondary);
-  border: 1px solid transparent;
+  border: none;
   transition: all var(--transition-normal);
   white-space: nowrap;
   cursor: pointer;
@@ -44,7 +44,7 @@
 .filter-chip.active {
   background: color-mix(in srgb, var(--tint-main) 15%, transparent);
   color: var(--tint-main);
-  border-color: color-mix(in srgb, var(--tint-main) 30%, transparent);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--tint-main) 40%, transparent);
 }
 
 .dropdown {
@@ -89,25 +89,25 @@
   flex-shrink: 0;
 }
 
-/* Search — prominent, with border */
+/* Search — elevated, no border */
 .search-input-wrapper {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
   background: var(--bg-detail);
-  border: 1px solid var(--border-color);
+  border: none;
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
   color: var(--text-tertiary);
   min-width: 200px;
   max-width: 320px;
   flex: 1;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition: box-shadow 150ms ease;
 }
 
 .search-input-wrapper:focus-within {
-  border-color: var(--tint-main);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tint-main) 12%, transparent);
+  box-shadow: var(--shadow-card), 0 0 0 3px color-mix(in srgb, var(--tint-main) 15%, transparent);
 }
 
 .search-input {
@@ -185,8 +185,9 @@
   gap: 6px;
   padding: 10px 14px;
   background: var(--bg-detail);
-  border: 1px solid var(--border-color);
+  border: none;
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
   color: var(--text-tertiary);
 }
 
@@ -208,10 +209,11 @@
   align-items: center;
   justify-content: center;
   width: 44px;
-  height: 44px;
+  align-self: stretch;
   border-radius: var(--radius-sm);
   background: var(--bg-detail);
-  border: 1px solid var(--border-color);
+  border: none;
+  box-shadow: var(--shadow-card);
   color: var(--text-secondary);
   position: relative;
   flex-shrink: 0;
@@ -220,7 +222,7 @@
 .filter-trigger.has-filters {
   background: color-mix(in srgb, var(--tint-main) 15%, transparent);
   color: var(--tint-main);
-  border-color: color-mix(in srgb, var(--tint-main) 30%, transparent);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--tint-main) 40%, transparent);
 }
 
 .filter-badge {

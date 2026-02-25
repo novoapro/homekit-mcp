@@ -11,12 +11,6 @@ actor WebhookService: WebhookServiceProtocol {
     /// Observable status published on the main actor for UI consumption.
     nonisolated let statusSubject = CurrentValueSubject<WebhookStatus, Never>(.idle)
 
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }()
-
     init(storage: StorageService, loggingService: LoggingService, keychainService: KeychainService) {
         self.storage = storage
         self.loggingService = loggingService
@@ -184,7 +178,7 @@ actor WebhookService: WebhookServiceProtocol {
     /// Returns JSON-encoded payload string only when detailed logs are enabled.
     private func detailedPayloadJSON(_ payload: WebhookPayload) -> String? {
         guard storage.readDetailedLogsEnabled(),
-              let data = try? Self.encoder.encode(payload) else { return nil }
+              let data = try? JSONEncoder.iso8601.encode(payload) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
@@ -245,7 +239,7 @@ actor WebhookService: WebhookServiceProtocol {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 10
 
-        let body = try Self.encoder.encode(payload)
+        let body = try JSONEncoder.iso8601.encode(payload)
         request.httpBody = body
 
         // Sign the payload with HMAC-SHA256

@@ -115,6 +115,9 @@ class StorageService: ObservableObject, StorageServiceProtocol {
     @Published var deviceStateLoggingEnabled: Bool {
         didSet { defaults.set(deviceStateLoggingEnabled, forKey: Keys.deviceStateLoggingEnabled) }
     }
+    @Published var logOnlyWebhookDevices: Bool {
+        didSet { defaults.set(logOnlyWebhookDevices, forKey: Keys.logOnlyWebhookDevices) }
+    }
     @Published var registryMigrationCompleted: Bool {
         didSet { defaults.set(registryMigrationCompleted, forKey: Keys.registryMigrationCompleted) }
     }
@@ -126,6 +129,9 @@ class StorageService: ObservableObject, StorageServiceProtocol {
     }
     @Published var logCacheSize: Int {
         didSet { defaults.set(logCacheSize, forKey: Keys.logCacheSize) }
+    }
+    @Published var websocketEnabled: Bool {
+        didSet { defaults.set(websocketEnabled, forKey: Keys.websocketEnabled) }
     }
     @Published var webhookPrivateIPAllowlist: [String] {
         didSet {
@@ -158,10 +164,12 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             Keys.workflowsEnabled: true,
             Keys.autoBackupEnabled: false,
             Keys.deviceStateLoggingEnabled: true,
+            Keys.logOnlyWebhookDevices: false,
             Keys.registryMigrationCompleted: false,
             Keys.workflowSyncEnabled: false,
             Keys.logAccessEnabled: true,
-            Keys.logCacheSize: 500
+            Keys.logCacheSize: 500,
+            Keys.websocketEnabled: true
         ])
 
         // Migrate webhook URL from UserDefaults to Keychain (one-time)
@@ -201,9 +209,11 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         self.workflowsEnabled = defaults.bool(forKey: Keys.workflowsEnabled)
         self.autoBackupEnabled = defaults.bool(forKey: Keys.autoBackupEnabled)
         self.deviceStateLoggingEnabled = defaults.bool(forKey: Keys.deviceStateLoggingEnabled)
+        self.logOnlyWebhookDevices = defaults.bool(forKey: Keys.logOnlyWebhookDevices)
         self.registryMigrationCompleted = defaults.bool(forKey: Keys.registryMigrationCompleted)
         self.workflowSyncEnabled = defaults.bool(forKey: Keys.workflowSyncEnabled)
         self.logAccessEnabled = defaults.bool(forKey: Keys.logAccessEnabled)
+        self.websocketEnabled = defaults.bool(forKey: Keys.websocketEnabled)
         let rawCacheSize = defaults.integer(forKey: Keys.logCacheSize)
         self.logCacheSize = rawCacheSize > 0 ? rawCacheSize : 500
         if let data = defaults.data(forKey: Keys.webhookPrivateIPAllowlist),
@@ -311,6 +321,10 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         UserDefaults.standard.bool(forKey: Keys.deviceStateLoggingEnabled)
     }
 
+    nonisolated func readLogOnlyWebhookDevices() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.logOnlyWebhookDevices)
+    }
+
     nonisolated func readRegistryMigrationCompleted() -> Bool {
         UserDefaults.standard.bool(forKey: Keys.registryMigrationCompleted)
     }
@@ -326,6 +340,10 @@ class StorageService: ObservableObject, StorageServiceProtocol {
 
     nonisolated func readLogAccessEnabled() -> Bool {
         UserDefaults.standard.bool(forKey: Keys.logAccessEnabled)
+    }
+
+    nonisolated func readWebsocketEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.websocketEnabled)
     }
 
     nonisolated func readLogCacheSize() -> Int {
@@ -358,10 +376,12 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         static let workflowsEnabled = "workflowsEnabled"
         static let autoBackupEnabled = "autoBackupEnabled"
         static let deviceStateLoggingEnabled = "deviceStateLoggingEnabled"
+        static let logOnlyWebhookDevices = "logOnlyWebhookDevices"
         static let registryMigrationCompleted = "registryMigrationCompleted"
         static let workflowSyncEnabled = "workflowSyncEnabled"
         static let webhookPrivateIPAllowlist = "webhookPrivateIPAllowlist"
         static let logAccessEnabled = "logAccessEnabled"
         static let logCacheSize = "logCacheSize"
+        static let websocketEnabled = "websocketEnabled"
     }
 }

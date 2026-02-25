@@ -192,12 +192,6 @@ actor AIWorkflowService {
     private let registry: DeviceRegistryService?
     let interactionLog: AIInteractionLogService
 
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }()
-
     init(storage: StorageService, homeKitManager: HomeKitManager, keychainService: KeychainService, interactionLog: AIInteractionLogService, registry: DeviceRegistryService? = nil) {
         self.storage = storage
         self.homeKitManager = homeKitManager
@@ -267,10 +261,7 @@ actor AIWorkflowService {
         let provider = storage.readAIProvider()
         let systemPrompt = buildSystemPrompt()
 
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = .prettyPrinted
-        let workflowJSON = String(data: try encoder.encode(workflow), encoding: .utf8) ?? "{}"
+        let workflowJSON = String(data: try JSONEncoder.iso8601Pretty.encode(workflow), encoding: .utf8) ?? "{}"
 
         let userMessage = await buildRefinementMessage(workflowJSON: workflowJSON, feedback: feedback)
 
@@ -803,6 +794,6 @@ actor AIWorkflowService {
         }
 
         let normalizedData = try JSONSerialization.data(withJSONObject: dict)
-        return try Self.decoder.decode(Workflow.self, from: normalizedData)
+        return try JSONDecoder.iso8601.decode(Workflow.self, from: normalizedData)
     }
 }

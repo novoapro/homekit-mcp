@@ -1,6 +1,11 @@
-import { Component, inject, signal, computed, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { Component, inject, signal, computed, effect, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { PollingService } from '../../core/services/polling.service';
 import { ConfigService } from '../../core/services/config.service';
+import { WebSocketService } from '../../core/services/websocket.service';
+import { LogFilterStateService } from '../../core/services/log-filter-state.service';
+import { MobileTopBarService } from '../../core/services/mobile-topbar.service';
 import { StateChangeLog } from '../../core/models/state-change-log.model';
 import { FilterBarComponent } from './components/filter-bar.component';
 import { LogRowComponent } from './components/log-row.component';
@@ -24,6 +29,16 @@ interface LogGroup {
 export class LogsComponent implements OnInit, OnDestroy {
   protected polling = inject(PollingService);
   private config = inject(ConfigService);
+  private router = inject(Router);
+  private filterState = inject(LogFilterStateService);
+  private wsService = inject(WebSocketService);
+  private topBar = inject(MobileTopBarService);
+  private wsSub?: Subscription;
+  private wsReconnectSub?: Subscription;
+
+  private topBarEffect = effect(() => {
+    this.topBar.set('Activity Log', String(this.logCount()), this.polling.isLoading());
+  });
 
   selectedCategories = signal<Set<string>>(new Set());
   selectedDevices = signal<Set<string>>(new Set());
@@ -107,14 +122,36 @@ export class LogsComponent implements OnInit, OnDestroy {
   readonly hasMore = computed(() => this.polling.logs().length < this.polling.totalCount());
 
   ngOnInit(): void {
+    const saved = this.filterState.restore();
+    if (saved) {
+      this.selectedCategories.set(saved.categories);
+      this.selectedDevices.set(saved.devices);
+      this.searchText.set(saved.searchText);
+      this.dateFrom.set(saved.dateFrom);
+      this.dateTo.set(saved.dateTo);
+    }
     this.fetchWithFilters();
     if (this.config.pollingInterval() > 0) {
       this.polling.startPolling();
     }
+
+    // Connect WebSocket for real-time log updates
+    if (this.config.websocketEnabled()) {
+      this.wsService.connect();
+    }
+    this.wsSub = this.wsService.logMessage$.subscribe(log => {
+      this.polling.injectLog(log);
+    });
+    this.wsReconnectSub = this.wsService.reconnected$.subscribe(() => {
+      this.fetchWithFilters();
+    });
   }
 
   ngOnDestroy(): void {
+    this.saveFilterState();
     this.polling.stopPolling();
+    this.wsSub?.unsubscribe();
+    this.wsReconnectSub?.unsubscribe();
   }
 
   @HostListener('document:click')
@@ -153,9 +190,23 @@ export class LogsComponent implements OnInit, OnDestroy {
     this.fetchWithFilters();
   }
 
+  onNavigateToWorkflow(event: { workflowId: string; logId: string }): void {
+    this.router.navigate(['/workflows', event.workflowId, event.logId]);
+  }
+
   onPullRefresh = (): void => {
     this.fetchWithFilters();
   };
+
+  private saveFilterState(): void {
+    this.filterState.save({
+      categories: this.selectedCategories(),
+      devices: this.selectedDevices(),
+      searchText: this.searchText(),
+      dateFrom: this.dateFrom(),
+      dateTo: this.dateTo(),
+    });
+  }
 
   loadMore(): void {
     this.polling.loadMore(this.buildQueryParams());

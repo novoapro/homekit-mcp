@@ -17,20 +17,24 @@ export const routes: Routes = [
   {
     path: 'logs',
     canActivate: [configGuard],
+    data: { title: 'Activity Log' },
     loadComponent: () => import('./features/logs/logs.component').then(m => m.LogsComponent),
   },
   {
     path: 'workflows',
     canActivate: [configGuard],
+    data: { title: 'Workflows' },
     loadComponent: () => import('./features/workflows/workflow-logs.component').then(m => m.WorkflowLogsComponent),
   },
   {
     path: 'workflows/:workflowId/:logId',
     canActivate: [configGuard],
+    data: { title: 'Workflow Detail' },
     loadComponent: () => import('./features/workflows/workflow-detail.component').then(m => m.WorkflowDetailComponent),
   },
   {
     path: 'settings',
+    data: { title: 'Settings' },
     loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent),
   },
 ];

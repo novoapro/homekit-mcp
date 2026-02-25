@@ -66,11 +66,15 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
       gap: var(--spacing-sm);
       padding: var(--card-padding);
       background: var(--bg-card);
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      border: none;
+      box-shadow: var(--shadow-card);
       margin-bottom: var(--card-gap);
       cursor: pointer;
-      transition: background 150ms ease, border-color 150ms ease, transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
+      transition: background 150ms ease, box-shadow 150ms ease, transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .workflow-card:hover {
+      box-shadow: var(--shadow-card-hover);
     }
     .workflow-card:active {
       transform: scale(0.985);
@@ -81,6 +85,7 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
     .content {
       flex: 1;
       min-width: 0;
+      padding-top: 4px; /* center header text with 32px status icon */
     }
     .header-row {
       display: flex;
@@ -90,13 +95,13 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
     }
     .workflow-name {
       font-size: var(--font-size-base);
-      font-weight: var(--font-weight-semibold);
+      font-weight: var(--font-weight-bold);
       color: var(--text-primary);
     }
     .trigger-text {
       font-size: var(--font-size-sm);
       color: var(--text-secondary);
-      margin-top: 2px;
+      margin-top: 4px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -105,7 +110,7 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
       display: flex;
       align-items: center;
       gap: var(--spacing-sm);
-      margin-top: 2px;
+      margin-top: 4px;
     }
     .step-count {
       font-size: var(--font-size-xs);
@@ -132,6 +137,7 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
       flex-direction: column;
       align-items: flex-end;
       flex-shrink: 0;
+      padding-top: 4px; /* align with content padding-top */
     }
     .time {
       font-size: var(--font-size-xs);
@@ -145,16 +151,22 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
     app-icon {
       color: var(--text-tertiary);
       flex-shrink: 0;
-      padding-top: 6px;
+      padding-top: 8px; /* align with header text (4px content offset + 4px centering) */
     }
     @media (max-width: 768px) {
-      :host {
-        padding: 0 var(--spacing-xs);
-      }
       .workflow-card {
-        padding: 12px;
+        --card-padding: 12px;
         border-radius: var(--radius-sm);
         gap: var(--spacing-xs);
+      }
+      .content {
+        padding-top: 2px;
+      }
+      .time-col {
+        padding-top: 2px;
+      }
+      app-icon {
+        padding-top: 6px;
       }
       .workflow-name {
         font-size: var(--font-size-sm);

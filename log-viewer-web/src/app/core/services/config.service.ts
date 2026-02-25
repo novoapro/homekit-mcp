@@ -8,6 +8,7 @@ export class ConfigService {
   readonly serverPort = signal(3000);
   readonly bearerToken = signal('');
   readonly pollingInterval = signal(10); // seconds, 0 = disabled
+  readonly websocketEnabled = signal(true);
 
   readonly isConfigured = computed(() => !!this.bearerToken());
 
@@ -29,6 +30,9 @@ export class ConfigService {
     if (port) this.serverPort.set(Number(port));
     if (token) this.bearerToken.set(token);
     if (interval !== null) this.pollingInterval.set(Number(interval));
+
+    const wsEnabled = localStorage.getItem(`${STORAGE_PREFIX}:websocketEnabled`);
+    if (wsEnabled !== null) this.websocketEnabled.set(wsEnabled === 'true');
   }
 
   save(): void {
@@ -36,5 +40,6 @@ export class ConfigService {
     localStorage.setItem(`${STORAGE_PREFIX}:serverPort`, String(this.serverPort()));
     localStorage.setItem(`${STORAGE_PREFIX}:bearerToken`, this.bearerToken());
     localStorage.setItem(`${STORAGE_PREFIX}:pollingInterval`, String(this.pollingInterval()));
+    localStorage.setItem(`${STORAGE_PREFIX}:websocketEnabled`, String(this.websocketEnabled()));
   }
 }

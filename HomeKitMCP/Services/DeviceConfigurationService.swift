@@ -5,21 +5,12 @@ actor DeviceConfigurationService: DeviceConfigurationServiceProtocol {
     private let fileURL: URL
     private var saveTask: Task<Void, Never>?
 
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
-        return encoder
-    }()
-
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let appDir = appSupport.appendingPathComponent("HomeKitMCP")
-        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: appDir.path)
+        let appDir = FileManager.appSupportDirectory
         self.fileURL = appDir.appendingPathComponent("device-config.json")
 
         if let data = try? Data(contentsOf: fileURL),
-           let saved = try? JSONDecoder().decode([String: CharacteristicConfiguration].self, from: data) {
+           let saved = try? JSONDecoder.iso8601.decode([String: CharacteristicConfiguration].self, from: data) {
             self.configs = saved
         }
     }
@@ -94,7 +85,7 @@ actor DeviceConfigurationService: DeviceConfigurationServiceProtocol {
 
     private func saveNow() {
         do {
-            let data = try Self.encoder.encode(configs)
+            let data = try JSONEncoder.iso8601Pretty.encode(configs)
             try data.write(to: fileURL, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         } catch {

@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CAFE0001BEEF0001DEAD0001 /* JSONCoder+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAFE0001BEEF0001DEAD0002 /* JSONCoder+Extensions.swift */; };
+		CAFE0001BEEF0001DEAD0003 /* FileManager+AppSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAFE0001BEEF0001DEAD0004 /* FileManager+AppSupport.swift */; };
 		05FE7A71EDD2732214277756 /* RESTModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A495D99FE62472ADF3E28B /* RESTModels.swift */; };
 		098F9A8A61792CB5D3FE8199 /* WorkflowRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC265741DFFD69964503BE06 /* WorkflowRow.swift */; };
 		09B94F256DC59A79C27BDDEB /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6B494504436886F8793A98E /* WorkflowModels.swift */; };
@@ -173,6 +175,8 @@
 		9A63C9C2427F3990D42C564A /* MCPToolDefinitions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPToolDefinitions.swift; sourceTree = "<group>"; };
 		9DE9CC6471BBAF3DFDA71FF6 /* BackupServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupServiceProtocol.swift; sourceTree = "<group>"; };
 		A0EDD8CF773B924B5E9F1122 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
+		CAFE0001BEEF0001DEAD0002 /* JSONCoder+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "JSONCoder+Extensions.swift"; sourceTree = "<group>"; };
+		CAFE0001BEEF0001DEAD0004 /* FileManager+AppSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FileManager+AppSupport.swift"; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* ServerSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettingsView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F3 /* WebhookSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookSettingsView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6A7B8C9D0E1F4 /* WorkflowSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowSettingsView.swift; sourceTree = "<group>"; };
@@ -377,6 +381,8 @@
 				3E8F9500B868465A851B314C /* CancellableBag.swift */,
 				F904B77E53F9A48675AE552B /* CharacteristicTypes.swift */,
 				65766D71479AEC864A35E452 /* DeviceNameFormatter.swift */,
+				CAFE0001BEEF0001DEAD0004 /* FileManager+AppSupport.swift */,
+				CAFE0001BEEF0001DEAD0002 /* JSONCoder+Extensions.swift */,
 				76A1CCA31A2168A2B8D12DD0 /* MenuBarController.swift */,
 				BB22CC33DD44EE55FF660011 /* NetworkInterfaceEnumerator.swift */,
 				77E7DB8F5E5A2E47859F9BE1 /* PreviewData.swift */,
@@ -593,6 +599,8 @@
 				604138D8F7B166CDADB33EE9 /* DeviceConfigurationService.swift in Sources */,
 				DDB9C4F7DAF16E5F1C638A4E /* DeviceListView.swift in Sources */,
 				0AB5E46CEF3A8B68CC454E5E /* DeviceModel.swift in Sources */,
+				CAFE0001BEEF0001DEAD0003 /* FileManager+AppSupport.swift in Sources */,
+				CAFE0001BEEF0001DEAD0001 /* JSONCoder+Extensions.swift in Sources */,
 				5D1DF4EE7848F0AFF3FCD041 /* DeviceNameFormatter.swift in Sources */,
 				5E6D895157FC47B4A75A4A28 /* DeviceRow.swift in Sources */,
 				D2C1B0A9F8E7D6C5B4A3F2E1 /* EmptyStateView.swift in Sources */,

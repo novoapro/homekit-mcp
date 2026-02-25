@@ -20,18 +20,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     private let workflowExecutionLogService: WorkflowExecutionLogService
     private let keychainService: KeychainService
     private let registry: DeviceRegistryService?
-
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }()
-
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }()
+    private var wsCancellables = Set<AnyCancellable>()
 
     init(
         homeKitManager: HomeKitManager,
@@ -90,6 +79,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                 app.logger.logLevel = .warning
 
                 self.configureRoutes(app)
+                self.subscribeToLogSubjects()
                 self.app = app
 
                 // Mark as running before the blocking startup() call.
@@ -135,6 +125,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     }
 
     private func stopAsync() async {
+        wsCancellables.removeAll()
         await connectionTracker.removeAll()
         if let app = self.app {
             self.app = nil
@@ -142,6 +133,80 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                 try await app.asyncShutdown()
             } catch {
                 AppLogger.server.error("Error shutting down app: \(error)")
+            }
+        }
+    }
+
+    // MARK: - WebSocket Broadcasting
+
+    private func subscribeToLogSubjects() {
+        wsCancellables.removeAll()
+
+        guard storage.readWebsocketEnabled() else { return }
+
+        let tracker = connectionTracker
+
+        // Broadcast new state-change log entries
+        loggingService.logEntrySubject
+            .receive(on: DispatchQueue.global(qos: .utility))
+            .sink { [weak self] entry in
+                guard self != nil else { return }
+                Task {
+                    guard await tracker.wsConnectionCount > 0 else { return }
+                    do {
+                        let logData = try JSONEncoder.iso8601.encode(entry)
+                        if let logJson = try JSONSerialization.jsonObject(with: logData) as? [String: Any] {
+                            let msg: [String: Any] = ["type": "log", "data": logJson]
+                            let msgData = try JSONSerialization.data(withJSONObject: msg)
+                            if let text = String(data: msgData, encoding: .utf8) {
+                                await tracker.broadcastToWS(text)
+                            }
+                        }
+                    } catch {
+                        AppLogger.server.error("Failed to encode log for WS broadcast: \(error)")
+                    }
+                }
+            }
+            .store(in: &wsCancellables)
+
+        // Broadcast new workflow execution logs
+        workflowExecutionLogService.logAddedSubject
+            .receive(on: DispatchQueue.global(qos: .utility))
+            .sink { [weak self] entry in
+                guard self != nil else { return }
+                Task {
+                    guard await tracker.wsConnectionCount > 0 else { return }
+                    self?.broadcastWorkflowLog(entry, type: "workflow_log", tracker: tracker)
+                }
+            }
+            .store(in: &wsCancellables)
+
+        // Broadcast updated workflow execution logs
+        workflowExecutionLogService.logUpdatedSubject
+            .receive(on: DispatchQueue.global(qos: .utility))
+            .sink { [weak self] entry in
+                guard self != nil else { return }
+                Task {
+                    guard await tracker.wsConnectionCount > 0 else { return }
+                    self?.broadcastWorkflowLog(entry, type: "workflow_log_updated", tracker: tracker)
+                }
+            }
+            .store(in: &wsCancellables)
+    }
+
+    private func broadcastWorkflowLog(_ entry: WorkflowExecutionLog, type: String, tracker: ConnectionTracker) {
+        Task {
+            do {
+                let logData = try JSONEncoder.iso8601.encode(entry)
+                if let logJson = try JSONSerialization.jsonObject(with: logData) as? [String: Any] {
+                    let msg: [String: Any] = ["type": type, "data": logJson]
+                    let msgData = try JSONSerialization.data(withJSONObject: msg)
+                    if let text = String(data: msgData, encoding: .utf8) {
+                        await tracker.broadcastToWS(text)
+                    }
+                }
+            } catch {
+                AppLogger.server.error("Failed to encode workflow log for WS broadcast: \(error)")
             }
         }
     }
@@ -174,6 +239,55 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         // Health check — no auth required
         app.on(.GET, "health") { _ -> String in
             return "ok"
+        }
+
+        // WebSocket endpoint for real-time log streaming.
+        // Auth via query param since browser WebSocket API cannot send Authorization headers.
+        if storage.readWebsocketEnabled() {
+            app.webSocket("ws") { [weak self] req, ws async in
+                guard let self else {
+                    try? await ws.close()
+                    return
+                }
+
+                // Validate bearer token from query parameter
+                guard let token = req.query[String.self, at: "token"],
+                      validTokens.contains(token) else {
+                    try? await ws.close(code: .policyViolation)
+                    return
+                }
+
+                guard self.storage.readLogAccessEnabled() else {
+                    try? await ws.close(code: .policyViolation)
+                    return
+                }
+
+                let connectionId = UUID()
+                let tracker = self.connectionTracker
+
+                await tracker.addWSConnection(id: connectionId, ws: ws)
+                self.updateClientCount()
+
+                AppLogger.server.info("WebSocket client connected: \(connectionId)")
+
+                // Send welcome message
+                let welcome = "{\"type\":\"connected\",\"connectionId\":\"\(connectionId.uuidString)\"}"
+                try? await ws.send(welcome)
+
+                // Handle incoming text (app-level ping)
+                ws.onText { ws, text in
+                    if text.contains("\"ping\"") {
+                        try? await ws.send("{\"type\":\"pong\"}")
+                    }
+                }
+
+                // Wait for close — this suspends until the WebSocket disconnects
+                try? await ws.onClose.get()
+
+                await tracker.removeWSConnection(id: connectionId)
+                self.updateClientCount()
+                AppLogger.server.info("WebSocket client disconnected: \(connectionId)")
+            }
         }
 
         // All routes require bearer token auth
@@ -334,7 +448,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let filteredDevices = await handler.filterDevicesByConfig(allDevices)
         let restDevices = filteredDevices.map { RESTDevice.from($0) }
 
-        let data = try Self.encoder.encode(restDevices)
+        let data = try JSONEncoder.iso8601.encode(restDevices)
         logRESTCall(method: "GET", path: "/devices", statusCode: 200,
                     resultSummary: "\(restDevices.count) devices",
                     req: req)
@@ -363,7 +477,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         }
 
         let restDevice = RESTDevice.from(filteredDevice)
-        let data = try Self.encoder.encode(restDevice)
+        let data = try JSONEncoder.iso8601.encode(restDevice)
         logRESTCall(method: "GET", path: "/devices/\(deviceId)", statusCode: 200,
                     resultSummary: restDevice.name,
                     req: req)
@@ -444,7 +558,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let paginatedLogs = Array(logs.dropFirst(offset).prefix(limit))
 
         // Build response with pagination metadata
-        let logsData = try Self.encoder.encode(paginatedLogs)
+        let logsData = try JSONEncoder.iso8601.encode(paginatedLogs)
         let logsJson = (try? JSONSerialization.jsonObject(with: logsData)) ?? []
         let response: [String: Any] = [
             "logs": logsJson,
@@ -464,7 +578,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let scenes = registry.map { reg in rawScenes.map { reg.withStableIds($0) } } ?? rawScenes
         let restScenes = scenes.map { RESTScene.from($0) }
 
-        let data = try Self.encoder.encode(restScenes)
+        let data = try JSONEncoder.iso8601.encode(restScenes)
         logRESTCall(method: "GET", path: "/scenes", statusCode: 200,
                     resultSummary: "\(restScenes.count) scenes",
                     req: req)
@@ -487,7 +601,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
         let scene = registry?.withStableIds(rawScene) ?? rawScene
         let restScene = RESTScene.from(scene)
-        let data = try Self.encoder.encode(restScene)
+        let data = try JSONEncoder.iso8601.encode(restScene)
         logRESTCall(method: "GET", path: "/scenes/\(sceneId)", statusCode: 200,
                     resultSummary: restScene.name,
                     req: req)
@@ -524,7 +638,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     private func handleRestGetWorkflows(_ req: Request) async throws -> Response {
         try guardWorkflowsEnabled()
         let workflows = await workflowStorageService.getAllWorkflows()
-        let data = try Self.encoder.encode(workflows)
+        let data = try JSONEncoder.iso8601.encode(workflows)
         logRESTCall(method: "GET", path: "/workflows", statusCode: 200,
                     resultSummary: "\(workflows.count) workflows",
                     req: req)
@@ -545,7 +659,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             throw Abort(.notFound, reason: "Workflow not found")
         }
 
-        let data = try Self.encoder.encode(workflow)
+        let data = try JSONEncoder.iso8601.encode(workflow)
         logRESTCall(method: "GET", path: "/workflows/\(idStr)", statusCode: 200,
                     resultSummary: workflow.name,
                     req: req)
@@ -586,7 +700,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             }
 
             let normalizedData = try JSONSerialization.data(withJSONObject: dict)
-            workflow = try Self.decoder.decode(Workflow.self, from: normalizedData)
+            workflow = try JSONDecoder.iso8601.decode(Workflow.self, from: normalizedData)
         } catch {
             AppLogger.server.error("Workflow JSON parse error: \(error.localizedDescription)")
             logRESTCall(method: "POST", path: "/workflows", statusCode: 400, resultSummary: "Parse Error")
@@ -594,7 +708,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         }
 
         let created = await workflowStorageService.createWorkflow(workflow)
-        let data = try Self.encoder.encode(created)
+        let data = try JSONEncoder.iso8601.encode(created)
         logRESTCall(method: "POST", path: "/workflows", statusCode: 201,
                     resultSummary: "Created: \(created.name)",
                     req: req)
@@ -635,15 +749,15 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
             if let triggersArray = updates["triggers"] {
                 let data = try JSONSerialization.data(withJSONObject: triggersArray)
-                parsedTriggers = try Self.decoder.decode([WorkflowTrigger].self, from: data)
+                parsedTriggers = try JSONDecoder.iso8601.decode([WorkflowTrigger].self, from: data)
             }
             if let conditionsArray = updates["conditions"] {
                 let data = try JSONSerialization.data(withJSONObject: conditionsArray)
-                parsedConditions = try Self.decoder.decode([WorkflowCondition].self, from: data)
+                parsedConditions = try JSONDecoder.iso8601.decode([WorkflowCondition].self, from: data)
             }
             if let blocksArray = updates["blocks"] {
                 let data = try JSONSerialization.data(withJSONObject: blocksArray)
-                parsedBlocks = try Self.decoder.decode([WorkflowBlock].self, from: data)
+                parsedBlocks = try JSONDecoder.iso8601.decode([WorkflowBlock].self, from: data)
             }
 
             let updated = await workflowStorageService.updateWorkflow(id: workflowId) { workflow in
@@ -662,7 +776,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                 throw Abort(.internalServerError, reason: "Failed to update workflow")
             }
 
-            let data = try Self.encoder.encode(updated)
+            let data = try JSONEncoder.iso8601.encode(updated)
             logRESTCall(method: "PUT", path: "/workflows/\(idStr)", statusCode: 200,
                         resultSummary: "Updated: \(updated.name)",
                         req: req)
@@ -706,7 +820,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let result = await workflowEngine.scheduleTrigger(id: workflowId)
 
         let httpStatus = HTTPStatus(statusCode: Int(result.httpStatusCode))
-        let data = try Self.encoder.encode(result)
+        let data = try JSONEncoder.iso8601.encode(result)
         logRESTCall(method: "POST", path: "/workflows/\(idStr)/trigger", statusCode: UInt(httpStatus.code),
                     resultSummary: result.message,
                     req: req)
@@ -726,7 +840,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         var logs = await workflowExecutionLogService.getLogs(forWorkflow: workflowId)
         logs = Array(logs.prefix(limit))
 
-        let data = try Self.encoder.encode(logs)
+        let data = try JSONEncoder.iso8601.encode(logs)
         logRESTCall(method: "GET", path: "/workflows/\(idStr)/logs", statusCode: 200,
                     resultSummary: "\(logs.count) logs",
                     req: req)
@@ -770,7 +884,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             results.append(result)
         }
 
-        let data = try Self.encoder.encode(results)
+        let data = try JSONEncoder.iso8601.encode(results)
         logRESTCall(method: "POST", path: "/workflows/webhook/\(token.prefix(8))...", statusCode: 202,
                     resultSummary: "\(results.filter(\.isAccepted).count)/\(results.count) workflows scheduled",
                     req: req)
@@ -790,11 +904,11 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let requests: [JSONRPCRequest]
         let isBatch: Bool
         do {
-            if let batchRequests = try? Self.decoder.decode([JSONRPCRequest].self, from: data) {
+            if let batchRequests = try? JSONDecoder.iso8601.decode([JSONRPCRequest].self, from: data) {
                 requests = batchRequests
                 isBatch = true
             } else {
-                let single = try Self.decoder.decode(JSONRPCRequest.self, from: data)
+                let single = try JSONDecoder.iso8601.decode(JSONRPCRequest.self, from: data)
                 requests = [single]
                 isBatch = false
             }
@@ -945,7 +1059,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
         let jsonrpcRequest: JSONRPCRequest
         do {
-            jsonrpcRequest = try Self.decoder.decode(JSONRPCRequest.self, from: data)
+            jsonrpcRequest = try JSONDecoder.iso8601.decode(JSONRPCRequest.self, from: data)
         } catch {
             throw Abort(.badRequest, reason: "Invalid JSON-RPC request")
         }
@@ -958,7 +1072,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let jsonrpcResponse = await handler.handle(jsonrpcRequest)
 
         // Send response on the SSE stream
-        let responseData = try Self.encoder.encode(jsonrpcResponse)
+        let responseData = try JSONEncoder.iso8601.encode(jsonrpcResponse)
         if let responseString = String(data: responseData, encoding: .utf8) {
             let sseEvent = "event: message\ndata: \(responseString)\n\n"
             try? await writer.writeBuffer(ByteBuffer(string: sseEvent))
@@ -971,13 +1085,13 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
     /// Build a 200 OK JSON HTTP response from a `JSONRPCResponse`.
     private func encodeJSONResponse(_ response: JSONRPCResponse) throws -> Response {
-        let data = try Self.encoder.encode(response)
+        let data = try JSONEncoder.iso8601.encode(response)
         return jsonResponse(data: data)
     }
 
     /// Build a 200 OK JSON HTTP response from a batch of `JSONRPCResponse` objects.
     private func encodeBatchJSONResponse(_ responses: [JSONRPCResponse]) throws -> Response {
-        let data = try Self.encoder.encode(responses)
+        let data = try JSONEncoder.iso8601.encode(responses)
         return jsonResponse(data: data)
     }
 
@@ -991,9 +1105,10 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
     private func updateClientCount() {
         Task {
-            let count = await connectionTracker.sseConnectionCount
+            let sseCount = await connectionTracker.sseConnectionCount
+            let wsCount = await connectionTracker.wsConnectionCount
             await MainActor.run { [weak self] in
-                self?.connectedClients = count
+                self?.connectedClients = sseCount + wsCount
             }
         }
     }
@@ -1064,6 +1179,7 @@ private struct BearerAuthMiddleware: AsyncMiddleware {
 /// with TTL-based expiration and idle timeout.
 private actor ConnectionTracker {
     private var sseConnections: [UUID: any AsyncBodyStreamWriter] = [:]
+    private var wsConnections: [UUID: WebSocket] = [:]
 
     private struct SessionInfo {
         let createdAt: Date
@@ -1081,6 +1197,7 @@ private actor ConnectionTracker {
     private let cleanupInterval: UInt64 = 5 * 60 * 1_000_000_000
 
     var sseConnectionCount: Int { sseConnections.count }
+    var wsConnectionCount: Int { wsConnections.count }
 
     // MARK: - SSE Connections
 
@@ -1094,6 +1211,27 @@ private actor ConnectionTracker {
 
     func getSSEWriter(for id: UUID) -> (any AsyncBodyStreamWriter)? {
         sseConnections[id]
+    }
+
+    // MARK: - WebSocket Connections
+
+    func addWSConnection(id: UUID, ws: WebSocket) {
+        wsConnections[id] = ws
+    }
+
+    func removeWSConnection(id: UUID) {
+        wsConnections.removeValue(forKey: id)
+    }
+
+    /// Send a text message to all connected WebSocket clients.
+    func broadcastToWS(_ text: String) {
+        for (id, ws) in wsConnections {
+            guard !ws.isClosed else {
+                wsConnections.removeValue(forKey: id)
+                continue
+            }
+            ws.send(text)
+        }
     }
 
     // MARK: - Streamable HTTP Sessions
@@ -1129,6 +1267,10 @@ private actor ConnectionTracker {
 
     func removeAll() {
         sseConnections.removeAll()
+        for (_, ws) in wsConnections {
+            try? ws.close().wait()
+        }
+        wsConnections.removeAll()
         activeSessions.removeAll()
         cleanupTask?.cancel()
         cleanupTask = nil

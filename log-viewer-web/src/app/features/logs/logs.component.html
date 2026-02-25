@@ -54,7 +54,7 @@
         <div class="date-group">
           <div class="date-header">{{ group.label }}</div>
           @for (log of group.logs; track log.id; let i = $index) {
-            <app-log-row [log]="log" [index]="i" />
+            <app-log-row [log]="log" [index]="i" (navigateToWorkflow)="onNavigateToWorkflow($event)" />
           }
         </div>
       }

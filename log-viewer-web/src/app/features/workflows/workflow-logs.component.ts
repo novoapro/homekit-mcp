@@ -1,7 +1,11 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, effect, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
+import { ConfigService } from '../../core/services/config.service';
+import { WebSocketService } from '../../core/services/websocket.service';
+import { MobileTopBarService } from '../../core/services/mobile-topbar.service';
 import { Workflow, WorkflowExecutionLog } from '../../core/models/workflow-log.model';
 import { WorkflowLogRowComponent } from './components/workflow-log-row.component';
 import { EmptyStateComponent } from '../../shared/components/empty-state.component';
@@ -15,9 +19,13 @@ import { PullToRefreshDirective } from '../../shared/directives/pull-to-refresh.
   templateUrl: './workflow-logs.component.html',
   styleUrl: './workflow-logs.component.css',
 })
-export class WorkflowLogsComponent implements OnInit {
+export class WorkflowLogsComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private router = inject(Router);
+  private config = inject(ConfigService);
+  private wsService = inject(WebSocketService);
+  private topBar = inject(MobileTopBarService);
+  private wsSub?: Subscription;
 
   workflows = signal<Workflow[]>([]);
   selectedWorkflowId = signal<string>('');
@@ -25,8 +33,39 @@ export class WorkflowLogsComponent implements OnInit {
   isLoading = signal(false);
   error = signal<string | null>(null);
 
+  private topBarEffect = effect(() => {
+    this.topBar.set('Workflows', null, this.isLoading());
+  });
+
   ngOnInit(): void {
     this.loadWorkflows();
+
+    // Connect WebSocket for real-time workflow log updates
+    if (this.config.websocketEnabled() && !this.wsService.isConnected()) {
+      this.wsService.connect();
+    }
+    this.wsSub = this.wsService.workflowLogMessage$.subscribe(msg => {
+      const selectedId = this.selectedWorkflowId();
+      if (!selectedId || msg.data.workflowId !== selectedId) return;
+
+      const current = this.executionLogs();
+      if (msg.type === 'new') {
+        if (!current.some(l => l.id === msg.data.id)) {
+          this.executionLogs.set([msg.data, ...current]);
+        }
+      } else if (msg.type === 'updated') {
+        const idx = current.findIndex(l => l.id === msg.data.id);
+        if (idx >= 0) {
+          const updated = [...current];
+          updated[idx] = msg.data;
+          this.executionLogs.set(updated);
+        }
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.wsSub?.unsubscribe();
   }
 
   loadWorkflows(): void {

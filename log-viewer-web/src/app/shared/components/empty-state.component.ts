@@ -32,7 +32,7 @@ import { IconComponent } from './icon.component';
     }
     h3 {
       font-size: var(--font-size-xl);
-      font-weight: var(--font-weight-semibold);
+      font-weight: var(--font-weight-bold);
       color: var(--text-primary);
       margin-bottom: var(--spacing-xs);
     }

@@ -46,6 +46,9 @@ class SettingsViewModel: ObservableObject {
     @Published var deviceStateLoggingEnabled: Bool {
         didSet { storage.deviceStateLoggingEnabled = deviceStateLoggingEnabled }
     }
+    @Published var logOnlyWebhookDevices: Bool {
+        didSet { storage.logOnlyWebhookDevices = logOnlyWebhookDevices }
+    }
     @Published var logAccessEnabled: Bool {
         didSet { storage.logAccessEnabled = logAccessEnabled }
     }
@@ -154,6 +157,7 @@ class SettingsViewModel: ObservableObject {
         self.workflowsEnabled = storage.workflowsEnabled
         self.workflowSyncEnabled = storage.workflowSyncEnabled
         self.deviceStateLoggingEnabled = storage.deviceStateLoggingEnabled
+        self.logOnlyWebhookDevices = storage.logOnlyWebhookDevices
         self.logAccessEnabled = storage.logAccessEnabled
         self.logCacheSize = storage.logCacheSize
         self.webhookPrivateIPAllowlist = storage.webhookPrivateIPAllowlist

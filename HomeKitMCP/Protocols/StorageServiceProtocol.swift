@@ -26,8 +26,15 @@ protocol StorageServiceProtocol: AnyObject {
     var webhookPrivateIPAllowlist: [String] { get set }
     var registryMigrationCompleted: Bool { get set }
     var workflowSyncEnabled: Bool { get set }
+    var sunEventLatitude: Double { get set }
+    var sunEventLongitude: Double { get set }
+    var sunEventZipCode: String { get set }
+    var sunEventCityName: String { get set }
+    var deviceStateLoggingEnabled: Bool { get set }
+    var logOnlyWebhookDevices: Bool { get set }
     var logAccessEnabled: Bool { get set }
     var logCacheSize: Int { get set }
+    var websocketEnabled: Bool { get set }
 
     // MARK: - Derived
     func isWebhookConfigured() -> Bool
@@ -52,6 +59,13 @@ protocol StorageServiceProtocol: AnyObject {
     nonisolated func readRegistryMigrationCompleted() -> Bool
     nonisolated func readWorkflowSyncEnabled() -> Bool
     nonisolated func readWebhookPrivateIPAllowlist() -> [String]
+    nonisolated func readSunEventLatitude() -> Double
+    nonisolated func readSunEventLongitude() -> Double
+    nonisolated func readSunEventZipCode() -> String
+    nonisolated func readSunEventCityName() -> String
+    nonisolated func readDeviceStateLoggingEnabled() -> Bool
+    nonisolated func readLogOnlyWebhookDevices() -> Bool
     nonisolated func readLogAccessEnabled() -> Bool
     nonisolated func readLogCacheSize() -> Int
+    nonisolated func readWebsocketEnabled() -> Bool
 }

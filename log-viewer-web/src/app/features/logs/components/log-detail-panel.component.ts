@@ -35,12 +35,8 @@ import { IconComponent } from '../../../shared/components/icon.component';
   `,
   styles: [`
     .detail-panel {
-      padding: var(--spacing-sm) var(--card-padding);
-      padding-left: calc(var(--card-padding) + 32px + var(--spacing-sm));
+      padding: var(--spacing-sm) var(--card-padding) var(--card-padding);
       background: var(--bg-card);
-      border-radius: 0 0 var(--radius-md) var(--radius-md);
-      box-shadow: var(--shadow-card);
-      border-top: 1px solid var(--border-color);
     }
     .detail-section {
       margin-bottom: var(--spacing-sm);
@@ -55,11 +51,11 @@ import { IconComponent } from '../../../shared/components/icon.component';
       margin-bottom: 4px;
     }
     .detail-label {
-      font-size: var(--font-size-xs);
-      font-weight: var(--font-weight-semibold);
+      font-size: 10px;
+      font-weight: var(--font-weight-bold);
       color: var(--text-secondary);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.08em;
     }
     .copy-btn {
       display: inline-flex;
@@ -89,12 +85,6 @@ import { IconComponent } from '../../../shared/components/icon.component';
       overflow-y: auto;
       line-height: 1.5;
       margin: 0;
-    }
-    @media (max-width: 768px) {
-      .detail-panel {
-        padding-left: var(--spacing-sm);
-        border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-      }
     }
   `]
 })

@@ -57,6 +57,20 @@
       <span class="hint">Set to 0 to disable auto-polling</span>
     </div>
 
+    <h3 class="section-heading">Real-time Updates</h3>
+
+    <div class="form-group">
+      <label class="toggle-label">
+        <input
+          type="checkbox"
+          [(ngModel)]="websocketEnabled"
+          class="form-checkbox"
+        />
+        <span>Enable WebSocket</span>
+      </label>
+      <span class="hint">When enabled, logs update instantly via WebSocket. When disabled, falls back to polling only.</span>
+    </div>
+
     <div class="button-row">
       <button class="btn btn-secondary" (click)="testConnection()">
         @if (connectionStatus() === 'testing') {

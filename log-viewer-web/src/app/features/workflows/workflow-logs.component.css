@@ -15,10 +15,10 @@
 
 .page-title {
   font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--font-weight-black);
   color: var(--text-primary);
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .loading-dot {
@@ -32,25 +32,38 @@
 
 /* Toolbar — simplified, just the dropdown */
 .toolbar {
+  display: flex;
+  align-items: center;
   padding: 0 var(--spacing-md) var(--spacing-sm);
 }
 
 .workflow-select {
-  padding: 8px 12px;
-  border: 1px solid var(--border-color-strong);
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 36px 10px 14px;
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--bg-main);
+  background-color: var(--bg-detail);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23999' d='M5 7L0.5 2.5h9z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  box-shadow: var(--shadow-card);
   color: var(--text-primary);
   font-size: var(--font-size-sm);
-  min-width: 200px;
+  font-family: inherit;
   cursor: pointer;
-  transition: border-color var(--transition-fast);
+  transition: box-shadow var(--transition-fast);
 }
 
 .workflow-select:focus {
   outline: none;
-  border-color: var(--tint-main);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--tint-main) 12%, transparent);
+}
+
+.workflow-select:hover {
+  box-shadow: var(--shadow-card), 0 0 0 1.5px var(--border-color);
 }
 
 .error-banner {
@@ -77,26 +90,25 @@
 .log-list {
   flex: 1;
   overflow-y: auto;
-  padding: var(--spacing-sm) 0;
+  padding: var(--spacing-sm) var(--spacing-md);
   -webkit-overflow-scrolling: touch;
 }
 
 @media (max-width: 768px) {
   .page-header {
-    padding: var(--spacing-md) var(--spacing-md) var(--spacing-xs);
-  }
-  .page-title {
-    font-size: var(--font-size-xl);
+    display: none;
   }
   .toolbar {
-    padding: 0 var(--spacing-sm) var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
   }
   .workflow-select {
-    width: 100%;
-    min-width: 0;
+    max-width: 100%;
+  }
+  .log-list {
+    padding: var(--spacing-sm) var(--spacing-sm);
   }
   .skeleton-list {
-    padding: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
   }
   .skeleton-card {
     border-radius: var(--radius-sm);

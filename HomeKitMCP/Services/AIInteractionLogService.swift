@@ -9,27 +9,12 @@ actor AIInteractionLogService {
 
     nonisolated let logsSubject = PassthroughSubject<[AIInteractionLog], Never>()
 
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }()
-
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }()
-
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let appDir = appSupport.appendingPathComponent("HomeKitMCP")
-        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: appDir.path)
+        let appDir = FileManager.appSupportDirectory
         fileURL = appDir.appendingPathComponent("ai-interaction-logs.json")
 
         if let data = try? Data(contentsOf: fileURL),
-           let saved = try? Self.decoder.decode([AIInteractionLog].self, from: data)
+           let saved = try? JSONDecoder.iso8601.decode([AIInteractionLog].self, from: data)
         {
             logs = saved
         }
@@ -67,7 +52,7 @@ actor AIInteractionLogService {
 
     private func saveNow() {
         do {
-            let data = try Self.encoder.encode(logs)
+            let data = try JSONEncoder.iso8601.encode(logs)
             try data.write(to: fileURL, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         } catch {

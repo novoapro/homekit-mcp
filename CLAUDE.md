@@ -15,6 +15,17 @@ HomeKit MCP Server — a macOS Mac Catalyst application that exposes HomeKit dev
 - **HomeKit**: Apple HomeKit framework (HMHomeManager, HMAccessoryDelegate)
 - **Distribution**: Non-sandboxed, direct download (notarized for public release)
 
+## Applications
+
+Keep in mind that there are two applications withing this project. A swift application called HomeKitMCP and a web application called log-viewer-web. The web application is used to view the logs of the swift application. The web application is not part of the swift application. The web application is a separate application that is run independently of the swift application. The web application is run using the following command:
+
+```bash
+cd log-viewer-web
+npm run dev
+```
+
+If I am referring to the web application, I will use the term "web app". If I am referring to the swift application, I will use the term "app", or "server app", or "server", or "mcp app".
+
 ## Architecture
 
 The app has four layers:
@@ -76,3 +87,6 @@ And then run the following command:
 ```bash
 open /Users/manuel/Library/Developer/Xcode/DerivedData/HomeKitMCP-byyskooslqggvmgrsoyhqtmgtepf/Build/Products/Debug-maccatalyst/HomeKitMCP.app
 ```
+
+Very Important:
+Everytime you complete a task that changes in any way the model that we expose through the MCP server, you need to update the documentation at `API.md` file to reflect the changes.

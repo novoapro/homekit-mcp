@@ -1,4 +1,4 @@
-import { Component, input, signal, computed } from '@angular/core';
+import { Component, input, output, signal, computed } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { StateChangeLog, LogCategory, CATEGORY_META } from '../../../core/models/state-change-log.model';
 import { characteristicDisplayName, formatCharacteristicValue } from '../../../core/utils/characteristic-types';
@@ -28,6 +28,7 @@ import { LogDetailPanelComponent } from './log-detail-panel.component';
 export class LogRowComponent {
   log = input.required<StateChangeLog>();
   index = input(0);
+  navigateToWorkflow = output<{ workflowId: string; logId: string }>();
 
   expanded = signal(false);
 
@@ -112,13 +113,23 @@ export class LogRowComponent {
       l.category !== LogCategory.RestCall;
   });
 
+  readonly isWorkflowLog = computed(() => {
+    const cat = this.log().category;
+    return cat === LogCategory.WorkflowExecution || cat === LogCategory.WorkflowError;
+  });
+
   readonly workflowStatus = computed(() => {
     const l = this.log();
-    if (l.category !== LogCategory.WorkflowExecution && l.category !== LogCategory.WorkflowError) return null;
+    if (!this.isWorkflowLog()) return null;
     return l.newValue as string | null;
   });
 
   toggle(): void {
+    if (this.isWorkflowLog()) {
+      const l = this.log();
+      this.navigateToWorkflow.emit({ workflowId: l.deviceId, logId: l.id });
+      return;
+    }
     if (this.isExpandable()) {
       this.expanded.set(!this.expanded());
     }

@@ -48,10 +48,7 @@ class CloudBackupService: ObservableObject, CloudBackupServiceProtocol {
             try await verifyCloudAvailability()
 
             let bundle = try await backupService.createBackup()
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(bundle)
+            let data = try JSONEncoder.iso8601Pretty.encode(bundle)
 
             // Write to temp file for CKAsset
             let tempURL = FileManager.default.temporaryDirectory
@@ -142,9 +139,7 @@ class CloudBackupService: ObservableObject, CloudBackupServiceProtocol {
             }
 
             let data = try Data(contentsOf: fileURL)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let bundle = try decoder.decode(BackupBundle.self, from: data)
+            let bundle = try JSONDecoder.iso8601.decode(BackupBundle.self, from: data)
             try await backupService.restoreBackup(bundle)
         } catch {
             lastSyncError = error.localizedDescription

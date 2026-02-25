@@ -115,7 +115,8 @@ import { IconComponent } from '../../../shared/components/icon.component';
       right: 0;
       max-height: 85vh;
       background: var(--bg-content);
-      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+      box-shadow: var(--shadow-elevated);
       z-index: 501;
       padding: var(--spacing-sm) var(--spacing-md) var(--spacing-xl);
       padding-bottom: calc(var(--spacing-xl) + env(safe-area-inset-bottom, 0px));
@@ -140,7 +141,7 @@ import { IconComponent } from '../../../shared/components/icon.component';
 
     .sheet-header h3 {
       font-size: var(--font-size-xl);
-      font-weight: var(--font-weight-bold);
+      font-weight: var(--font-weight-black);
       color: var(--text-primary);
       margin: 0;
     }
@@ -162,11 +163,11 @@ import { IconComponent } from '../../../shared/components/icon.component';
 
     .sheet-label {
       display: block;
-      font-size: var(--font-size-xs);
-      font-weight: var(--font-weight-bold);
+      font-size: 10px;
+      font-weight: var(--font-weight-black);
       color: var(--text-tertiary);
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.12em;
       margin-bottom: var(--spacing-sm);
     }
 
@@ -209,14 +210,14 @@ import { IconComponent } from '../../../shared/components/icon.component';
       font-weight: var(--font-weight-medium);
       background: var(--bg-chip-inactive);
       color: var(--text-secondary);
-      border: 1px solid transparent;
+      border: none;
       transition: all 150ms ease-out;
     }
 
     .chip.selected {
       background: color-mix(in srgb, var(--tint-main) 15%, transparent);
       color: var(--tint-main);
-      border-color: color-mix(in srgb, var(--tint-main) 30%, transparent);
+      box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--tint-main) 40%, transparent);
     }
 
     .date-row {
@@ -250,7 +251,7 @@ import { IconComponent } from '../../../shared/components/icon.component';
       padding: 14px 20px;
       border-radius: var(--radius-md);
       font-size: var(--font-size-base);
-      font-weight: var(--font-weight-medium);
+      font-weight: var(--font-weight-semibold);
       color: var(--status-error);
       background: color-mix(in srgb, var(--status-error) 10%, transparent);
     }
@@ -261,7 +262,7 @@ import { IconComponent } from '../../../shared/components/icon.component';
       border-radius: var(--radius-md);
       background: var(--tint-main);
       color: white;
-      font-weight: var(--font-weight-semibold);
+      font-weight: var(--font-weight-bold);
       font-size: var(--font-size-base);
     }
   `],

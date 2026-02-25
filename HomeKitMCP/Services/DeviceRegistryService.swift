@@ -97,22 +97,14 @@ actor DeviceRegistryService {
     private let fileURL: URL
     private var saveTask: Task<Void, Never>?
 
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return encoder
-    }()
-
     // MARK: - Init
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let appDir = appSupport.appendingPathComponent("HomeKitMCP")
-        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
+        let appDir = FileManager.appSupportDirectory
         self.fileURL = appDir.appendingPathComponent("device-registry.json")
 
         if let data = try? Data(contentsOf: fileURL),
-           let saved = try? JSONDecoder().decode(RegistrySnapshot.self, from: data) {
+           let saved = try? JSONDecoder.iso8601.decode(RegistrySnapshot.self, from: data) {
             self.devices = saved.devices
             self.scenes = saved.scenes
             rebuildReverseLookups()
@@ -1092,7 +1084,7 @@ actor DeviceRegistryService {
     private func saveNow() {
         do {
             let snapshot = RegistrySnapshot(devices: devices, scenes: scenes)
-            let data = try Self.encoder.encode(snapshot)
+            let data = try JSONEncoder.iso8601Pretty.encode(snapshot)
             try data.write(to: fileURL, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         } catch {

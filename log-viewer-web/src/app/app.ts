@@ -6,6 +6,8 @@ import { SidebarComponent } from './shared/components/sidebar.component';
 import { ThemeService } from './core/services/theme.service';
 import { ConfigService } from './core/services/config.service';
 import { PollingService } from './core/services/polling.service';
+import { MobileTopBarService } from './core/services/mobile-topbar.service';
+import { WebSocketService } from './core/services/websocket.service';
 import { trigger, transition, style, animate, query } from '@angular/animations';
 
 const routeAnimation = trigger('routeAnimation', [
@@ -34,6 +36,8 @@ export class App {
   protected theme = inject(ThemeService);
   protected config = inject(ConfigService);
   protected polling = inject(PollingService);
+  protected topBar = inject(MobileTopBarService);
+  protected wsService = inject(WebSocketService);
 
   sidebarOpen = signal(false);
   sidebarCollapsed = signal(
