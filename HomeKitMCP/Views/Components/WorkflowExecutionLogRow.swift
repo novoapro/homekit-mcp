@@ -55,7 +55,7 @@ struct WorkflowExecutionLogRow: View {
                 if let error = log.errorMessage {
                     Text(error)
                         .font(.footnote)
-                        .foregroundColor(Theme.Status.error)
+                        .foregroundColor(messageColor)
                         .lineLimit(1)
                 }
             }
@@ -103,6 +103,15 @@ struct WorkflowExecutionLogRow: View {
             return String(format: "%.0fms", interval * 1000)
         } else {
             return String(format: "%.1fs", interval)
+        }
+    }
+
+    private var messageColor: Color {
+        switch log.status {
+        case .success: return Theme.Status.active
+        case .cancelled: return Theme.Status.inactive
+        case .failure: return Theme.Status.error
+        default: return Theme.Text.secondary
         }
     }
 

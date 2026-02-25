@@ -124,12 +124,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                             let kind = orphan.isScene ? "scene" : "device"
                             let desc = orphan.referenceName ?? orphan.referenceId
                             AppLogger.workflow.warning("Startup migration: workflow '\(workflowName)' has orphaned \(kind) '\(desc)' in \(orphan.location)")
-                            let logEntry = StateChangeLog(
-                                id: UUID(), timestamp: Date(),
-                                deviceId: workflowName, deviceName: workflowName,
-                                characteristicType: "orphan-detection",
-                                oldValue: nil, newValue: nil,
-                                category: .workflowError,
+                            let logEntry = StateChangeLog.workflowError(
+                                workflowId: workflowName,
+                                workflowName: workflowName,
                                 errorDetails: "Orphaned \(kind) '\(desc)' in \(orphan.location) — not found after migration"
                             )
                             await self.container.loggingService.logEntry(logEntry)
@@ -197,12 +194,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                         if !validation.unresolvable.isEmpty {
                             AppLogger.registry.warning("Startup validation: \(validation.unresolvable.count) unresolvable issue(s)")
                             for issue in validation.unresolvable {
-                                let logEntry = StateChangeLog(
-                                    id: UUID(), timestamp: Date(),
-                                    deviceId: issue.workflowId.uuidString, deviceName: issue.workflowName,
-                                    characteristicType: "validation-error",
-                                    oldValue: nil, newValue: nil,
-                                    category: .workflowError,
+                                let logEntry = StateChangeLog.workflowError(
+                                    workflowId: issue.workflowId.uuidString,
+                                    workflowName: issue.workflowName,
                                     errorDetails: "[\(issue.location)] \(issue.detail)"
                                 )
                                 await self.container.loggingService.logEntry(logEntry)

@@ -43,7 +43,7 @@ input, select, textarea {
   color: var(--text-primary);
 }
 
-/* Scrollbar styling */
+/* Scrollbar styling (desktop) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -62,6 +62,14 @@ input, select, textarea {
   background: var(--text-secondary);
 }
 
+/* Hide scrollbars on mobile for cleaner look */
+@media (max-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
 /* Focus visible */
 :focus-visible {
   outline: 2px solid var(--tint-main);
@@ -76,11 +84,17 @@ input, select, textarea {
   }
 }
 
-/* Touch-friendly tap targets on navigation */
+/* Touch-friendly tap targets */
 @media (pointer: coarse) {
-  .nav-tab, .btn, .header-btn {
-    min-height: 44px;
+  button, a, [role="button"], select {
+    min-height: var(--touch-target-min);
   }
+}
+
+/* Button press micro-interaction */
+button:active, [role="button"]:active {
+  transform: scale(0.97);
+  transition: transform 100ms ease;
 }
 
 /* Safe area insets for notched devices */

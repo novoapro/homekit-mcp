@@ -1,5 +1,7 @@
 import { Component, input, signal, computed } from '@angular/core';
-import { StateChangeLog, LogCategory } from '../../../core/models/state-change-log.model';
+import { trigger, transition, style, animate } from '@angular/animations';
+import { StateChangeLog, LogCategory, CATEGORY_META } from '../../../core/models/state-change-log.model';
+import { characteristicDisplayName, formatCharacteristicValue } from '../../../core/utils/characteristic-types';
 import { CategoryIconComponent } from '../../../shared/components/category-icon.component';
 import { IconComponent } from '../../../shared/components/icon.component';
 import { LogDetailPanelComponent } from './log-detail-panel.component';
@@ -10,23 +12,68 @@ import { LogDetailPanelComponent } from './log-detail-panel.component';
   imports: [CategoryIconComponent, IconComponent, LogDetailPanelComponent],
   templateUrl: './log-row.component.html',
   styleUrl: './log-row.component.css',
+  animations: [
+    trigger('expandCollapse', [
+      transition(':enter', [
+        style({ height: 0, opacity: 0, overflow: 'hidden' }),
+        animate('250ms cubic-bezier(0.4, 0, 0.2, 1)', style({ height: '*', opacity: 1 }))
+      ]),
+      transition(':leave', [
+        style({ overflow: 'hidden' }),
+        animate('200ms cubic-bezier(0.4, 0, 0.2, 1)', style({ height: 0, opacity: 0 }))
+      ])
+    ])
+  ]
 })
 export class LogRowComponent {
   log = input.required<StateChangeLog>();
+  index = input(0);
 
   expanded = signal(false);
 
   readonly isExpandable = computed(() => {
     const l = this.log();
-    return !!(l.detailedRequestBody || l.detailedResponseBody || l.requestBody || l.responseBody);
+    return !!(l.detailedRequestBody || l.requestBody || l.responseBody);
   });
 
   readonly isError = computed(() => {
-    const cat = this.log().category;
+    const l = this.log();
+    const cat = l.category;
+    if (cat === LogCategory.WorkflowError && l.returnOutcome && l.returnOutcome !== 'error') {
+      return false;
+    }
     return cat === LogCategory.WebhookError ||
       cat === LogCategory.ServerError ||
       cat === LogCategory.WorkflowError ||
       cat === LogCategory.SceneError;
+  });
+
+  readonly categoryColor = computed(() => {
+    const l = this.log();
+    if (l.category === LogCategory.WorkflowError && l.returnOutcome) {
+      if (l.returnOutcome === 'success') return 'var(--status-active)';
+      if (l.returnOutcome === 'cancelled') return 'var(--status-warning)';
+    }
+    const meta = CATEGORY_META[l.category];
+    return meta?.color || 'var(--tint-main)';
+  });
+
+  readonly displayCharacteristicType = computed(() => {
+    return characteristicDisplayName(this.log().characteristicType);
+  });
+
+  readonly backupSubtype = computed(() => {
+    const l = this.log();
+    if (l.category !== LogCategory.BackupRestore) return '';
+    return l.characteristicType
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  });
+
+  readonly isBooleanChange = computed(() => {
+    const l = this.log();
+    if (l.category !== LogCategory.StateChange) return false;
+    return typeof l.newValue === 'boolean' || typeof l.oldValue === 'boolean';
   });
 
   readonly timeStr = computed(() => {
@@ -37,8 +84,21 @@ export class LogRowComponent {
     });
   });
 
-  readonly formattedOldValue = computed(() => this.formatValue(this.log().oldValue));
-  readonly formattedNewValue = computed(() => this.formatValue(this.log().newValue));
+  readonly formattedOldValue = computed(() => {
+    const l = this.log();
+    if (l.category === LogCategory.StateChange) {
+      return formatCharacteristicValue(l.oldValue, l.characteristicType);
+    }
+    return this.formatValue(l.oldValue);
+  });
+
+  readonly formattedNewValue = computed(() => {
+    const l = this.log();
+    if (l.category === LogCategory.StateChange) {
+      return formatCharacteristicValue(l.newValue, l.characteristicType);
+    }
+    return this.formatValue(l.newValue);
+  });
 
   readonly showValueChange = computed(() => {
     const l = this.log();
@@ -50,6 +110,12 @@ export class LogRowComponent {
     return l.serviceName &&
       l.category !== LogCategory.McpCall &&
       l.category !== LogCategory.RestCall;
+  });
+
+  readonly workflowStatus = computed(() => {
+    const l = this.log();
+    if (l.category !== LogCategory.WorkflowExecution && l.category !== LogCategory.WorkflowError) return null;
+    return l.newValue as string | null;
   });
 
   toggle(): void {

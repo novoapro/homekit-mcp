@@ -23,7 +23,7 @@
     }
   </div>
 
-  <!-- Log List -->
+  <!-- Error -->
   @if (polling.error()) {
     <div class="error-banner animate-fade-in">
       <app-icon name="exclamation-triangle" [size]="16" />
@@ -31,19 +31,32 @@
     </div>
   }
 
+  <!-- Skeleton loading -->
+  @if (polling.isLoading() && groupedLogs().length === 0 && !polling.error()) {
+    <div class="skeleton-list">
+      @for (i of [1,2,3,4,5,6]; track i) {
+        <div class="skeleton-card skeleton" [style.animation-delay.ms]="i * 100"></div>
+      }
+    </div>
+  }
+
+  <!-- Empty state -->
   @if (groupedLogs().length === 0 && !polling.isLoading()) {
     <app-empty-state
       icon="bolt-circle-fill"
       title="No logs yet"
       message="Logs will appear here when devices change state, workflows execute, or API calls are made."
     />
-  } @else {
-    <div class="log-list">
+  }
+
+  <!-- Log List -->
+  @if (groupedLogs().length > 0) {
+    <div class="log-list" [appPullToRefresh]="onPullRefresh">
       @for (group of groupedLogs(); track group.date) {
-        <div class="date-group animate-fade-in">
+        <div class="date-group">
           <div class="date-header">{{ group.label }}</div>
-          @for (log of group.logs; track log.id) {
-            <app-log-row [log]="log" />
+          @for (log of group.logs; track log.id; let i = $index) {
+            <app-log-row [log]="log" [index]="i" />
           }
         </div>
       }

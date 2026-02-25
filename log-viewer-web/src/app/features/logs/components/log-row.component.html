@@ -1,112 +1,178 @@
-<div class="log-row" [class.expandable]="isExpandable()" [class.error]="isError()" (click)="toggle()">
-  <!-- Column 1: Category Icon -->
-  <app-category-icon [category]="log().category" [size]="28" />
+<div class="log-card"
+     [class.expandable]="isExpandable()"
+     [class.error]="isError()"
+     [style.--accent-color]="categoryColor()"
+     [style.animation-delay.ms]="index() * 30"
+     (click)="toggle()">
 
-  <!-- Column 2: Content -->
+  <!-- Category Icon -->
+  <app-category-icon [category]="log().category" [size]="32" />
+
+  <!-- Content -->
   <div class="content">
     <div class="header-row">
       <span class="device-name">{{ log().deviceName }}</span>
       @if (showServiceBadge()) {
         <span class="service-badge">{{ log().serviceName }}</span>
       }
+      @if (workflowStatus(); as status) {
+        <span class="status-badge" [class.success]="status === 'success'" [class.cancelled]="status === 'cancelled'" [class.failure]="status !== 'success' && status !== 'cancelled'">{{ status }}</span>
+      }
+      <span class="time">{{ timeStr() }}</span>
     </div>
 
     @switch (log().category) {
       @case ('state_change') {
-        @if (showValueChange()) {
-          <div class="value-change">
-            <span class="characteristic">{{ log().characteristicType }}</span>
-            <span class="old-value">{{ formattedOldValue() }}</span>
-            <app-icon name="arrow-right" [size]="12" />
-            <span class="new-value">{{ formattedNewValue() }}</span>
+        @if (isBooleanChange()) {
+          <div class="toggle-indicator" [class.on]="log().newValue === true" [class.off]="log().newValue !== true">
+            <span class="characteristic">{{ displayCharacteristicType() }}</span>
+            <span class="toggle-label">{{ log().newValue === true ? 'On' : 'Off' }}</span>
+          </div>
+        } @else if (showValueChange()) {
+          <div class="value-indicator">
+            <span class="characteristic">{{ displayCharacteristicType() }}</span>
+            <span class="old">{{ formattedOldValue() }}</span>
+            <app-icon name="arrow-right" [size]="10" />
+            <span class="new">{{ formattedNewValue() }}</span>
           </div>
         }
       }
       @case ('mcp_call') {
-        <div class="sub-content mcp">
+        <div class="api-content">
+          <span class="method-badge mcp">MCP</span>
           @if (log().requestBody) {
-            <div class="req-line">&rarr; {{ log().requestBody }}</div>
-          }
-          @if (log().responseBody) {
-            <div class="res-line">&larr; {{ log().responseBody }}</div>
+            <span class="api-text">{{ log().requestBody }}</span>
           }
         </div>
+        @if (log().responseBody) {
+          <div class="api-result">
+            <span class="result-arrow">&larr;</span>
+            <span class="result-text">{{ log().responseBody }}</span>
+          </div>
+        }
       }
       @case ('rest_call') {
-        <div class="sub-content rest">
-          <span class="rest-type">{{ log().characteristicType }}</span>
-          @if (log().responseBody) {
-            <div class="res-line">&larr; {{ log().responseBody }}</div>
+        <div class="api-content">
+          <span class="method-badge rest">{{ log().characteristicType || 'REST' }}</span>
+          @if (log().requestBody) {
+            <span class="api-text">{{ log().requestBody }}</span>
           }
         </div>
+        @if (log().responseBody) {
+          <div class="api-result">
+            <span class="result-arrow">&larr;</span>
+            <span class="result-text">{{ log().responseBody }}</span>
+          </div>
+        }
       }
       @case ('webhook_call') {
-        <div class="sub-content webhook">
+        <div class="api-content">
+          <span class="method-badge webhook">Webhook</span>
           @if (log().requestBody) {
-            <div class="req-line">{{ log().requestBody }}</div>
-          }
-          @if (log().responseBody) {
-            <div class="res-line">&larr; {{ log().responseBody }}</div>
+            <span class="api-text">{{ log().requestBody }}</span>
           }
         </div>
+        @if (log().responseBody) {
+          <div class="api-result">
+            <span class="result-arrow">&larr;</span>
+            <span class="result-text">{{ log().responseBody }}</span>
+          </div>
+        }
       }
       @case ('webhook_error') {
-        <div class="sub-content error-content">
-          <span>Webhook Error</span>
-          @if (log().errorDetails) {
-            <div class="error-detail">{{ log().errorDetails }}</div>
-          }
+        @if (log().requestBody) {
+          <div class="api-content">
+            <span class="method-badge webhook">Webhook</span>
+            <span class="api-text">{{ log().requestBody }}</span>
+          </div>
+        }
+        <div class="error-banner-inline">
+          <app-icon name="exclamation-circle-fill" [size]="14" />
+          <span>{{ log().errorDetails || 'Webhook failed' }}</span>
         </div>
       }
       @case ('server_error') {
-        <div class="sub-content error-content">
-          <span>Server Error</span>
-          @if (log().errorDetails) {
-            <div class="error-detail">{{ log().errorDetails }}</div>
-          }
+        <div class="error-banner-inline">
+          <app-icon name="exclamation-circle-fill" [size]="14" />
+          <span>{{ log().errorDetails || 'Server error' }}</span>
         </div>
       }
       @case ('workflow_execution') {
-        <div class="sub-content">
-          @if (log().responseBody) {
-            <div class="res-line">{{ log().responseBody }}</div>
-          }
-        </div>
+        @if (log().requestBody) {
+          <div class="sub-content">{{ log().requestBody }}</div>
+        }
+        @if (log().responseBody) {
+          <div class="sub-content mono">{{ log().responseBody }}</div>
+        }
+        @if (log().returnOutcome && log().errorDetails) {
+          <div class="return-banner-inline" [class.success]="log().returnOutcome === 'success'" [class.cancelled]="log().returnOutcome === 'cancelled'">
+            <app-icon [name]="log().returnOutcome === 'success' ? 'checkmark-circle-fill' : 'minus-circle-fill'" [size]="14" />
+            <span>{{ log().errorDetails }}</span>
+          </div>
+        }
       }
       @case ('workflow_error') {
-        <div class="sub-content error-content">
-          @if (log().errorDetails) {
-            <div class="error-detail">{{ log().errorDetails }}</div>
-          } @else if (log().responseBody) {
-            <div class="error-detail">{{ log().responseBody }}</div>
-          }
+        @if (log().requestBody) {
+          <div class="sub-content" [class.error-text]="!log().returnOutcome || log().returnOutcome === 'error'">{{ log().requestBody }}</div>
+        }
+        @if (log().returnOutcome && log().returnOutcome !== 'error') {
+          <div class="return-banner-inline" [class.success]="log().returnOutcome === 'success'" [class.cancelled]="log().returnOutcome === 'cancelled'">
+            <app-icon [name]="log().returnOutcome === 'success' ? 'checkmark-circle-fill' : 'minus-circle-fill'" [size]="14" />
+            <span>{{ log().errorDetails || log().responseBody || 'Workflow stopped' }}</span>
+          </div>
+        } @else {
+          <div class="error-banner-inline">
+            <app-icon name="exclamation-circle-fill" [size]="14" />
+            <span>{{ log().errorDetails || log().responseBody || 'Workflow error' }}</span>
+          </div>
+        }
+      }
+      @case ('scene_execution') {
+        @if (log().requestBody) {
+          <div class="sub-content">{{ log().requestBody }}</div>
+        }
+      }
+      @case ('scene_error') {
+        @if (log().requestBody) {
+          <div class="sub-content error-text">{{ log().requestBody }}</div>
+        }
+        <div class="error-banner-inline">
+          <app-icon name="exclamation-circle-fill" [size]="14" />
+          <span>{{ log().errorDetails || 'Scene error' }}</span>
         </div>
+      }
+      @case ('backup_restore') {
+        <div class="api-content">
+          <span class="method-badge backup">{{ backupSubtype() }}</span>
+        </div>
+        @if (log().errorDetails) {
+          <div class="sub-content" [class.error-text]="log().characteristicType === 'orphan-detection'">
+            {{ log().errorDetails }}
+          </div>
+        }
       }
       @default {
         @if (log().responseBody) {
-          <div class="sub-content">
-            <div class="res-line">{{ log().responseBody }}</div>
-          </div>
+          <div class="sub-content">{{ log().responseBody }}</div>
         }
       }
     }
   </div>
 
-  <!-- Column 3: Time -->
-  <span class="time">{{ timeStr() }}</span>
-
-  <!-- Column 4: Chevron -->
-  <div class="chevron-space">
-    @if (isExpandable()) {
-      <app-icon [name]="expanded() ? 'chevron-down' : 'chevron-right'" [size]="14" />
-    }
-  </div>
+  <!-- Chevron -->
+  @if (isExpandable()) {
+    <div class="chevron" [class.expanded]="expanded()">
+      <app-icon name="chevron-right" [size]="14" />
+    </div>
+  }
 </div>
 
 <!-- Expandable Detail Panel -->
 @if (expanded() && isExpandable()) {
-  <app-log-detail-panel
-    [requestBody]="log().detailedRequestBody || log().requestBody || ''"
-    [responseBody]="log().detailedResponseBody || log().responseBody || ''"
-  />
+  <div class="detail-wrapper" @expandCollapse>
+    <app-log-detail-panel
+      [requestBody]="log().detailedRequestBody || log().requestBody || ''"
+      [responseBody]="log().responseBody || ''"
+    />
+  </div>
 }

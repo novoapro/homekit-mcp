@@ -305,15 +305,9 @@ struct ConditionEvaluator {
 
         AppLogger.workflow.warning("[\(workflowName)] Orphaned reference in \(location): \(deviceDesc)")
 
-        let logEntry = StateChangeLog(
-            id: UUID(),
-            timestamp: Date(),
-            deviceId: workflowId.uuidString,
-            deviceName: workflowName,
-            characteristicType: "orphan-detection",
-            oldValue: nil,
-            newValue: nil,
-            category: .workflowError,
+        let logEntry = StateChangeLog.workflowError(
+            workflowId: workflowId.uuidString,
+            workflowName: workflowName,
             errorDetails: errorDetails
         )
         await loggingService.logEntry(logEntry)

@@ -31,11 +31,12 @@
     </div>
   }
 
-  <!-- Loading -->
+  <!-- Skeleton Loading -->
   @if (isLoading() && executionLogs().length === 0) {
-    <div class="loading-state">
-      <app-icon name="spinner" [size]="24" />
-      <span>Loading executions...</span>
+    <div class="skeleton-list">
+      @for (i of [1,2,3,4]; track i) {
+        <div class="skeleton-card skeleton" [style.animation-delay.ms]="i * 100"></div>
+      }
     </div>
   }
 
@@ -58,9 +59,9 @@
 
   <!-- Execution list -->
   @if (executionLogs().length > 0) {
-    <div class="log-list">
-      @for (log of executionLogs(); track log.id) {
-        <app-workflow-log-row [log]="log" (click)="openDetail(log)" />
+    <div class="log-list" [appPullToRefresh]="onPullRefresh">
+      @for (log of executionLogs(); track log.id; let i = $index) {
+        <app-workflow-log-row [log]="log" [index]="i" (click)="openDetail(log)" />
       }
     </div>
   }

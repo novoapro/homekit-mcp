@@ -617,96 +617,8 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             await workflowStorageService.incrementFailures(id: workflow.id)
         }
 
-        // Build rich log entry for main logging service
-        let category: LogCategory = (succeeded || execLog.status == .cancelled) ? .workflowExecution : .workflowError
-        let durationMs: Int = {
-            guard let completed = execLog.completedAt else { return 0 }
-            return Int(completed.timeIntervalSince(execLog.triggeredAt) * 1000)
-        }()
-
-        // requestBody: trigger description
-        let requestBody: String = {
-            if let trigger = execLog.triggerEvent, let desc = trigger.triggerDescription {
-                return desc
-            } else if let trigger = execLog.triggerEvent, let deviceName = trigger.deviceName {
-                let charName = trigger.characteristicType.map { CharacteristicTypes.displayName(for: $0) } ?? ""
-                let oldStr = trigger.oldValue.map { stringFromAny($0.value) } ?? "?"
-                let newStr = trigger.newValue.map { stringFromAny($0.value) } ?? "?"
-                return "\(deviceName) \(charName): \(oldStr) → \(newStr)"
-            } else {
-                return "Manual trigger"
-            }
-        }()
-
-        // responseBody: sequential summary of what happened
-        let responseBody: String = {
-            var lines: [String] = []
-            func summarizeResults(_ results: [BlockResult], depth: Int = 0) {
-                let indent = String(repeating: "  ", count: depth)
-                for r in results {
-                    let icon = r.status == .success ? "✓" : (r.status == .failure ? "✗" : "–")
-                    let name = r.blockName ?? r.blockType
-                    if let detail = r.detail, !detail.isEmpty {
-                        lines.append("\(indent)\(icon) \(name): \(detail)")
-                    } else {
-                        lines.append("\(indent)\(icon) \(name)")
-                    }
-                    if let nested = r.nestedResults, !nested.isEmpty {
-                        summarizeResults(nested, depth: depth + 1)
-                    }
-                }
-            }
-            summarizeResults(execLog.blockResults)
-            if lines.isEmpty {
-                lines.append("\(execLog.status.rawValue) in \(durationMs)ms")
-            }
-            return lines.joined(separator: "\n")
-        }()
-
-        // Detailed logs (gated by setting)
-        var detailedRequest: String?
-        if storage.readDetailedLogsEnabled() {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys]
-            encoder.dateEncodingStrategy = .iso8601
-
-            // Detailed request: trigger event + condition results
-            var detailedReqDict: [String: AnyCodable] = [:]
-            if let trigger = execLog.triggerEvent {
-                var triggerDict: [String: AnyCodable] = [
-                    "oldValue": trigger.oldValue ?? AnyCodable("nil"),
-                    "newValue": trigger.newValue ?? AnyCodable("nil"),
-                ]
-                if let deviceId = trigger.deviceId { triggerDict["deviceId"] = AnyCodable(deviceId) }
-                if let deviceName = trigger.deviceName { triggerDict["deviceName"] = AnyCodable(deviceName) }
-                if let characteristicType = trigger.characteristicType { triggerDict["characteristicType"] = AnyCodable(characteristicType) }
-                if let triggerDescription = trigger.triggerDescription { triggerDict["triggerDescription"] = AnyCodable(triggerDescription) }
-                detailedReqDict["trigger"] = AnyCodable(triggerDict)
-            }
-            if let condResults = execLog.conditionResults {
-                detailedReqDict["conditions"] = AnyCodable(condResults.map { AnyCodable(["description": AnyCodable($0.conditionDescription), "passed": AnyCodable($0.passed)] as [String: AnyCodable]) })
-            }
-            if let data = try? encoder.encode(detailedReqDict), let json = String(data: data, encoding: .utf8) {
-                detailedRequest = json
-            }
-        }
-
-        let logEntry = StateChangeLog(
-            id: UUID(),
-            timestamp: Date(),
-            deviceId: workflow.id.uuidString,
-            deviceName: workflow.name,
-            serviceName: execLog.triggerEvent?.deviceName,
-            characteristicType: "workflow",
-            oldValue: nil,
-            newValue: AnyCodable(execLog.status.rawValue),
-            category: category,
-            errorDetails: execLog.errorMessage,
-            requestBody: requestBody,
-            responseBody: responseBody,
-            detailedRequestBody: detailedRequest
-        )
-        await loggingService.logEntry(logEntry)
+        // Workflow execution details are tracked by ExecutionLogService;
+        // no duplicate entry needed in the main StateChangeLog stream.
     }
 
     // MARK: - Block Execution (Recursive)
@@ -1306,15 +1218,9 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
         AppLogger.workflow.warning("[\(workflowName)] Orphaned reference in \(location): \(deviceDesc)")
 
-        let logEntry = StateChangeLog(
-            id: UUID(),
-            timestamp: Date(),
-            deviceId: workflowId.uuidString,
-            deviceName: workflowName,
-            characteristicType: "orphan-detection",
-            oldValue: nil,
-            newValue: nil,
-            category: .workflowError,
+        let logEntry = StateChangeLog.workflowError(
+            workflowId: workflowId.uuidString,
+            workflowName: workflowName,
             errorDetails: errorDetails
         )
         await loggingService.logEntry(logEntry)

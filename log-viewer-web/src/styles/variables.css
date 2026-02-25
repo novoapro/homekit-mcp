@@ -18,15 +18,15 @@
   --status-warning: #FF9500;
   --status-running: #007AFF;
 
-  /* Category colors */
+  /* Category colors (distinct palette) */
   --color-state-change: #FF9500;
   --color-mcp: #30D5C8;
   --color-rest: #5856D6;
-  --color-webhook: #30D5C8;
+  --color-webhook: #007AFF;
   --color-error: #FF3B30;
-  --color-workflow: #FF9500;
-  --color-scene: #FF9500;
-  --color-backup: #FF9500;
+  --color-workflow: #AF52DE;
+  --color-scene: #FF2D55;
+  --color-backup: #8E8E93;
 
   /* Depth colors (for nested block visualization) */
   --depth-0: #FF9500;
@@ -38,6 +38,7 @@
   /* Backgrounds */
   --bg-main: #F2F2F7;
   --bg-content: #FFFFFF;
+  --bg-card: #FFFFFF;
   --bg-detail: #F2F2F7;
   --bg-chip-inactive: #F2F2F7;
   --bg-pill: #E8E8ED;
@@ -45,14 +46,21 @@
   --bg-hover: rgba(0, 0, 0, 0.04);
   --bg-overlay: rgba(0, 0, 0, 0.3);
 
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-blur: 20px;
+
   /* Borders */
   --border-color: rgba(0, 0, 0, 0.08);
   --border-color-strong: rgba(0, 0, 0, 0.15);
 
   /* Shadows */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.12);
-  --shadow-header: 0 1px 0 rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.1);
+  --shadow-dropdown: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-header: none;
+  --shadow-bottom-bar: 0 -1px 0 rgba(0, 0, 0, 0.06), 0 -4px 16px rgba(0, 0, 0, 0.04);
 
   /* Spacing */
   --spacing-xs: 4px;
@@ -60,12 +68,15 @@
   --spacing-md: 16px;
   --spacing-lg: 24px;
   --spacing-xl: 32px;
+  --spacing-2xl: 40px;
+  --spacing-3xl: 56px;
 
-  /* Border radius */
-  --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  /* Border radius (larger, more rounded) */
+  --radius-xs: 6px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
   --radius-full: 9999px;
 
   /* Typography */
@@ -76,8 +87,9 @@
   --font-size-sm: 13px;
   --font-size-base: 15px;
   --font-size-lg: 17px;
-  --font-size-xl: 20px;
-  --font-size-2xl: 24px;
+  --font-size-xl: 22px;
+  --font-size-2xl: 28px;
+  --font-size-3xl: 34px;
 
   --font-weight-regular: 400;
   --font-weight-medium: 500;
@@ -88,6 +100,24 @@
   --transition-fast: 150ms ease-out;
   --transition-normal: 200ms ease-in-out;
   --transition-spring: 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Animation timing tokens */
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
+  --duration-page: 400ms;
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+
+  /* Touch targets */
+  --touch-target-min: 44px;
+
+  /* Card spacing */
+  --card-padding: 14px;
+  --card-gap: 10px;
 }
 
 /* Dark mode */
@@ -98,6 +128,7 @@
 
   --bg-main: #000000;
   --bg-content: #1C1C1E;
+  --bg-card: #1C1C1E;
   --bg-detail: #2C2C2E;
   --bg-chip-inactive: #2C2C2E;
   --bg-pill: #3A3A3C;
@@ -105,12 +136,17 @@
   --bg-hover: rgba(255, 255, 255, 0.06);
   --bg-overlay: rgba(0, 0, 0, 0.5);
 
+  --glass-bg: rgba(28, 28, 30, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.08);
+
   --border-color: rgba(255, 255, 255, 0.08);
   --border-color-strong: rgba(255, 255, 255, 0.15);
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --shadow-header: 0 1px 0 rgba(255, 255, 255, 0.08);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-card-hover: 0 2px 8px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.25);
+  --shadow-dropdown: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-header: none;
+  --shadow-bottom-bar: 0 -1px 0 rgba(255, 255, 255, 0.06), 0 -4px 16px rgba(0, 0, 0, 0.2);
 }
 
 /* Auto dark mode from system preference */
@@ -122,6 +158,7 @@
 
     --bg-main: #000000;
     --bg-content: #1C1C1E;
+    --bg-card: #1C1C1E;
     --bg-detail: #2C2C2E;
     --bg-chip-inactive: #2C2C2E;
     --bg-pill: #3A3A3C;
@@ -129,11 +166,16 @@
     --bg-hover: rgba(255, 255, 255, 0.06);
     --bg-overlay: rgba(0, 0, 0, 0.5);
 
+    --glass-bg: rgba(28, 28, 30, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.08);
+
     --border-color: rgba(255, 255, 255, 0.08);
     --border-color-strong: rgba(255, 255, 255, 0.15);
 
-    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.4);
-    --shadow-header: 0 1px 0 rgba(255, 255, 255, 0.08);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-card-hover: 0 2px 8px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.25);
+    --shadow-dropdown: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+    --shadow-header: none;
+    --shadow-bottom-bar: 0 -1px 0 rgba(255, 255, 255, 0.06), 0 -4px 16px rgba(0, 0, 0, 0.2);
   }
 }

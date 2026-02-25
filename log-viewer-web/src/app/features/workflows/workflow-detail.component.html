@@ -1,4 +1,4 @@
-<div class="detail-page">
+<div class="detail-page" [appPullToRefresh]="onPullRefresh">
   <!-- Back button -->
   <button class="back-btn" (click)="goBack()">
     <app-icon name="chevron-down" [size]="14" />
@@ -54,8 +54,8 @@
         }
       </div>
       @if (l.errorMessage) {
-        <div class="error-message">
-          <app-icon name="exclamation-circle-fill" [size]="14" />
+        <div class="outcome-message" [class.error]="l.status === 'failure'" [class.success]="l.status === 'success'" [class.cancelled]="l.status === 'cancelled'">
+          <app-icon [name]="l.status === 'success' ? 'checkmark-circle-fill' : l.status === 'cancelled' ? 'minus-circle-fill' : 'exclamation-circle-fill'" [size]="14" />
           <span>{{ l.errorMessage }}</span>
         </div>
       }

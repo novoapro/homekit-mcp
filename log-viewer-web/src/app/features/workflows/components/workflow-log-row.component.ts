@@ -9,15 +9,15 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
   standalone: true,
   imports: [IconComponent, StatusBadgeComponent, DurationPipe],
   template: `
-    <div class="workflow-row">
+    <div class="workflow-card" [style.animation-delay.ms]="index() * 30">
       <!-- Status icon -->
       <div class="status-icon" [style.color]="statusColor()">
         @if (log().status === 'running') {
           <span class="animate-pulse">
-            <app-icon name="bolt-circle-fill" [size]="28" />
+            <app-icon name="bolt-circle-fill" [size]="32" />
           </span>
         } @else {
-          <app-icon name="bolt-circle-fill" [size]="28" />
+          <app-icon name="bolt-circle-fill" [size]="32" />
         }
       </div>
 
@@ -33,7 +33,7 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
         <div class="meta-row">
           <span class="step-count">{{ log().blockResults.length }} steps</span>
           @if (log().errorMessage) {
-            <span class="error-text">{{ log().errorMessage }}</span>
+            <span class="message-text" [class.error]="log().status === 'failure'" [class.success]="log().status === 'success'" [class.cancelled]="log().status === 'cancelled'">{{ log().errorMessage }}</span>
           }
         </div>
       </div>
@@ -55,18 +55,25 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
     </div>
   `,
   styles: [`
-    .workflow-row {
+    :host {
+      display: block;
+      padding: 0 var(--spacing-sm);
+      animation: cardEnter 350ms cubic-bezier(0, 0, 0.2, 1) backwards;
+    }
+    .workflow-card {
       display: flex;
       align-items: flex-start;
       gap: var(--spacing-sm);
-      padding: var(--spacing-sm) var(--spacing-md);
-      background: var(--bg-content);
-      border-bottom: 1px solid var(--border-color);
+      padding: var(--card-padding);
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-card);
+      margin-bottom: var(--card-gap);
       cursor: pointer;
-      transition: background var(--transition-fast);
+      transition: box-shadow 150ms ease-out, transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .workflow-row:hover {
-      background: var(--bg-hover);
+    .workflow-card:active {
+      transform: scale(0.985);
     }
     .status-icon {
       flex-shrink: 0;
@@ -104,12 +111,21 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
       font-size: var(--font-size-xs);
       color: var(--text-tertiary);
     }
-    .error-text {
+    .message-text {
       font-size: var(--font-size-xs);
-      color: var(--status-error);
+      color: var(--text-secondary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .message-text.error {
+      color: var(--status-error);
+    }
+    .message-text.success {
+      color: var(--status-active);
+    }
+    .message-text.cancelled {
+      color: var(--status-warning);
     }
     .time-col {
       display: flex;
@@ -132,8 +148,12 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
       padding-top: 6px;
     }
     @media (max-width: 768px) {
-      .workflow-row {
-        padding: var(--spacing-xs) var(--spacing-sm);
+      :host {
+        padding: 0 var(--spacing-xs);
+      }
+      .workflow-card {
+        padding: 12px;
+        border-radius: var(--radius-sm);
         gap: var(--spacing-xs);
       }
       .workflow-name {
@@ -155,6 +175,7 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
 })
 export class WorkflowLogRowComponent {
   log = input.required<WorkflowExecutionLog>();
+  index = input(0);
 
   readonly statusColor = computed(() => {
     const map: Record<string, string> = {

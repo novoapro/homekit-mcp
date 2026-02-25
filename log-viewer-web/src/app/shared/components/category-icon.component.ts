@@ -27,7 +27,7 @@ import { LogCategory, CATEGORY_META } from '../../core/models/state-change-log.m
 })
 export class CategoryIconComponent {
   category = input.required<LogCategory>();
-  size = input(28);
+  size = input(32);
 
   readonly iconSize = computed(() => Math.round(this.size() * 0.52));
 
@@ -36,8 +36,6 @@ export class CategoryIconComponent {
   });
 
   readonly bgColor = computed(() => {
-    // We use an approach to convert to rgba with 0.15 opacity
-    // Since CSS variables, we replicate this as a lighter tint
     return `color-mix(in srgb, ${CATEGORY_META[this.category()]?.color || 'var(--tint-main)'} 15%, transparent)`;
   });
 

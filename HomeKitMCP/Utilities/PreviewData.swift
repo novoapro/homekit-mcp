@@ -86,10 +86,8 @@ enum PreviewData {
     // MARK: - Logs (All 8 StateChangeLog types)
 
     static let sampleLogs: [StateChangeLog] = [
-        // 1. State Change: Device characteristic changed
-        StateChangeLog(
-            id: UUID(),
-            timestamp: Date().addingTimeInterval(-20),
+        // 1. State Change
+        .stateChange(
             deviceId: "device-1",
             deviceName: "Living Room Light",
             serviceId: "service-1",
@@ -99,40 +97,24 @@ enum PreviewData {
             newValue: AnyCodable(true)
         ),
 
-        // 2. MCP Call: Tool invocation (successful)
-        StateChangeLog(
-            id: UUID(),
-            timestamp: Date().addingTimeInterval(-80),
-            deviceId: "mcp",
-            deviceName: "MCP Server",
-            characteristicType: "tools/call",
-            oldValue: nil,
-            newValue: nil,
-            category: .mcpCall,
-            requestBody: "method: tools/call | tool: control_device | args: {device_id=device-1}",
-            responseBody: "✓ Successfully set Power to true",
-            detailedRequestBody: "{\"method\":\"tools/call\",\"params\":{\"name\":\"control_device\",\"arguments\":{\"device_id\":\"device-1\",\"value\":true}}}"
+        // 2. MCP Call
+        .mcpCall(
+            method: "tools/call",
+            summary: "method: tools/call | tool: control_device | args: {device_id=device-1}",
+            result: "Successfully set Power to true",
+            detailedRequest: "{\"method\":\"tools/call\",\"params\":{\"name\":\"control_device\",\"arguments\":{\"device_id\":\"device-1\",\"value\":true}}}"
         ),
 
-        // 3. REST API: GET request (successful)
-        StateChangeLog(
-            id: UUID(),
-            timestamp: Date().addingTimeInterval(-140),
-            deviceId: "rest",
-            deviceName: "REST API",
-            characteristicType: "GET /devices",
-            oldValue: nil,
-            newValue: nil,
-            category: .restCall,
-            requestBody: "GET /devices",
-            responseBody: "200 OK - 3 devices returned",
-            detailedRequestBody: "Client: 192.168.1.100\nUser-Agent: curl/8.0\nContent-Type: -\nURL: GET /devices"
+        // 3. REST Call
+        .restCall(
+            method: "GET /devices",
+            summary: "GET /devices",
+            result: "200 OK - 3 devices returned",
+            detailedRequest: "Client: 192.168.1.100\nUser-Agent: curl/8.0\nContent-Type: -\nURL: GET /devices"
         ),
 
-        // 4. Webhook Call: External service notification (successful)
-        StateChangeLog(
-            id: UUID(),
-            timestamp: Date().addingTimeInterval(-200),
+        // 4. Webhook Call
+        .webhookCall(
             deviceId: "webhook-1",
             deviceName: "Living Room Light",
             serviceId: "service-1",
@@ -140,15 +122,12 @@ enum PreviewData {
             characteristicType: "00000025-0000-1000-8000-0026BB765291",
             oldValue: AnyCodable(false),
             newValue: AnyCodable(true),
-            category: .webhookCall,
-            requestBody: "POST https://example.com/webhook - Power changed to ON",
-            responseBody: "HTTP 200 OK"
+            summary: "POST https://example.com/webhook - Power changed to ON",
+            result: "HTTP 200 OK"
         ),
 
-        // 5. Webhook Error: Failed to send to external service
-        StateChangeLog(
-            id: UUID(),
-            timestamp: Date().addingTimeInterval(-320),
+        // 5. Webhook Error
+        .webhookError(
             deviceId: "webhook-error",
             deviceName: "Bedroom Light",
             serviceId: "service-1",
@@ -156,24 +135,13 @@ enum PreviewData {
             characteristicType: "00000025-0000-1000-8000-0026BB765291",
             oldValue: AnyCodable(true),
             newValue: AnyCodable(false),
-            category: .webhookError,
-            errorDetails: "Failed after 3 retries: Connection timeout",
-            requestBody: "POST https://webhook.example.com/notify - Power changed",
-            responseBody: "⚠ Connection timeout after 30s"
+            summary: "POST https://webhook.example.com/notify - Power changed",
+            result: "Connection timeout after 30s",
+            errorDetails: "Failed after 3 retries: Connection timeout"
         ),
 
-        // 6. Server Error: MCP server internal error
-        StateChangeLog(
-            id: UUID(),
-            timestamp: Date().addingTimeInterval(-420),
-            deviceId: "server",
-            deviceName: "MCP Server",
-            characteristicType: "server",
-            oldValue: nil,
-            newValue: nil,
-            category: .serverError,
-            errorDetails: "JSON parsing failed: Unexpected token in request body"
-        )
+        // 6. Server Error
+        .serverError(errorDetails: "JSON parsing failed: Unexpected token in request body")
     ]
 
     // MARK: - Scenes

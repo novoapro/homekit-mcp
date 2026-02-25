@@ -7,11 +7,12 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
 import { ConditionTreeComponent } from './components/condition-tree.component';
 import { BlockTreeComponent } from './components/block-tree.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
+import { PullToRefreshDirective } from '../../shared/directives/pull-to-refresh.directive';
 
 @Component({
   selector: 'app-workflow-detail',
   standalone: true,
-  imports: [IconComponent, StatusBadgeComponent, ConditionTreeComponent, BlockTreeComponent, DurationPipe],
+  imports: [IconComponent, StatusBadgeComponent, ConditionTreeComponent, BlockTreeComponent, DurationPipe, PullToRefreshDirective],
   templateUrl: './workflow-detail.component.html',
   styleUrl: './workflow-detail.component.css',
 })
@@ -62,7 +63,15 @@ export class WorkflowDetailComponent implements OnInit {
     };
   });
 
+  onPullRefresh = (): void => {
+    this.loadDetail();
+  };
+
   ngOnInit(): void {
+    this.loadDetail();
+  }
+
+  private loadDetail(): void {
     const workflowId = this.route.snapshot.paramMap.get('workflowId')!;
     const logId = this.route.snapshot.paramMap.get('logId')!;
 

@@ -2,11 +2,12 @@ import { Component, input, output, signal, computed, HostListener } from '@angul
 import { FormsModule } from '@angular/forms';
 import { LogCategory, CATEGORY_META } from '../../../core/models/state-change-log.model';
 import { IconComponent } from '../../../shared/components/icon.component';
+import { FilterSheetComponent } from './filter-sheet.component';
 
 @Component({
   selector: 'app-filter-bar',
   standalone: true,
-  imports: [FormsModule, IconComponent],
+  imports: [FormsModule, IconComponent, FilterSheetComponent],
   templateUrl: './filter-bar.component.html',
   styleUrl: './filter-bar.component.css',
 })
@@ -24,6 +25,7 @@ export class FilterBarComponent {
 
   showCategoryDropdown = signal(false);
   showDeviceDropdown = signal(false);
+  sheetOpen = signal(false);
   dateFrom = signal<string>('');
   dateTo = signal<string>('');
   localSearch = '';
@@ -37,6 +39,14 @@ export class FilterBarComponent {
       this.searchText() !== '' ||
       this.dateFrom() !== '' ||
       this.dateTo() !== '';
+  });
+
+  readonly activeFilterCount = computed(() => {
+    let count = 0;
+    count += this.selectedCategories().size;
+    count += this.selectedDevices().size;
+    if (this.dateFrom() || this.dateTo()) count++;
+    return count;
   });
 
   readonly categoryLabel = computed(() => {
@@ -93,6 +103,14 @@ export class FilterBarComponent {
     this.dateTo.set('');
     this.localSearch = '';
     this.clearAll.emit();
+  }
+
+  openSheet(): void {
+    this.sheetOpen.set(true);
+  }
+
+  closeSheet(): void {
+    this.sheetOpen.set(false);
   }
 
   readonly isAnyDropdownOpen = computed(() => this.showCategoryDropdown() || this.showDeviceDropdown());

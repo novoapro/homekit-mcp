@@ -44,9 +44,7 @@ actor LoggingService: LoggingServiceProtocol {
     }
 
     func log(_ change: StateChange) {
-        let entry = StateChangeLog(
-            id: UUID(),
-            timestamp: Date(),
+        let entry = StateChangeLog.stateChange(
             deviceId: change.deviceId,
             deviceName: change.deviceName,
             serviceId: change.serviceId,

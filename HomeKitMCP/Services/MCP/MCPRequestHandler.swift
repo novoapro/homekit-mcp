@@ -1100,18 +1100,11 @@ class MCPRequestHandler {
             }
         }
 
-        let entry = StateChangeLog(
-            id: UUID(),
-            timestamp: Date(),
-            deviceId: "mcp",
-            deviceName: "MCP Server",
-            characteristicType: method,
-            oldValue: nil,
-            newValue: nil,
-            category: .mcpCall,
-            requestBody: request,
-            responseBody: response,
-            detailedRequestBody: detailedReq
+        let entry = StateChangeLog.mcpCall(
+            method: method,
+            summary: request,
+            result: response,
+            detailedRequest: detailedReq
         )
         await loggingService.logEntry(entry)
     }

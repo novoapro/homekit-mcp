@@ -84,9 +84,7 @@ actor WebhookService: WebhookServiceProtocol {
 
             statusSubject.send(.lastSuccess(date: Date()))
 
-            let logEntry = StateChangeLog(
-                id: UUID(),
-                timestamp: Date(),
+            let logEntry = StateChangeLog.webhookCall(
                 deviceId: payload.deviceId,
                 deviceName: deviceName,
                 serviceId: payload.serviceId,
@@ -94,10 +92,9 @@ actor WebhookService: WebhookServiceProtocol {
                 characteristicType: payload.characteristicType,
                 oldValue: payload.oldValue,
                 newValue: payload.newValue,
-                category: .webhookCall,
-                requestBody: "POST \(deviceName) (\(payload.characteristicName))",
-                responseBody: "HTTP \(httpResponse.statusCode) OK",
-                detailedRequestBody: detailedPayloadJSON(payload)
+                summary: "POST \(deviceName) (\(payload.characteristicName))",
+                result: "HTTP \(httpResponse.statusCode) OK",
+                detailedRequest: detailedPayloadJSON(payload)
             )
             await loggingService.logEntry(logEntry)
         } catch {
@@ -109,9 +106,7 @@ actor WebhookService: WebhookServiceProtocol {
                 let errorDesc = error.localizedDescription
                 statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
 
-                let logEntry = StateChangeLog(
-                    id: UUID(),
-                    timestamp: Date(),
+                let logEntry = StateChangeLog.webhookError(
                     deviceId: payload.deviceId,
                     deviceName: deviceName,
                     serviceId: payload.serviceId,
@@ -119,11 +114,10 @@ actor WebhookService: WebhookServiceProtocol {
                     characteristicType: payload.characteristicType,
                     oldValue: payload.oldValue,
                     newValue: payload.newValue,
-                    category: .webhookError,
+                    summary: "POST \(deviceName) (\(payload.characteristicName))",
+                    result: errorDesc,
                     errorDetails: "Failed after \(maxRetries) retries: \(errorDesc)",
-                    requestBody: "POST \(deviceName) (\(payload.characteristicName))",
-                    responseBody: errorDesc,
-                    detailedRequestBody: detailedPayloadJSON(payload)
+                    detailedRequest: detailedPayloadJSON(payload)
                 )
                 await loggingService.logEntry(logEntry)
             }
@@ -141,19 +135,14 @@ actor WebhookService: WebhookServiceProtocol {
                 let errorDesc = "HTTP \(statusCode)"
                 statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
 
-                let logEntry = StateChangeLog(
-                    id: UUID(),
-                    timestamp: Date(),
+                let logEntry = StateChangeLog.webhookError(
                     deviceId: "test",
                     deviceName: "Test Device",
                     characteristicType: "test",
-                    oldValue: nil,
-                    newValue: nil,
-                    category: .webhookError,
+                    summary: "POST Test Device (Test)",
+                    result: errorDesc,
                     errorDetails: "Test webhook failed: \(errorDesc)",
-                    requestBody: "POST Test Device (Test)",
-                    responseBody: errorDesc,
-                    detailedRequestBody: detailedPayloadJSON(payload)
+                    detailedRequest: detailedPayloadJSON(payload)
                 )
                 await loggingService.logEntry(logEntry)
 
@@ -162,18 +151,13 @@ actor WebhookService: WebhookServiceProtocol {
 
             statusSubject.send(.lastSuccess(date: Date()))
 
-            let logEntry = StateChangeLog(
-                id: UUID(),
-                timestamp: Date(),
+            let logEntry = StateChangeLog.webhookCall(
                 deviceId: "test",
                 deviceName: "Test Device",
                 characteristicType: "test",
-                oldValue: nil,
-                newValue: nil,
-                category: .webhookCall,
-                requestBody: "POST Test Device (Test)",
-                responseBody: "HTTP \(httpResponse.statusCode) OK",
-                detailedRequestBody: detailedPayloadJSON(payload)
+                summary: "POST Test Device (Test)",
+                result: "HTTP \(httpResponse.statusCode) OK",
+                detailedRequest: detailedPayloadJSON(payload)
             )
             await loggingService.logEntry(logEntry)
 
@@ -182,19 +166,14 @@ actor WebhookService: WebhookServiceProtocol {
             let errorDesc = error.localizedDescription
             statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
 
-            let logEntry = StateChangeLog(
-                id: UUID(),
-                timestamp: Date(),
+            let logEntry = StateChangeLog.webhookError(
                 deviceId: "test",
                 deviceName: "Test Device",
                 characteristicType: "test",
-                oldValue: nil,
-                newValue: nil,
-                category: .webhookError,
+                summary: "POST Test Device (Test)",
+                result: errorDesc,
                 errorDetails: "Test webhook failed: \(errorDesc)",
-                requestBody: "POST Test Device (Test)",
-                responseBody: errorDesc,
-                detailedRequestBody: detailedPayloadJSON(payload)
+                detailedRequest: detailedPayloadJSON(payload)
             )
             await loggingService.logEntry(logEntry)
 

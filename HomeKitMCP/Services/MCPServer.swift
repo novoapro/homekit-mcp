@@ -1008,18 +1008,11 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                 URL: \(method) \(path)\(query)
                 """
             }
-            let entry = StateChangeLog(
-                id: UUID(),
-                timestamp: Date(),
-                deviceId: "rest",
-                deviceName: "REST API",
-                characteristicType: "\(method) \(path)",
-                oldValue: nil,
-                newValue: nil,
-                category: .restCall,
-                requestBody: "\(method) \(path)",
-                responseBody: "\(statusCode) \(resultSummary)",
-                detailedRequestBody: detailedReq
+            let entry = StateChangeLog.restCall(
+                method: "\(method) \(path)",
+                summary: "\(method) \(path)",
+                result: "\(statusCode) \(resultSummary)",
+                detailedRequest: detailedReq
             )
             await loggingService.logEntry(entry)
         }
@@ -1027,17 +1020,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
     private func logServerError(_ message: String) {
         Task {
-            let entry = StateChangeLog(
-                id: UUID(),
-                timestamp: Date(),
-                deviceId: "system",
-                deviceName: "MCP Server",
-                characteristicType: "server",
-                oldValue: nil,
-                newValue: nil,
-                category: .serverError,
-                errorDetails: message
-            )
+            let entry = StateChangeLog.serverError(errorDetails: message)
             await loggingService.logEntry(entry)
         }
     }

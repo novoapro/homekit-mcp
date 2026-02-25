@@ -6,41 +6,36 @@ struct LogRow: View {
 
     @State private var isExpanded = false
 
-    private var isError: Bool {
-        log.category == .webhookError || log.category == .serverError
-    }
-
-    private var isMCP: Bool {
-        log.category == .mcpCall
-    }
-
-    private var isREST: Bool {
-        log.category == .restCall
-    }
-
-    private var isWebhookCall: Bool {
-        log.category == .webhookCall
-    }
-
     private var hasDetailedData: Bool {
         log.detailedRequestBody != nil
     }
 
-    /// Tint color for the log category icon background.
     private var categoryColor: Color {
-        if isError { return Theme.Status.error }
-        if isMCP { return Color.teal }
-        if isREST { return Color.indigo }
-        if isWebhookCall { return Theme.Tint.secondary }
-        if log.category == .workflowExecution { return Theme.Status.active }
-        if log.category == .workflowError { return Theme.Status.error }
-        if log.category == .backupRestore { return Color.orange }
-        return Theme.Tint.main
+        switch log.payload {
+        case .stateChange: return Theme.Tint.main
+        case .mcpCall: return Color.teal
+        case .restCall: return Color.indigo
+        case .webhookCall: return Theme.Tint.secondary
+        case .webhookError, .serverError, .sceneError: return Theme.Status.error
+        case .workflowError(let p):
+            return returnOutcomeColor(p.returnOutcome) ?? Theme.Status.error
+        case .workflowExecution: return Theme.Status.active
+        case .sceneExecution: return Theme.Tint.main
+        case .backupRestore: return Color.orange
+        }
+    }
+
+    private func returnOutcomeColor(_ outcome: String?) -> Color? {
+        switch outcome {
+        case "success": return Theme.Status.active
+        case "cancelled": return Theme.Status.warning
+        default: return nil
+        }
     }
 
     var body: some View {
         HStack(alignment: isExpanded ? .firstTextBaseline : .center, spacing: 10) {
-            // Column 1: Circular icon indicator (28x28, matching Home app style)
+            // Column 1: Category icon
             ZStack {
                 Circle()
                     .fill(categoryColor.opacity(0.15))
@@ -51,38 +46,17 @@ struct LogRow: View {
                     .foregroundColor(categoryColor)
             }
 
-            // Column 2: Header row + subheader and content rows
+            // Column 2: Content
             VStack(alignment: .leading, spacing: 4) {
-                // Header row: device name + service badge
-                HStack(alignment: .center, spacing: 8) {
-                    Text(log.deviceName)
-                        .font(.headline)
-                        .foregroundColor(Theme.Text.primary)
-
-                    if let serviceName = log.serviceName, !isMCP && !isREST {
-                        Text(serviceName)
-                            .font(.footnote)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Theme.Tint.main.opacity(0.1))
-                            .foregroundColor(Theme.Tint.main)
-                            .cornerRadius(4)
-                    }
-
-                    Spacer()
-                }
-
-                // Subheader and content rows
+                headerRow
                 contentSection
 
-                // Expandable detail section
                 if detailedLogsEnabled && hasDetailedData && isExpanded {
                     detailSection
                 }
             }
 
-            // Column 3: Time of execution
+            // Column 3: Time
             Text(log.timestamp, style: .time)
                 .font(.footnote)
                 .foregroundColor(Theme.Text.secondary)
@@ -103,31 +77,102 @@ struct LogRow: View {
         .modifier(ExpandableTapModifier(isExpandable: detailedLogsEnabled && hasDetailedData, isExpanded: $isExpanded))
         .contextMenu {
             Button {
-                let text = "\(log.deviceName) — \(log.characteristicType) — \(log.timestamp)"
-                UIPasteboard.general.string = text
+                UIPasteboard.general.string = "\(log.deviceName) — \(log.characteristicType) — \(log.timestamp)"
             } label: {
                 Label("Copy Log Entry", systemImage: "doc.on.doc")
             }
         }
     }
 
+    // MARK: - Header
+
+    @ViewBuilder
+    private var headerRow: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text(log.deviceName)
+                .font(.headline)
+                .foregroundColor(Theme.Text.primary)
+
+            // Service badge for device-related categories
+            switch log.payload {
+            case .stateChange(let p):
+                if let serviceName = p.serviceName {
+                    serviceBadge(serviceName)
+                }
+            case .webhookCall(let p):
+                if let serviceName = p.serviceName {
+                    serviceBadge(serviceName)
+                }
+            case .webhookError(let p):
+                if let serviceName = p.serviceName {
+                    serviceBadge(serviceName)
+                }
+            case .workflowExecution(let p):
+                if let status = p.status {
+                    statusBadge(status)
+                }
+            case .workflowError(let p):
+                if let status = p.status {
+                    statusBadge(status)
+                }
+            default:
+                EmptyView()
+            }
+
+            Spacer()
+        }
+    }
+
+    private func serviceBadge(_ name: String) -> some View {
+        Text(name)
+            .font(.footnote)
+            .fontWeight(.semibold)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Theme.Tint.main.opacity(0.1))
+            .foregroundColor(Theme.Tint.main)
+            .cornerRadius(4)
+    }
+
+    private func statusBadge(_ status: String) -> some View {
+        let color: Color = switch status {
+        case "success": Theme.Status.active
+        case "cancelled": Theme.Status.warning
+        default: Theme.Status.error
+        }
+        return Text(status)
+            .font(.footnote)
+            .fontWeight(.semibold)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.1))
+            .foregroundColor(color)
+            .cornerRadius(4)
+    }
+
+    // MARK: - Category Icon
+
     @ViewBuilder
     private var categoryIconImage: some View {
-        switch log.category {
-        case .webhookError, .serverError, .sceneError:
-            Image(systemName: "exclamationmark.circle.fill")
+        switch log.payload {
+        case .stateChange:
+            Image(systemName: "bolt.circle.fill")
         case .mcpCall:
             Image(systemName: "arrow.left.arrow.right.circle.fill")
         case .restCall:
             Image(systemName: "link.circle.fill")
         case .webhookCall:
             Image(systemName: "paperplane.circle.fill")
-        case .stateChange:
-            Image(systemName: "bolt.circle.fill")
+        case .webhookError, .serverError, .sceneError:
+            Image(systemName: "exclamationmark.circle.fill")
+        case .workflowError(let p):
+            switch p.returnOutcome {
+            case "success": Image(systemName: "checkmark.circle.fill")
+            case "cancelled": Image(systemName: "minus.circle.fill")
+            default: Image(systemName: "exclamationmark.circle.fill")
+            }
         case .workflowExecution:
             Image(systemName: "bolt.circle.fill")
-        case .workflowError:
-            Image(systemName: "exclamationmark.circle.fill")
         case .sceneExecution:
             Image(systemName: "play.circle.fill")
         case .backupRestore:
@@ -135,136 +180,43 @@ struct LogRow: View {
         }
     }
 
-    // MARK: - Content
+    // MARK: - Content (typed payload pattern matching)
 
     @ViewBuilder
     private var contentSection: some View {
-        switch log.category {
-        case .mcpCall:
-            mcpContent
-        case .restCall:
-            restContent
-        case .webhookCall:
-            webhookContent
-        case .webhookError, .serverError, .sceneError:
-            errorContent
-        case .stateChange:
-            stateChangeContent
-        case .workflowExecution:
-            workflowContent
-        case .workflowError:
-            workflowContent
-        case .sceneExecution:
-            stateChangeContent
-        case .backupRestore:
-            backupRestoreContent
+        switch log.payload {
+        case .stateChange(let p):
+            stateChangeContent(p)
+        case .mcpCall(let p):
+            apiCallContent(p, color: Color.teal)
+        case .restCall(let p):
+            apiCallContent(p, color: Color.indigo)
+        case .webhookCall(let p):
+            webhookCallContent(p)
+        case .webhookError(let p):
+            webhookErrorContent(p)
+        case .serverError(let p):
+            errorContent(label: "Server Error", details: p.errorDetails)
+        case .workflowExecution(let p):
+            workflowContent(p, isError: false)
+        case .workflowError(let p):
+            workflowContent(p, isError: true)
+        case .sceneExecution(let p):
+            sceneContent(p)
+        case .sceneError(let p):
+            sceneErrorContent(p)
+        case .backupRestore(let p):
+            backupRestoreContent(p)
         }
     }
 
-    private var mcpContent: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if let requestBody = log.requestBody {
-                Text("→ \(requestBody)")
-                    .font(.footnote)
-                    .foregroundColor(Theme.Text.secondary)
-                    .lineLimit(2)
-            }
-            if let responseBody = log.responseBody {
-                Text("← \(responseBody)")
-                    .font(.footnote)
-                    .foregroundColor(Theme.Text.secondary)
-                    .lineLimit(2)
-            }
-        }
-    }
-
-    private var restContent: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(log.characteristicType)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(Color.indigo)
-
-            if let responseBody = log.responseBody {
-                Text("← \(responseBody)")
-                    .font(.footnote)
-                    .foregroundColor(Theme.Text.secondary)
-                    .lineLimit(2)
-            }
-        }
-    }
-
-    private var webhookContent: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if let requestBody = log.requestBody {
-                Text(requestBody)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(Theme.Tint.secondary)
-            }
-            if let responseBody = log.responseBody {
-                Text("← \(responseBody)")
-                    .font(.footnote)
-                    .foregroundColor(Theme.Text.secondary)
-            }
-        }
-    }
-
-    private var errorContent: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Text(log.category == .serverError ? "Server Error" : "Webhook Error")
-                    .font(.subheadline)
-                    .foregroundColor(Theme.Status.error)
-                Spacer()
-            }
-            if let errorDetails = log.errorDetails {
-                Text(errorDetails)
-                    .font(.footnote)
-                    .foregroundColor(Theme.Status.error)
-                    .lineLimit(3)
-            }
-        }
-    }
-
-    private var isWorkflowError: Bool {
-        log.category == .workflowError
-    }
-
-    private var workflowContent: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let requestBody = log.requestBody {
-                Text(requestBody)
-                    .font(.footnote)
-                    .foregroundColor(isWorkflowError ? Theme.Status.error : Theme.Text.secondary)
-            }
-            if let responseBody = log.responseBody {
-                Text(responseBody)
-                    .font(.system(.caption2, design: .monospaced))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var backupRestoreContent: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let errorDetails = log.errorDetails {
-                let isOrphan = log.characteristicType == "orphan-detection"
-                Text(errorDetails)
-                    .font(.footnote)
-                    .foregroundColor(isOrphan ? Theme.Status.error : Theme.Text.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var stateChangeContent: some View {
+    private func stateChangeContent(_ p: DeviceStatePayload) -> some View {
         HStack(spacing: 4) {
-            Text(CharacteristicTypes.displayName(for: log.characteristicType))
+            Text(CharacteristicTypes.displayName(for: p.characteristicType))
                 .font(.subheadline)
                 .foregroundColor(Theme.Text.secondary)
-            if let oldValue = log.oldValue {
-                Text(CharacteristicTypes.formatValue(oldValue.value, characteristicType: log.characteristicType))
+            if let oldValue = p.oldValue {
+                Text(CharacteristicTypes.formatValue(oldValue.value, characteristicType: p.characteristicType))
                     .font(.subheadline)
                     .foregroundColor(Theme.Text.secondary)
 
@@ -273,8 +225,8 @@ struct LogRow: View {
                     .foregroundColor(Theme.Text.secondary)
             }
 
-            if let newValue = log.newValue {
-                Text(CharacteristicTypes.formatValue(newValue.value, characteristicType: log.characteristicType))
+            if let newValue = p.newValue {
+                Text(CharacteristicTypes.formatValue(newValue.value, characteristicType: p.characteristicType))
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(Theme.Text.primary)
@@ -283,6 +235,118 @@ struct LogRow: View {
                     .font(.subheadline)
                     .foregroundColor(Theme.Text.secondary)
             }
+        }
+    }
+
+    private func apiCallContent(_ p: APICallPayload, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(p.method)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(color)
+
+            Text("← \(p.result)")
+                .font(.footnote)
+                .foregroundColor(Theme.Text.secondary)
+                .lineLimit(2)
+        }
+    }
+
+    private func webhookCallContent(_ p: WebhookLogPayload) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(p.summary)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(Theme.Tint.secondary)
+            Text("← \(p.result)")
+                .font(.footnote)
+                .foregroundColor(Theme.Text.secondary)
+        }
+    }
+
+    private func webhookErrorContent(_ p: WebhookLogPayload) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(p.summary)
+                .font(.subheadline)
+                .foregroundColor(Theme.Status.error)
+            if let errorDetails = p.errorDetails {
+                Text(errorDetails)
+                    .font(.footnote)
+                    .foregroundColor(Theme.Status.error)
+                    .lineLimit(3)
+            }
+        }
+    }
+
+    private func errorContent(label: String, details: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundColor(Theme.Status.error)
+                Spacer()
+            }
+            Text(details)
+                .font(.footnote)
+                .foregroundColor(Theme.Status.error)
+                .lineLimit(3)
+        }
+    }
+
+    private func workflowContent(_ p: WorkflowPayload, isError: Bool) -> some View {
+        let messageColor = returnOutcomeColor(p.returnOutcome) ?? (isError ? Theme.Status.error : Theme.Text.secondary)
+        return VStack(alignment: .leading, spacing: 4) {
+            if let triggerDescription = p.triggerDescription {
+                Text(triggerDescription)
+                    .font(.footnote)
+                    .foregroundColor(isError && p.returnOutcome == nil ? Theme.Status.error : Theme.Text.secondary)
+            }
+            if let blockSummary = p.blockSummary {
+                Text(blockSummary)
+                    .font(.system(.caption2, design: .monospaced))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let errorDetails = p.errorDetails {
+                Text(errorDetails)
+                    .font(.footnote)
+                    .foregroundColor(messageColor)
+                    .lineLimit(3)
+            }
+        }
+    }
+
+    private func sceneContent(_ p: ScenePayload) -> some View {
+        HStack(spacing: 4) {
+            if let summary = p.summary {
+                Text(summary)
+                    .font(.subheadline)
+                    .foregroundColor(Theme.Text.secondary)
+            }
+        }
+    }
+
+    private func sceneErrorContent(_ p: ScenePayload) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let summary = p.summary {
+                Text(summary)
+                    .font(.subheadline)
+                    .foregroundColor(Theme.Status.error)
+            }
+            if let errorDetails = p.errorDetails {
+                Text(errorDetails)
+                    .font(.footnote)
+                    .foregroundColor(Theme.Status.error)
+                    .lineLimit(3)
+            }
+        }
+    }
+
+    private func backupRestoreContent(_ p: BackupRestorePayload) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(p.summary)
+                .font(.footnote)
+                .foregroundColor(p.subtype == "orphan-detection" ? Theme.Status.error : Theme.Text.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -320,8 +384,6 @@ struct LogRow: View {
         }
     }
 
-    /// Conditionally adds a tap gesture for expandable rows.
-    /// When not expandable, no gesture is attached, allowing NavigationLink to handle taps.
     private struct ExpandableTapModifier: ViewModifier {
         let isExpandable: Bool
         @Binding var isExpanded: Bool
@@ -341,7 +403,6 @@ struct LogRow: View {
         }
     }
 
-    /// Attempts to pretty-print a JSON string; returns as-is if not valid JSON.
     private static func formatJSON(_ string: String) -> String {
         guard let data = string.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data),

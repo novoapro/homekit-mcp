@@ -6,6 +6,7 @@ import { FilterBarComponent } from './components/filter-bar.component';
 import { LogRowComponent } from './components/log-row.component';
 import { EmptyStateComponent } from '../../shared/components/empty-state.component';
 import { IconComponent } from '../../shared/components/icon.component';
+import { PullToRefreshDirective } from '../../shared/directives/pull-to-refresh.directive';
 
 interface LogGroup {
   date: string;
@@ -16,7 +17,7 @@ interface LogGroup {
 @Component({
   selector: 'app-logs',
   standalone: true,
-  imports: [FilterBarComponent, LogRowComponent, EmptyStateComponent, IconComponent],
+  imports: [FilterBarComponent, LogRowComponent, EmptyStateComponent, IconComponent, PullToRefreshDirective],
   templateUrl: './logs.component.html',
   styleUrl: './logs.component.css',
 })
@@ -151,6 +152,10 @@ export class LogsComponent implements OnInit, OnDestroy {
     this.dateTo.set(null);
     this.fetchWithFilters();
   }
+
+  onPullRefresh = (): void => {
+    this.fetchWithFilters();
+  };
 
   loadMore(): void {
     this.polling.loadMore(this.buildQueryParams());

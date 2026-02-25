@@ -24,10 +24,10 @@ export interface StateChangeLog {
   newValue?: any;
   category: LogCategory;
   errorDetails?: string;
+  returnOutcome?: string;
   requestBody?: string;
   responseBody?: string;
   detailedRequestBody?: string;
-  detailedResponseBody?: string;
 }
 
 export interface CategoryMeta {

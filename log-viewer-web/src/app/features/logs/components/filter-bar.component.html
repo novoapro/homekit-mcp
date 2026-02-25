@@ -1,7 +1,8 @@
+<!-- Desktop inline filters -->
 @if (isAnyDropdownOpen()) {
   <div class="dropdown-backdrop" (click)="closeDropdowns()"></div>
 }
-<div class="filter-bar" (click)="$event.stopPropagation()">
+<div class="filter-bar desktop-filters" (click)="$event.stopPropagation()">
   <!-- Category Filter -->
   <div class="filter-chip-wrapper">
     <button
@@ -98,3 +99,37 @@
     </button>
   }
 </div>
+
+<!-- Mobile filter bar -->
+<div class="mobile-filter-bar">
+  <div class="search-compact">
+    <app-icon name="magnifying-glass" [size]="14" />
+    <input
+      type="text"
+      placeholder="Search..."
+      [ngModel]="searchText()"
+      (ngModelChange)="onSearchInput($event)"
+    />
+  </div>
+  <button class="filter-trigger" [class.has-filters]="activeFilterCount() > 0" (click)="openSheet()">
+    <app-icon name="slider-horizontal" [size]="16" />
+    @if (activeFilterCount() > 0) {
+      <span class="filter-badge">{{ activeFilterCount() }}</span>
+    }
+  </button>
+</div>
+
+<!-- Filter Bottom Sheet (mobile) -->
+<app-filter-sheet
+  [isOpen]="sheetOpen()"
+  [availableDevices]="availableDevices()"
+  [selectedCategories]="selectedCategories()"
+  [selectedDevices]="selectedDevices()"
+  [searchText]="searchText()"
+  (closed)="closeSheet()"
+  (categoriesChange)="categoriesChange.emit($event)"
+  (devicesChange)="devicesChange.emit($event)"
+  (searchTextChange)="searchTextChange.emit($event)"
+  (dateRangeChange)="dateRangeChange.emit($event)"
+  (clearAll)="onClearAll()"
+/>

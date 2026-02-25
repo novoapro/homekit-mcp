@@ -1,3 +1,4 @@
+/* Desktop filter bar */
 .dropdown-backdrop {
   position: fixed;
   inset: 0;
@@ -5,7 +6,7 @@
   background: transparent;
 }
 
-.filter-bar {
+.desktop-filters {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -153,33 +154,83 @@
   background: color-mix(in srgb, var(--status-error) 10%, transparent);
 }
 
+/* Mobile filter bar */
+.mobile-filter-bar {
+  display: none;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-content);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.search-compact {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--bg-detail);
+  border-radius: var(--radius-full);
+  color: var(--text-tertiary);
+}
+
+.search-compact input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.search-compact input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.filter-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--bg-detail);
+  color: var(--text-secondary);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.filter-trigger.has-filters {
+  background: color-mix(in srgb, var(--tint-main) 15%, transparent);
+  color: var(--tint-main);
+}
+
+.filter-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--tint-main);
+  color: white;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Responsive: show/hide */
 @media (max-width: 768px) {
-  .filter-bar {
-    padding: var(--spacing-sm);
-    gap: 6px;
+  .desktop-filters {
+    display: none;
   }
-  .search-input-wrapper {
-    max-width: none;
-    min-width: 100%;
-    order: -1;
+  .dropdown-backdrop {
+    display: none;
   }
-  .date-range {
-    width: 100%;
-  }
-  .date-input {
-    flex: 1;
-    min-width: 0;
-  }
-  .filter-chip {
-    padding: 5px 10px;
-    font-size: var(--font-size-xs);
-  }
-  .dropdown {
-    position: fixed;
-    left: var(--spacing-sm);
-    right: var(--spacing-sm);
-    top: auto;
-    min-width: auto;
-    max-height: 50vh;
+  .mobile-filter-bar {
+    display: flex;
   }
 }

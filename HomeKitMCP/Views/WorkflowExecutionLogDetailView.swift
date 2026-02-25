@@ -77,7 +77,7 @@ struct WorkflowExecutionLogDetailView: View {
                     if let error = log.errorMessage {
                         Text(error)
                             .font(.subheadline)
-                            .foregroundColor(Theme.Status.error)
+                            .foregroundColor(statusColor(log.status))
                     }
 
                     if log.status == .running, onCancel != nil {
@@ -271,11 +271,11 @@ struct WorkflowExecutionLogDetailView: View {
                                 .foregroundColor(result.status == .running ? .blue : Theme.Text.secondary)
                         }
 
-                        // Error
+                        // Message (error, success, or cancelled)
                         if let error = result.errorMessage {
                             Text(error)
                                 .font(.footnote)
-                                .foregroundColor(Theme.Status.error)
+                                .foregroundColor(statusColor(result.status))
                         }
                     }
                 }

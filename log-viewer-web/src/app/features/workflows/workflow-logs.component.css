@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--bg-main);
 }
 
 .toolbar {
@@ -34,7 +35,7 @@
 }
 
 .workflow-select {
-  padding: 6px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--border-color-strong);
   border-radius: var(--radius-sm);
   background: var(--bg-main);
@@ -53,8 +54,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   transition: all var(--transition-fast);
@@ -80,23 +81,22 @@
   font-size: var(--font-size-sm);
 }
 
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-xl);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+/* Skeleton loading */
+.skeleton-list {
+  padding: var(--spacing-sm);
 }
 
-.loading-state app-icon {
-  animation: spin 1s linear infinite;
+.skeleton-card {
+  height: 80px;
+  margin-bottom: var(--card-gap);
+  border-radius: var(--radius-md);
 }
 
 .log-list {
   flex: 1;
   overflow-y: auto;
+  padding: var(--spacing-sm) 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (max-width: 768px) {
@@ -114,6 +114,12 @@
   .workflow-select {
     flex: 1;
     min-width: 0;
+  }
+  .skeleton-list {
+    padding: var(--spacing-xs);
+  }
+  .skeleton-card {
+    border-radius: var(--radius-sm);
   }
 }
 

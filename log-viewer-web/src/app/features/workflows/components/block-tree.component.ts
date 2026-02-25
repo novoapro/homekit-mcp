@@ -73,7 +73,7 @@ const DEPTH_COLORS = [
             <div class="block-detail">{{ result().detail }}</div>
           }
           @if (result().errorMessage) {
-            <div class="block-error">{{ result().errorMessage }}</div>
+            <div class="block-message" [class.error]="result().status === 'failure'" [class.success]="result().status === 'success'" [class.cancelled]="result().status === 'cancelled'">{{ result().errorMessage }}</div>
           }
         </div>
       </div>
@@ -143,10 +143,19 @@ const DEPTH_COLORS = [
       margin-top: 2px;
       line-height: 1.4;
     }
-    .block-error {
-      color: var(--status-error);
+    .block-message {
       margin-top: 2px;
       font-size: var(--font-size-xs);
+      color: var(--text-secondary);
+    }
+    .block-message.error {
+      color: var(--status-error);
+    }
+    .block-message.success {
+      color: var(--status-active);
+    }
+    .block-message.cancelled {
+      color: var(--status-warning);
     }
   `]
 })

@@ -131,6 +131,12 @@ import { Component, input } from '@angular/core';
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" opacity="0.25"/>
           <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
         }
+        @case ('menu') {
+          <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+        }
+        @case ('xmark') {
+          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+        }
         @default {
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
         }

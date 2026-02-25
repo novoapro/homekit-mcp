@@ -2,15 +2,19 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--bg-main);
 }
 
+/* Info bar with glassmorphism */
 .info-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-xs) var(--spacing-md);
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-content);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .log-count {
@@ -42,11 +46,26 @@
   border-bottom: 1px solid color-mix(in srgb, var(--status-error) 20%, transparent);
 }
 
+/* Skeleton loading */
+.skeleton-list {
+  padding: var(--spacing-sm);
+}
+
+.skeleton-card {
+  height: 72px;
+  margin-bottom: var(--card-gap);
+  border-radius: var(--radius-md);
+}
+
+/* Log list */
 .log-list {
   flex: 1;
   overflow-y: auto;
+  padding: var(--spacing-sm) 0;
+  -webkit-overflow-scrolling: touch;
 }
 
+/* Date group headers */
 .date-group {
   margin-bottom: 0;
 }
@@ -55,14 +74,16 @@
   position: sticky;
   top: 0;
   padding: var(--spacing-sm) var(--spacing-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
-  color: var(--text-primary);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   background: var(--bg-main);
-  border-bottom: 1px solid var(--border-color);
   z-index: 10;
 }
 
+/* Load more button */
 .load-more {
   padding: var(--spacing-lg);
   text-align: center;
@@ -72,11 +93,12 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 24px;
-  border-radius: var(--radius-sm);
+  padding: 12px 32px;
+  border-radius: var(--radius-full);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  background: var(--bg-pill);
+  font-weight: var(--font-weight-semibold);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
   color: var(--text-primary);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -84,7 +106,7 @@
 }
 
 .load-more-btn:hover:not(:disabled) {
-  filter: brightness(0.95);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .load-more-btn:disabled {
@@ -94,4 +116,13 @@
 
 .load-more-btn app-icon {
   animation: spin 1s linear infinite;
+}
+
+@media (max-width: 768px) {
+  .skeleton-list {
+    padding: var(--spacing-xs);
+  }
+  .skeleton-card {
+    border-radius: var(--radius-sm);
+  }
 }

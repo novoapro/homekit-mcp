@@ -102,16 +102,10 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
 
             AppLogger.scene.info("Scene executed successfully: \(sceneName)")
 
-            let logEntry = StateChangeLog(
-                id: UUID(),
-                timestamp: Date(),
-                deviceId: id,
-                deviceName: sceneName,
-                characteristicType: "scene_execution",
-                oldValue: nil,
-                newValue: AnyCodable(true),
-                category: .sceneExecution,
-                requestBody: "Execute scene: \(sceneName)"
+            let logEntry = StateChangeLog.sceneExecution(
+                sceneId: id,
+                sceneName: sceneName,
+                summary: "Execute scene: \(sceneName)"
             )
             await loggingService.logEntry(logEntry)
 
@@ -128,18 +122,11 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
         } catch {
             AppLogger.scene.error("Scene execution failed: \(sceneName) - \(error.localizedDescription)")
 
-            let logEntry = StateChangeLog(
-                id: UUID(),
-                timestamp: Date(),
-                deviceId: id,
-                deviceName: sceneName,
-                characteristicType: "scene_execution",
-                oldValue: nil,
-                newValue: AnyCodable(false),
-                category: .sceneError,
+            let logEntry = StateChangeLog.sceneError(
+                sceneId: id,
+                sceneName: sceneName,
                 errorDetails: error.localizedDescription,
-                requestBody: "Execute scene: \(sceneName)",
-                responseBody: "Error: \(error.localizedDescription)"
+                summary: "Execute scene: \(sceneName)"
             )
             await loggingService.logEntry(logEntry)
 
@@ -604,16 +591,13 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
                 hideRoomName: self.storage.readHideRoomName()
             )
 
-            let logEntry = StateChangeLog(
-                id: UUID(),
-                timestamp: Date(),
+            let logEntry = StateChangeLog.stateChange(
                 deviceId: deviceId,
                 deviceName: formattedName,
                 serviceName: serviceName,
                 characteristicType: characteristic.characteristicType,
                 oldValue: cachedValue.map { AnyCodable($0) },
-                newValue: newValue.map { AnyCodable($0) },
-                category: .stateChange
+                newValue: newValue.map { AnyCodable($0) }
             )
 
             // Translate to stable registry IDs for published StateChange
@@ -964,16 +948,12 @@ extension HomeKitManager: HMAccessoryDelegate {
                 hideRoomName: storage.readHideRoomName()
             )
 
-            let logEntry = StateChangeLog(
-                id: UUID(),
-                timestamp: Date(),
+            let logEntry = StateChangeLog.stateChange(
                 deviceId: accessory.uniqueIdentifier.uuidString,
                 deviceName: formattedName,
                 serviceName: ServiceTypes.displayName(for: service.serviceType),
                 characteristicType: characteristic.characteristicType,
-                oldValue: nil,
-                newValue: value.map { AnyCodable($0) },
-                category: .stateChange
+                newValue: value.map { AnyCodable($0) }
             )
 
             // Translate to stable registry IDs for published StateChange.

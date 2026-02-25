@@ -20,16 +20,18 @@ import { IconComponent } from './icon.component';
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: var(--spacing-xl) var(--spacing-lg);
+      padding: var(--spacing-2xl) var(--spacing-lg);
       min-height: 300px;
       text-align: center;
+      animation: cardEnter 350ms cubic-bezier(0, 0, 0.2, 1) forwards;
     }
     .icon-wrapper {
       color: var(--text-tertiary);
       margin-bottom: var(--spacing-md);
+      opacity: 0.6;
     }
     h3 {
-      font-size: var(--font-size-lg);
+      font-size: var(--font-size-xl);
       font-weight: var(--font-weight-semibold);
       color: var(--text-primary);
       margin-bottom: var(--spacing-xs);
@@ -38,6 +40,7 @@ import { IconComponent } from './icon.component';
       font-size: var(--font-size-sm);
       color: var(--text-secondary);
       max-width: 300px;
+      line-height: 1.5;
     }
   `]
 })

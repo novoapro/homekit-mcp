@@ -6,7 +6,7 @@ import { IconComponent } from '../../../shared/components/icon.component';
   standalone: true,
   imports: [IconComponent],
   template: `
-    <div class="detail-panel animate-fade-in">
+    <div class="detail-panel">
       @if (requestBody()) {
         <div class="detail-section">
           <div class="detail-header">
@@ -35,10 +35,12 @@ import { IconComponent } from '../../../shared/components/icon.component';
   `,
   styles: [`
     .detail-panel {
-      padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
-      padding-left: calc(var(--spacing-md) + 28px + var(--spacing-sm));
-      background: var(--bg-content);
-      border-bottom: 1px solid var(--border-color);
+      padding: var(--spacing-sm) var(--card-padding);
+      padding-left: calc(var(--card-padding) + 32px + var(--spacing-sm));
+      background: var(--bg-card);
+      border-radius: 0 0 var(--radius-md) var(--radius-md);
+      box-shadow: var(--shadow-card);
+      border-top: 1px solid var(--border-color);
     }
     .detail-section {
       margin-bottom: var(--spacing-sm);
@@ -87,6 +89,12 @@ import { IconComponent } from '../../../shared/components/icon.component';
       overflow-y: auto;
       line-height: 1.5;
       margin: 0;
+    }
+    @media (max-width: 768px) {
+      .detail-panel {
+        padding-left: var(--spacing-sm);
+        border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+      }
     }
   `]
 })

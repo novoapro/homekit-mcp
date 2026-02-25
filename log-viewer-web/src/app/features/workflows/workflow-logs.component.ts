@@ -6,11 +6,12 @@ import { Workflow, WorkflowExecutionLog } from '../../core/models/workflow-log.m
 import { WorkflowLogRowComponent } from './components/workflow-log-row.component';
 import { EmptyStateComponent } from '../../shared/components/empty-state.component';
 import { IconComponent } from '../../shared/components/icon.component';
+import { PullToRefreshDirective } from '../../shared/directives/pull-to-refresh.directive';
 
 @Component({
   selector: 'app-workflow-logs',
   standalone: true,
-  imports: [FormsModule, WorkflowLogRowComponent, EmptyStateComponent, IconComponent],
+  imports: [FormsModule, WorkflowLogRowComponent, EmptyStateComponent, IconComponent, PullToRefreshDirective],
   templateUrl: './workflow-logs.component.html',
   styleUrl: './workflow-logs.component.css',
 })
@@ -70,6 +71,10 @@ export class WorkflowLogsComponent implements OnInit {
   openDetail(log: WorkflowExecutionLog): void {
     this.router.navigate(['/workflows', log.workflowId, log.id]);
   }
+
+  onPullRefresh = (): void => {
+    this.loadLogs();
+  };
 
   refresh(): void {
     this.loadLogs();
