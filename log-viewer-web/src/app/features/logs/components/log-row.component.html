@@ -1,33 +1,55 @@
-<div class="log-card"
-     [class.expandable]="isExpandable()"
-     [class.error]="isError()"
-     [style.--accent-color]="categoryColor()"
-     [style.animation-delay.ms]="index() * 30"
-     (click)="toggle()">
-
+<div
+  class="log-card"
+  [class.expandable]="isExpandable()"
+  [class.error]="isError()"
+  [style.--accent-color]="categoryColor()"
+  [style.animation-delay.ms]="index() * 30"
+  (click)="toggle()"
+>
   <!-- Content -->
   <div class="content">
     <div class="header-row">
-      <app-category-icon [category]="log().category" [size]="32" />
-      <span class="device-name">{{ log().deviceName }}</span>
-      @if (workflowStatus(); as status) {
-        <span class="status-badge"
-              [style.color]="workflowStatusColor()"
-              [style.background-color]="workflowStatusColor() + '22'">{{ status }}</span>
-      }
-      <span class="time">{{ timeStr() }}</span>
-    </div>
-    @if (showServiceBadge() || log().roomName) {
-      <div class="room-row">
-        @if (showServiceBadge()) {
-          <span class="service-badge"
-                [style.background]="serviceBadgeColors()[0]"
-                [style.color]="serviceBadgeColors()[1]">{{ log().serviceName }}</span>
+      <div class="header-left">
+        <app-category-icon [category]="log().category" [size]="32" />
+        <span class="device-name">{{ log().deviceName }}</span>
+      </div>
+      <div class="header-end">
+        <div class="header-right">
+          <span class="time">{{ timeStr() }}</span>
+        </div>
+        <!-- Chevron -->
+        @if (isExpandable()) {
+          <div class="chevron" [class.expanded]="expanded()">
+            <app-icon name="chevron-right" [size]="14" />
+          </div>
         }
+      </div>
+    </div>
+    @if (showServiceBadge() || log().roomName || workflowStatus()) {
+      <div class="room-row">
         @if (log().roomName) {
-          <span class="room-badge"
-                [style.background]="roomBadgeColors()[0]"
-                [style.color]="roomBadgeColors()[1]">{{ log().roomName }}</span>
+          <span
+            class="room-badge"
+            [style.background]="roomBadgeColors()[0]"
+            [style.color]="roomBadgeColors()[1]"
+            >{{ log().roomName }}</span
+          >
+        }
+        @if (workflowStatus(); as status) {
+          <span
+            class="status-badge"
+            [style.color]="workflowStatusColor()"
+            [style.background-color]="workflowStatusColor() + '22'"
+            >{{ status }}</span
+          >
+        }
+        @if (showServiceBadge()) {
+          <span
+            class="service-badge"
+            [style.background]="serviceBadgeColors()[0]"
+            [style.color]="serviceBadgeColors()[1]"
+            >{{ log().serviceName }}</span
+          >
         }
       </div>
     }
@@ -35,7 +57,11 @@
     @switch (log().category) {
       @case ('state_change') {
         @if (isBooleanChange()) {
-          <div class="toggle-indicator" [class.on]="log().newValue === true" [class.off]="log().newValue !== true">
+          <div
+            class="toggle-indicator"
+            [class.on]="log().newValue === true"
+            [class.off]="log().newValue !== true"
+          >
             <span class="toggle-dot"></span>
             <span class="characteristic">{{ displayCharacteristicType() }}</span>
             <span class="toggle-label">{{ log().newValue === true ? 'On' : 'Off' }}</span>
@@ -152,7 +178,10 @@
           <span class="method-badge backup">{{ backupSubtype() }}</span>
         </div>
         @if (log().errorDetails) {
-          <div class="sub-content" [class.error-text]="log().characteristicType === 'orphan-detection'">
+          <div
+            class="sub-content"
+            [class.error-text]="log().characteristicType === 'orphan-detection'"
+          >
             {{ log().errorDetails }}
           </div>
         }
@@ -164,13 +193,6 @@
       }
     }
   </div>
-
-  <!-- Chevron -->
-  @if (isExpandable()) {
-    <div class="chevron" [class.expanded]="expanded()">
-      <app-icon name="chevron-right" [size]="14" />
-    </div>
-  }
 
   <!-- Expandable Detail Panel (inside card) -->
   @if (expanded() && isExpandable()) {
@@ -190,12 +212,17 @@
               <app-block-tree [result]="block" />
             }
           }
-          @if (execLog.blockResults.length === 0 && (!execLog.conditionResults || execLog.conditionResults.length === 0)) {
+          @if (
+            execLog.blockResults.length === 0 &&
+            (!execLog.conditionResults || execLog.conditionResults.length === 0)
+          ) {
             <span class="sub-content">No steps executed.</span>
           }
-          <a class="view-detail-link"
-             [routerLink]="['/workflows', execLog.workflowId, execLog.id]"
-             (click)="$event.stopPropagation()">
+          <a
+            class="view-detail-link"
+            [routerLink]="['/workflows', execLog.workflowId, execLog.id]"
+            (click)="$event.stopPropagation()"
+          >
             <app-icon name="arrow-right-circle" [size]="14" />
             View full execution details
           </a>

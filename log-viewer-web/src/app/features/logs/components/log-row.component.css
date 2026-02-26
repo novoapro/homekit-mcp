@@ -65,8 +65,16 @@
 .header-row {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0;
+  flex-wrap: nowrap;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0; /* Allow device-name ellipsis to work */
 }
 
 .device-name {
@@ -87,9 +95,9 @@
 }
 
 .room-row {
-  margin-top: 2px;
+  margin-top: 8px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   gap: 6px;
 }
@@ -100,14 +108,28 @@
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
+  margin-left: auto;
 }
 
 .status-badge {
   display: inline-block;
-  padding: 1px 6px;
   border-radius: var(--radius-xs);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
+  margin-left: auto;
+}
+
+.header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding-top: 2px;
+}
+
+.header-end {
+  display: flex;
+  align-items: center;
+  gap: 0;
 }
 
 .status-badge.success {
@@ -129,7 +151,6 @@
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   white-space: nowrap;
-  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -140,7 +161,7 @@
   gap: 6px;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
-  margin-top: 6px;
+  margin-top: 10px;
 }
 
 .toggle-dot {
@@ -177,7 +198,6 @@
   align-items: center;
   gap: 6px;
   margin-top: 10px;
-  padding: 6px 10px;
   font-size: var(--font-size-sm);
 }
 
@@ -368,7 +388,9 @@
   transition: transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
   color: var(--text-tertiary);
   flex-shrink: 0;
-  padding-top: 9px; /* align chevron center with 32px icon row: (32 - 14) / 2 */
+  display: flex;
+  align-items: center;
+  margin-left: 0;
 }
 
 .chevron.expanded {
@@ -430,9 +452,12 @@
     padding-top: 2px;
   }
   .chevron {
-    padding-top: 6px;
+    padding-left: 5px;
   }
   .device-name {
     font-size: var(--font-size-sm);
+    max-width: 210px;
+    display: inline-block;
+    vertical-align: middle;
   }
 }
