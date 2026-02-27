@@ -67,7 +67,7 @@ export class WorkflowLogsComponent implements OnInit, OnDestroy {
   }
 
   openWorkflow(workflow: Workflow): void {
-    this.router.navigate(['/workflows', workflow.id]);
+    this.router.navigate(['/workflows', workflow.id, 'definition']);
   }
 
   toggleWorkflow(workflow: Workflow, enabled: boolean): void {

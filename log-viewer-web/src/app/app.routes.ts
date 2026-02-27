@@ -27,6 +27,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/workflows/workflow-logs.component').then(m => m.WorkflowLogsComponent),
   },
   {
+    path: 'workflows/:workflowId/definition',
+    canActivate: [configGuard],
+    data: { title: 'Workflow Definition' },
+    loadComponent: () => import('./features/workflows/workflow-definition.component').then(m => m.WorkflowDefinitionComponent),
+  },
+  {
     path: 'workflows/:workflowId',
     canActivate: [configGuard],
     data: { title: 'Workflow Logs' },

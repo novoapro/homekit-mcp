@@ -1,0 +1,133 @@
+<div class="detail-page" [appPullToRefresh]="onPullRefresh">
+  <!-- Back button -->
+  <button class="back-btn" (click)="goBack()">
+    <app-icon name="chevron-down" [size]="14" />
+    <span>Back to Workflows</span>
+  </button>
+
+  @if (isLoading()) {
+    <div class="loading-state">
+      <app-icon name="spinner" [size]="24" />
+      <span>Loading...</span>
+    </div>
+  }
+
+  @if (error()) {
+    <div class="error-banner animate-fade-in">
+      <app-icon name="exclamation-triangle" [size]="16" />
+      <span>{{ error() }}</span>
+    </div>
+  }
+
+  @if (workflow(); as wf) {
+    <!-- Header Section -->
+    <div class="section header-section animate-fade-in">
+      <div class="header-row">
+        <div class="header-info">
+          <div class="name-row">
+            <h2 class="workflow-name">{{ wf.name }}</h2>
+            @if (wf.isEnabled) {
+              <span class="status-badge enabled">Enabled</span>
+            } @else {
+              <span class="status-badge disabled">Disabled</span>
+            }
+          </div>
+          @if (wf.description) {
+            <p class="workflow-description">{{ wf.description }}</p>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Info Section -->
+    <div class="section animate-fade-in">
+      <h3 class="section-title">Info</h3>
+      <div class="info-grid">
+        <div class="info-row">
+          <span class="info-label">Executions</span>
+          <span class="info-value">{{ wf.metadata.totalExecutions }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Continue on Error</span>
+          <span class="info-value">{{ wf.continueOnError ? 'Yes' : 'No' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Retrigger Policy</span>
+          <span class="info-value">{{ retriggerPolicyLabel() }}</span>
+        </div>
+        @if (wf.metadata.lastTriggeredAt) {
+          <div class="info-row">
+            <span class="info-label">Last Triggered</span>
+            <span class="info-value">{{ wf.metadata.lastTriggeredAt | relativeTime }}</span>
+          </div>
+        }
+        @if (wf.metadata.consecutiveFailures > 0) {
+          <div class="info-row">
+            <span class="info-label">Consecutive Failures</span>
+            <span class="info-value error">{{ wf.metadata.consecutiveFailures }}</span>
+          </div>
+        }
+        @if (wf.metadata.tags && wf.metadata.tags.length > 0) {
+          <div class="info-row">
+            <span class="info-label">Tags</span>
+            <span class="info-value tags">
+              @for (tag of wf.metadata.tags; track tag) {
+                <span class="tag-pill">{{ tag }}</span>
+              }
+            </span>
+          </div>
+        }
+        <div class="info-row">
+          <span class="info-label">Created</span>
+          <span class="info-value">{{ formatDate(wf.createdAt) }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Updated</span>
+          <span class="info-value">{{ formatDate(wf.updatedAt) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Triggers Section -->
+    <div class="section animate-fade-in">
+      <h3 class="section-title">
+        Triggers <span class="count">({{ wf.triggers.length }})</span>
+      </h3>
+      <div class="tree-content">
+        @for (trigger of wf.triggers; track $index) {
+          <app-definition-trigger [trigger]="trigger" [depth]="0" />
+        }
+      </div>
+    </div>
+
+    <!-- Guard Conditions Section -->
+    @if (wf.conditions && wf.conditions.length > 0) {
+      <div class="section animate-fade-in">
+        <h3 class="section-title">Guard Conditions</h3>
+        <div class="tree-content">
+          @for (condition of wf.conditions; track $index) {
+            <app-definition-condition [condition]="condition" [depth]="0" />
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Blocks Section -->
+    <div class="section animate-fade-in">
+      <h3 class="section-title">
+        Blocks <span class="count">({{ wf.blocks.length }})</span>
+      </h3>
+      <div class="tree-content">
+        @for (block of wf.blocks; track block.blockId) {
+          <app-definition-block-tree [block]="block" [depth]="0" />
+        }
+      </div>
+    </div>
+
+    <!-- Execution Logs Link -->
+    <button class="execution-logs-btn" (click)="viewExecutionLogs()">
+      <span>View Execution Logs</span>
+      <app-icon name="chevron-right" [size]="16" />
+    </button>
+  }
+</div>

@@ -244,7 +244,7 @@ export class WorkflowExecutionListComponent implements OnInit, OnDestroy {
     if (window.history.length > 1) {
       this.location.back();
     } else {
-      this.router.navigate(['/workflows']);
+      this.router.navigate(['/workflows', this.workflowId, 'definition']);
     }
   }
 

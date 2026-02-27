@@ -4,6 +4,7 @@ import { Observable, map, catchError, of } from 'rxjs';
 import { ConfigService } from './config.service';
 import { PaginatedLogsResponse, LogQueryParams } from '../models/api-response.model';
 import { WorkflowExecutionLog, Workflow } from '../models/workflow-log.model';
+import { WorkflowDefinition } from '../models/workflow-definition.model';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -55,6 +56,10 @@ export class ApiService {
 
   getWorkflows(): Observable<Workflow[]> {
     return this.http.get<Workflow[]>(`${this.base}/workflows`);
+  }
+
+  getWorkflow(workflowId: string): Observable<WorkflowDefinition> {
+    return this.http.get<WorkflowDefinition>(`${this.base}/workflows/${workflowId}`);
   }
 
   getWorkflowLogs(workflowId: string, limit?: number): Observable<WorkflowExecutionLog[]> {

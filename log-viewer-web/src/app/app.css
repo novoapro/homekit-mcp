@@ -212,7 +212,7 @@
   /* Reveal mobile-only elements */
   .hamburger-btn    { display: flex; }
   .topbar-logo      { display: flex; }
-  .topbar-title     { display: flex; }
+  .topbar-title     { display: block; }
   .topbar-badge     { display: inline-flex; }
   .topbar-loading-dot { display: block; }
 
