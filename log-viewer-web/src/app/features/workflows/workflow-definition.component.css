@@ -148,54 +148,79 @@
   color: var(--text-tertiary);
 }
 
-/* Info grid */
-.info-grid {
+/* Metadata chips */
+.meta-chips {
   display: flex;
-  flex-direction: column;
-  gap: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 var(--spacing-md) var(--spacing-md);
 }
 
-.info-row {
-  display: flex;
+.meta-chip {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-xs) 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--text-tertiary) 10%, transparent);
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
 }
 
-.info-row:last-child {
-  border-bottom: none;
+.chip-label {
+  font-weight: var(--font-weight-medium);
+  opacity: 0.75;
 }
 
-.info-label {
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
+.chip-value {
+  font-weight: var(--font-weight-bold);
 }
 
-.info-value {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-primary);
+/* Each chip uses a unique token with good contrast in light + dark */
+
+.chip-executions {
+  /* Orange — tint-main: #FF9500 light / #FFB340 dark */
+  background: color-mix(in srgb, var(--tint-main) 14%, transparent);
+  color: var(--tint-main);
 }
 
-.info-value.error {
+.chip-triggered {
+  /* Blue — status-running: #007AFF light / #40AAFF dark */
+  background: color-mix(in srgb, var(--status-running) 12%, transparent);
+  color: var(--status-running);
+}
+
+.chip-failures {
+  /* Red faded when 0 — status-error: #FF3B30 light / #FF6B63 dark */
+  background: color-mix(in srgb, var(--status-error) 7%, transparent);
+  color: color-mix(in srgb, var(--status-error) 55%, var(--text-tertiary));
+}
+
+.chip-failures.chip-failures-active {
+  background: color-mix(in srgb, var(--status-error) 14%, transparent);
   color: var(--status-error);
 }
 
-.info-value.tags {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.chip-updated {
+  /* Amber — color-rest: #C2820A light / #FBBF24 dark */
+  background: color-mix(in srgb, var(--color-rest) 12%, transparent);
+  color: var(--color-rest);
 }
 
-.tag-pill {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  padding: 1px 8px;
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--tint-main) 12%, transparent);
-  color: var(--tint-main);
+.chip-error-policy {
+  /* Green faded when No — status-active: #248A3D light / #4CD964 dark */
+  background: color-mix(in srgb, var(--status-active) 8%, transparent);
+  color: color-mix(in srgb, var(--status-active) 60%, var(--text-tertiary));
+}
+
+.chip-error-policy.chip-yes {
+  background: color-mix(in srgb, var(--status-active) 14%, transparent);
+  color: var(--status-active);
+}
+
+.chip-tag {
+  /* Purple — color-workflow: #AF52DE light / #DA8FFF dark */
+  background: color-mix(in srgb, var(--color-workflow) 12%, transparent);
+  color: var(--color-workflow);
 }
 
 /* Tree content */

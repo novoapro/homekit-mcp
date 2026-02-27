@@ -47,7 +47,7 @@ import { IconComponent } from '../../../shared/components/icon.component';
     }
     .condition-row {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 6px;
       padding: 6px 0;
     }
@@ -65,7 +65,6 @@ import { IconComponent } from '../../../shared/components/icon.component';
       display: flex;
       align-items: center;
       flex-shrink: 0;
-      margin-top: 1px;
       color: var(--text-tertiary);
     }
     .logic-badge {

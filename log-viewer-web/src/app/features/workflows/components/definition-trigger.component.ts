@@ -4,7 +4,7 @@ import {
   ScheduleTriggerDef, SunEventTriggerDef, WebhookTriggerDef,
 } from '../../../core/models/workflow-definition.model';
 import { TRIGGER_TYPE_ICONS } from '../../../core/models/workflow-log.model';
-import { formatTriggerCondition, formatScheduleType } from '../../../core/utils/workflow-definition-utils';
+import { formatTriggerCondition, formatScheduleType, formatRetriggerPolicy } from '../../../core/utils/workflow-definition-utils';
 import { IconComponent } from '../../../shared/components/icon.component';
 
 const DEPTH_COLORS = [
@@ -38,6 +38,12 @@ const DEPTH_COLORS = [
           <span class="trigger-name">{{ displayName() }}</span>
           @if (detailText()) {
             <span class="trigger-detail">{{ detailText() }}</span>
+          }
+          @if (retriggerLabel()) {
+            <span class="retrigger-badge">
+              <span class="retrigger-badge-key">Retrigger</span>
+              {{ retriggerLabel() }}
+            </span>
           }
         </div>
       </div>
@@ -99,6 +105,26 @@ const DEPTH_COLORS = [
       color: var(--text-secondary);
       line-height: 1.4;
     }
+    .retrigger-badge {
+      display: inline-flex;
+      align-items: center;
+      align-self: flex-start;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: var(--font-weight-medium);
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      background: color-mix(in srgb, var(--text-tertiary) 10%, transparent);
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+    .retrigger-badge-key {
+      font-weight: var(--font-weight-bold);
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      font-size: 9px;
+      letter-spacing: 0.06em;
+    }
   `]
 })
 export class DefinitionTriggerComponent {
@@ -157,7 +183,7 @@ export class DefinitionTriggerComponent {
       }
       case 'webhook': {
         const w = t as WebhookTriggerDef;
-        return `Token: ${w.token.substring(0, 8)}...`;
+        return `Token: ${w.token}`;
       }
       case 'sunEvent': {
         const s = t as SunEventTriggerDef;
@@ -170,6 +196,12 @@ export class DefinitionTriggerComponent {
       case 'workflow': return 'Can be triggered by other workflows';
       default: return undefined;
     }
+  });
+
+  readonly retriggerLabel = computed(() => {
+    const policy = (this.trigger() as any).retriggerPolicy;
+    if (!policy) return null;
+    return formatRetriggerPolicy(policy);
   });
 
   readonly compoundTriggers = computed(() => {

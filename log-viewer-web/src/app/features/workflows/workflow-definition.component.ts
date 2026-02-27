@@ -1,12 +1,10 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { MobileTopBarService } from '../../core/services/mobile-topbar.service';
 import { WorkflowDefinition } from '../../core/models/workflow-definition.model';
-import { formatRetriggerPolicy } from '../../core/utils/workflow-definition-utils';
 import { IconComponent } from '../../shared/components/icon.component';
-import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
 import { DefinitionTriggerComponent } from './components/definition-trigger.component';
 import { DefinitionConditionComponent } from './components/definition-condition.component';
 import { DefinitionBlockTreeComponent } from './components/definition-block-tree.component';
@@ -16,7 +14,7 @@ import { PullToRefreshDirective } from '../../shared/directives/pull-to-refresh.
   selector: 'app-workflow-definition',
   standalone: true,
   imports: [
-    IconComponent, RelativeTimePipe, PullToRefreshDirective,
+    IconComponent, PullToRefreshDirective,
     DefinitionTriggerComponent, DefinitionConditionComponent, DefinitionBlockTreeComponent,
   ],
   templateUrl: './workflow-definition.component.html',
@@ -34,11 +32,6 @@ export class WorkflowDefinitionComponent implements OnInit {
   error = signal<string | null>(null);
 
   private workflowId = '';
-
-  readonly retriggerPolicyLabel = computed(() => {
-    const wf = this.workflow();
-    return wf ? formatRetriggerPolicy(wf.retriggerPolicy) : '';
-  });
 
   onPullRefresh = (): void => {
     this.loadWorkflow();
@@ -83,7 +76,7 @@ export class WorkflowDefinitionComponent implements OnInit {
   formatDate(iso: string): string {
     const d = new Date(iso);
     return d.toLocaleString(undefined, {
-      month: 'short', day: 'numeric', year: 'numeric',
+      month: 'short', day: 'numeric', year: '2-digit',
       hour: '2-digit', minute: '2-digit',
     });
   }

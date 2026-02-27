@@ -55,6 +55,24 @@ import { IconComponent } from '../../../shared/components/icon.component';
           </div>
         }
 
+        <!-- Rooms -->
+        @if (availableRooms().length > 0) {
+          <div class="sheet-section">
+            <label class="sheet-label">Room</label>
+            <div class="chip-grid">
+              @for (room of availableRooms(); track room) {
+                <button
+                  class="chip"
+                  [class.selected]="selectedRooms().has(room)"
+                  (click)="toggleRoom(room)"
+                >
+                  <span>{{ room }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        }
+
         <!-- Date Range -->
         <div class="sheet-section">
           <label class="sheet-label">Date Range</label>
@@ -243,11 +261,14 @@ import { IconComponent } from '../../../shared/components/icon.component';
 export class FilterSheetComponent {
   isOpen = input.required<boolean>();
   availableDevices = input<string[]>([]);
+  availableRooms = input<string[]>([]);
   selectedCategories = input<Set<string>>(new Set());
   selectedDevices = input<Set<string>>(new Set());
+  selectedRooms = input<Set<string>>(new Set());
   closed = output<void>();
   categoriesChange = output<Set<string>>();
   devicesChange = output<Set<string>>();
+  roomsChange = output<Set<string>>();
   dateRangeChange = output<{ from: string | null; to: string | null }>();
   clearAll = output<void>();
 
@@ -260,6 +281,7 @@ export class FilterSheetComponent {
   readonly hasActiveFilters = computed(() => {
     return this.selectedCategories().size > 0 ||
       this.selectedDevices().size > 0 ||
+      this.selectedRooms().size > 0 ||
       this.localDateFrom() !== '' ||
       this.localDateTo() !== '';
   });
@@ -282,6 +304,16 @@ export class FilterSheetComponent {
       current.add(device);
     }
     this.devicesChange.emit(current);
+  }
+
+  toggleRoom(room: string): void {
+    const current = new Set(this.selectedRooms());
+    if (current.has(room)) {
+      current.delete(room);
+    } else {
+      current.add(room);
+    }
+    this.roomsChange.emit(current);
   }
 
   emitDateRange(): void {

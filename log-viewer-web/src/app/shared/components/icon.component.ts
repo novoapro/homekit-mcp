@@ -1,256 +1,99 @@
-import { Component, input } from '@angular/core';
+import { Component, input, computed } from '@angular/core';
+
+interface IconEntry { ms: string; fill?: 1 }
+
+const ICON_MAP: Record<string, IconEntry> = {
+  // ── Status / circle-fill ──────────────────────────────
+  'bolt-circle-fill':        { ms: 'electric_bolt',       fill: 1 },
+  'exclamation-circle-fill': { ms: 'error',               fill: 1 },
+  'paperplane-circle-fill':  { ms: 'send',                fill: 1 },
+  'link-circle-fill':        { ms: 'link',                fill: 1 },
+  'arrows-circle-fill':      { ms: 'sync',                fill: 1 },
+  'play-circle-fill':        { ms: 'play_circle',         fill: 1 },
+  'refresh-circle-fill':     { ms: 'autorenew',           fill: 1 },
+  'checkmark-circle-fill':   { ms: 'check_circle',        fill: 1 },
+  'xmark-circle-fill':       { ms: 'cancel',              fill: 1 },
+  'forward-circle-fill':     { ms: 'skip_next',           fill: 1 },
+  'slash-circle-fill':       { ms: 'block',               fill: 1 },
+  'stop-circle':             { ms: 'stop_circle',         fill: 1 },
+
+  // ── Navigation ────────────────────────────────────────
+  'chevron-down':            { ms: 'expand_more'                   },
+  'chevron-right':           { ms: 'chevron_right'                 },
+  'chevron-up':              { ms: 'expand_less'                   },
+  'arrow-right':             { ms: 'arrow_forward'                 },
+  'arrow-right-circle':      { ms: 'arrow_circle_right', fill: 1  },
+
+  // ── Workflow / blocks ─────────────────────────────────
+  'clock':                   { ms: 'schedule'                      },
+  'hourglass':               { ms: 'hourglass_empty'               },
+  'repeat':                  { ms: 'repeat'                        },
+  'branch':                  { ms: 'alt_route'                     },
+  'rectangles-group':        { ms: 'grid_view'                     },
+  'map-pin':                 { ms: 'location_on',        fill: 1  },
+  'cpu':                     { ms: 'memory'                        },
+  'house':                   { ms: 'home',               fill: 1  },
+  'slider-horizontal':       { ms: 'tune'                          },
+
+  // ── General UI ────────────────────────────────────────
+  'magnifying-glass':        { ms: 'search'                        },
+  'sun':                     { ms: 'light_mode',         fill: 1  },
+  'moon':                    { ms: 'dark_mode',          fill: 1  },
+  'wifi':                    { ms: 'wifi'                          },
+  'wifi-off':                { ms: 'wifi_off'                      },
+  'gear':                    { ms: 'settings'                      },
+  'exclamation-triangle':    { ms: 'warning',            fill: 1  },
+  'copy':                    { ms: 'content_copy'                  },
+  'spinner':                 { ms: 'progress_activity'             },
+  'sidebar-left':            { ms: 'left_panel_close'              },
+  'menu':                    { ms: 'menu'                          },
+  'xmark':                   { ms: 'close'                         },
+  'funnel':                  { ms: 'filter_alt',         fill: 1  },
+  'filter':                  { ms: 'filter_list'                   },
+  'trash':                   { ms: 'delete'                        },
+  'plus':                    { ms: 'add'                           },
+  'eye':                     { ms: 'visibility'                    },
+  'eye-slash':               { ms: 'visibility_off'                },
+
+  // ── HomeKit services ──────────────────────────────────
+  'hk-lightbulb':            { ms: 'lightbulb'                     },
+  'hk-switch':               { ms: 'toggle_on',          fill: 1  },
+  'hk-outlet':               { ms: 'electrical_services'           },
+  'hk-fan':                  { ms: 'mode_fan'                      },
+  'hk-thermostat':           { ms: 'thermostat'                    },
+  'hk-garage':               { ms: 'garage',             fill: 1  },
+  'hk-lock':                 { ms: 'lock',               fill: 1  },
+  'hk-window-covering':      { ms: 'blinds'                        },
+  'hk-motion':               { ms: 'motion_sensor_active', fill: 1 },
+  'hk-occupancy':            { ms: 'person',             fill: 1  },
+  'hk-temperature':          { ms: 'device_thermostat'             },
+  'hk-humidity':             { ms: 'water_drop',         fill: 1  },
+  'hk-contact':              { ms: 'sensor_door'                   },
+  'hk-leak':                 { ms: 'water_damage',       fill: 1  },
+  'hk-smoke':                { ms: 'detector_smoke',     fill: 1  },
+  'hk-security':             { ms: 'security',           fill: 1  },
+  'hk-camera':               { ms: 'videocam',           fill: 1  },
+  'hk-tv':                   { ms: 'tv'                            },
+  'hk-speaker':              { ms: 'speaker',            fill: 1  },
+  'hk-valve':                { ms: 'valve'                         },
+  'hk-doorbell':             { ms: 'doorbell',           fill: 1  },
+  'hk-air-purifier':         { ms: 'air_purifier',       fill: 1  },
+  'hk-air-quality':          { ms: 'air'                           },
+  'hk-battery':              { ms: 'battery_full'                  },
+  'hk-microphone':           { ms: 'mic',                fill: 1  },
+  'hk-filter':               { ms: 'filter_alt',         fill: 1  },
+  'hk-robot-vacuum':         { ms: 'robot_vacuum',       fill: 1  },
+  'hk-blinds':               { ms: 'blinds_closed'                 },
+  'hk-curtain':              { ms: 'curtains',           fill: 1  },
+};
 
 @Component({
   selector: 'app-icon',
   standalone: true,
   template: `
-    <svg [attr.width]="size()" [attr.height]="size()" viewBox="0 0 24 24" fill="currentColor">
-      @switch (name()) {
-        @case ('bolt-circle-fill') {
-          <circle cx="12" cy="12" r="11" opacity="0.15" fill="currentColor"/>
-          <path d="M13.5 4L8 13h3.5L10 20l6-9h-3.5L13.5 4z"/>
-        }
-        @case ('exclamation-circle-fill') {
-          <circle cx="12" cy="12" r="11" opacity="0.15" fill="currentColor"/>
-          <circle cx="12" cy="12" r="10" fill="currentColor"/>
-          <path d="M12 7v6M12 15.5v1" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('paperplane-circle-fill') {
-          <circle cx="12" cy="12" r="11" opacity="0.15" fill="currentColor"/>
-          <circle cx="12" cy="12" r="10" fill="currentColor"/>
-          <path d="M5 12l2.5 1.5L12 11l-3 4 6.5 2.5L19 5 5 12z" fill="white"/>
-        }
-        @case ('link-circle-fill') {
-          <circle cx="12" cy="12" r="11" opacity="0.15" fill="currentColor"/>
-          <circle cx="12" cy="12" r="10" fill="currentColor"/>
-          <path d="M10 13a3 3 0 0 0 4.24.01l1.5-1.5a3 3 0 0 0-4.24-4.24l-.88.87M14 11a3 3 0 0 0-4.24-.01l-1.5 1.5a3 3 0 0 0 4.24 4.24l.88-.87" stroke="white" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-        }
-        @case ('arrows-circle-fill') {
-          <circle cx="12" cy="12" r="11" opacity="0.15" fill="currentColor"/>
-          <circle cx="12" cy="12" r="10" fill="currentColor"/>
-          <path d="M7 12h10M14 9l3 3-3 3M10 15l-3-3 3-3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('play-circle-fill') {
-          <circle cx="12" cy="12" r="11" opacity="0.15" fill="currentColor"/>
-          <circle cx="12" cy="12" r="10" fill="currentColor"/>
-          <path d="M10 8l6 4-6 4V8z" fill="white"/>
-        }
-        @case ('refresh-circle-fill') {
-          <circle cx="12" cy="12" r="11" opacity="0.15" fill="currentColor"/>
-          <circle cx="12" cy="12" r="10" fill="currentColor"/>
-          <path d="M16 12a4 4 0 0 1-7.46 2M8 12a4 4 0 0 1 7.46-2" stroke="white" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-          <path d="M16 9v3h-3M8 15v-3h3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('checkmark-circle-fill') {
-          <circle cx="12" cy="12" r="10" fill="currentColor"/>
-          <path d="M8 12l2.5 3L16 9" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('xmark-circle-fill') {
-          <circle cx="12" cy="12" r="10" fill="currentColor"/>
-          <path d="M9 9l6 6M15 9l-6 6" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('forward-circle-fill') {
-          <circle cx="12" cy="12" r="10" fill="currentColor"/>
-          <path d="M8 8l4 4-4 4M12 8l4 4-4 4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('slash-circle-fill') {
-          <circle cx="12" cy="12" r="10" fill="currentColor"/>
-          <path d="M6 18L18 6" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('chevron-down') {
-          <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('chevron-right') {
-          <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('clock') {
-          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M12 7v5l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('hourglass') {
-          <path d="M7 4h10M7 20h10M7 4v4a5 5 0 0 0 5 5 5 5 0 0 0 5-5V4M7 20v-4a5 5 0 0 1 5-5 5 5 0 0 1 5 5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('repeat') {
-          <path d="M17 2l3 3-3 3M7 22l-3-3 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <path d="M4 12a8 8 0 0 1 12.93-6.29M20 12a8 8 0 0 1-12.93 6.29" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('branch') {
-          <path d="M6 3v12M18 3v6M6 15a6 6 0 0 0 6-6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <circle cx="6" cy="18" r="2" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('rectangles-group') {
-          <rect x="3" y="3" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/>
-          <rect x="13" y="3" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/>
-          <rect x="3" y="13" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/>
-          <rect x="13" y="13" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('map-pin') {
-          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="2" fill="none"/>
-          <circle cx="12" cy="9" r="2.5" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('cpu') {
-          <rect x="5" y="5" width="14" height="14" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
-          <rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('house') {
-          <path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
-          <path d="M9 21V13h6v8" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('slider-horizontal') {
-          <path d="M4 12h16M8 8v8M16 8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('arrow-right') {
-          <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('magnifying-glass') {
-          <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M15.5 15.5L20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('sun') {
-          <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('moon') {
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('wifi') {
-          <path d="M12 19h.01M8.53 15.47a4.5 4.5 0 0 1 6.94 0M5.06 11.94a8.5 8.5 0 0 1 13.88 0M1.59 8.41a12.5 12.5 0 0 1 20.82 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('wifi-off') {
-          <path d="M12 19h.01M8.53 15.47a4.5 4.5 0 0 1 6.94 0M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('gear') {
-          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('stop-circle') {
-          <circle cx="12" cy="12" r="10" fill="currentColor"/>
-          <rect x="9" y="9" width="6" height="6" rx="0.5" fill="white"/>
-        }
-        @case ('exclamation-triangle') {
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M12 9v4M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('copy') {
-          <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('spinner') {
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" opacity="0.25"/>
-          <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('sidebar-left') {
-          <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M9 3v18" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('menu') {
-          <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('xmark') {
-          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('funnel') {
-          <path d="M3 4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2.5a1 1 0 0 1-.293.707L14 13.914V19a1 1 0 0 1-.553.894l-4 2A1 1 0 0 1 8 21v-7.086L3.293 7.207A1 1 0 0 1 3 6.5V4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('filter') {
-          <path d="M3 6h18M6 12h12M10 18h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('trash') {
-          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('plus') {
-          <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('eye') {
-          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('eye-slash') {
-          <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c4.477 0 8.268 2.943 9.542 7a10.26 10.26 0 0 1-2.04 3.3M8.47 18.15C7.4 17.7 6.39 17.07 5.5 16.3M2 2l20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('hk-lightbulb') {
-          <path d="M9 18h6m-1 3h-4m1.5-6.816A5.5 5.5 0 1 0 6.5 8c0 1.6.65 3.06 1.7 4.1L9 13v2a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2l.8-1.1A5.5 5.5 0 0 0 17.5 8 5.5 5.5 0 0 0 12 2.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('hk-switch') {
-          <rect x="6" y="4" width="12" height="16" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
-          <circle cx="12" cy="15" r="2" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('hk-outlet') {
-          <rect x="5" y="5" width="14" height="14" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
-          <circle cx="9" cy="11" r="1.5" fill="currentColor"/>
-          <circle cx="15" cy="11" r="1.5" fill="currentColor"/>
-          <path d="M12 14v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        }
-        @case ('hk-fan') {
-          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M12 9A5 5 0 0 0 7 4a5 5 0 0 1 5 5M12 15a5 5 0 0 0 5 5 5 5 0 0 1-5-5M15 12a5 5 0 0 0 5-5 5 5 0 0 1-5 5M9 12a5 5 0 0 0-5 5 5 5 0 0 1 5-5" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('hk-thermostat') {
-          <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M10 14A2.5 2.5 0 1 0 14 14V8a2 2 0 1 0-4 0v6z" stroke="currentColor" stroke-width="2" fill="none" />
-        }
-        @case ('hk-garage') {
-          <rect x="4" y="4" width="16" height="16" rx="1" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M4 9h16M4 14h16M12 14v6" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('hk-lock') {
-          <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M8 11V7a4 4 0 1 1 8 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('hk-window-covering') {
-          <rect x="4" y="4" width="16" height="16" rx="1" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M4 8h16M4 12h16M4 16h16" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('hk-motion') {
-          <circle cx="12" cy="12" r="3" fill="currentColor"/>
-          <path d="M16 16c1.5-1 2.5-2.5 2.5-4.5S17.5 8 16 7M20 20c2.5-2 4-5 4-8.5S22.5 5 20 3M8 16c-1.5-1-2.5-2.5-2.5-4.5S6.5 8 8 7M4 20C1.5 18 0 15 0 11.5S1.5 5 4 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('hk-occupancy') {
-          <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M5 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('hk-temperature') {
-          <path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0z" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('hk-humidity') {
-          <path d="M12 22a6 6 0 0 0 6-6c0-4-6-11-6-11S6 12 6 16a6 6 0 0 0 6 6z" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-        @case ('hk-contact') {
-          <path d="M6 3v18M18 3v18M10 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('hk-leak') {
-          <path d="M12 18s4-3 4-6c0-2-4-8-4-8s-4 6-4 8c0 3 4 6 4 6z" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M12 2v2M8 4l2 2M16 4l-2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('hk-smoke') {
-          <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M10 16s-2-2-2-4 2-4 2-4M14 16s2-2 2-4-2-4-2-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-        }
-        @case ('hk-security') {
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
-          <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('hk-camera') {
-          <path d="M22 6l-6 4v-2c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-2l6 4V6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('hk-tv') {
-          <rect x="2" y="6" width="20" height="12" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
-          <path d="M7 22l5-4 5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @case ('hk-speaker') {
-          <path d="M11 5L6 9H2v6h4l5 4V5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
-          <path d="M15.5 8c1 1.5 1 4.5 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-          <path d="M19 5c2.5 3.5 2.5 8.5 0 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-        }
-        @case ('hk-valve') {
-          <path d="M3 10h18M3 14h18M12 10V6M8 6h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        }
-        @default {
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
-        }
-      }
-    </svg>
+    <span class="material-symbols-rounded"
+          [style.font-size.px]="size()"
+          [style.font-variation-settings]="variationSettings()">{{ iconName() }}</span>
   `,
   styles: [`
     :host {
@@ -259,12 +102,23 @@ import { Component, input } from '@angular/core';
       justify-content: center;
       flex-shrink: 0;
     }
-    svg {
+    .material-symbols-rounded {
       display: block;
+      line-height: 1;
+      user-select: none;
     }
   `]
 })
 export class IconComponent {
   name = input.required<string>();
   size = input(24);
+
+  private readonly entry = computed(() => ICON_MAP[this.name()] ?? { ms: 'help_outline' });
+
+  readonly iconName = computed(() => this.entry().ms);
+
+  readonly variationSettings = computed(() => {
+    const fill = this.entry().fill ?? 0;
+    return `'FILL' ${fill}, 'wght' 400, 'GRAD' 0, 'opsz' 24`;
+  });
 }

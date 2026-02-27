@@ -25,12 +25,12 @@
       <div class="header-row">
         <div class="header-info">
           <div class="name-row">
-            <h2 class="workflow-name">{{ wf.name }}</h2>
             @if (wf.isEnabled) {
               <span class="status-badge enabled">Enabled</span>
             } @else {
               <span class="status-badge disabled">Disabled</span>
             }
+            <h2 class="workflow-name">{{ wf.name }}</h2>
           </div>
           @if (wf.description) {
             <p class="workflow-description">{{ wf.description }}</p>
@@ -39,53 +39,43 @@
       </div>
     </div>
 
-    <!-- Info Section -->
-    <div class="section animate-fade-in">
-      <h3 class="section-title">Info</h3>
-      <div class="info-grid">
-        <div class="info-row">
-          <span class="info-label">Executions</span>
-          <span class="info-value">{{ wf.metadata.totalExecutions }}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Continue on Error</span>
-          <span class="info-value">{{ wf.continueOnError ? 'Yes' : 'No' }}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Retrigger Policy</span>
-          <span class="info-value">{{ retriggerPolicyLabel() }}</span>
-        </div>
-        @if (wf.metadata.lastTriggeredAt) {
-          <div class="info-row">
-            <span class="info-label">Last Triggered</span>
-            <span class="info-value">{{ wf.metadata.lastTriggeredAt | relativeTime }}</span>
-          </div>
+    <!-- Metadata Chips -->
+    <div class="meta-chips animate-fade-in">
+      <span class="meta-chip chip-executions">
+        <app-icon name="play-circle-fill" [size]="13" />
+        <span class="chip-label">Executions</span>
+        <span class="chip-value">{{ wf.metadata.totalExecutions }}</span>
+      </span>
+      @if (wf.metadata.lastTriggeredAt) {
+        <span class="meta-chip chip-triggered">
+          <app-icon name="clock" [size]="13" />
+          <span class="chip-label">Last triggered</span>
+          <span class="chip-value">{{ formatDate(wf.metadata.lastTriggeredAt) }}</span>
+        </span>
+      }
+      <span class="meta-chip chip-failures" [class.chip-failures-active]="wf.metadata.consecutiveFailures > 0">
+        <app-icon name="exclamation-circle-fill" [size]="13" />
+        <span class="chip-label">Consecutive failures</span>
+        <span class="chip-value">{{ wf.metadata.consecutiveFailures }}</span>
+      </span>
+      <span class="meta-chip chip-updated">
+        <app-icon name="refresh-circle-fill" [size]="13" />
+        <span class="chip-label">Updated</span>
+        <span class="chip-value">{{ formatDate(wf.updatedAt) }}</span>
+      </span>
+      <span class="meta-chip chip-error-policy" [class.chip-yes]="wf.continueOnError">
+        <app-icon name="forward-circle-fill" [size]="13" />
+        <span class="chip-label">Continue on error</span>
+        <span class="chip-value">{{ wf.continueOnError ? 'Yes' : 'No' }}</span>
+      </span>
+      @if (wf.metadata.tags && wf.metadata.tags.length > 0) {
+        @for (tag of wf.metadata.tags; track tag) {
+          <span class="meta-chip chip-tag">
+            <app-icon name="funnel" [size]="13" />
+            <span class="chip-value">{{ tag }}</span>
+          </span>
         }
-        @if (wf.metadata.consecutiveFailures > 0) {
-          <div class="info-row">
-            <span class="info-label">Consecutive Failures</span>
-            <span class="info-value error">{{ wf.metadata.consecutiveFailures }}</span>
-          </div>
-        }
-        @if (wf.metadata.tags && wf.metadata.tags.length > 0) {
-          <div class="info-row">
-            <span class="info-label">Tags</span>
-            <span class="info-value tags">
-              @for (tag of wf.metadata.tags; track tag) {
-                <span class="tag-pill">{{ tag }}</span>
-              }
-            </span>
-          </div>
-        }
-        <div class="info-row">
-          <span class="info-label">Created</span>
-          <span class="info-value">{{ formatDate(wf.createdAt) }}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Updated</span>
-          <span class="info-value">{{ formatDate(wf.updatedAt) }}</span>
-        </div>
-      </div>
+      }
     </div>
 
     <!-- Triggers Section -->

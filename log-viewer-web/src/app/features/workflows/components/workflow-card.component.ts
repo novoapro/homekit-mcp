@@ -92,9 +92,6 @@ import { RelativeTimePipe } from '../../../shared/pipes/relative-time.pipe';
     .workflow-card:hover {
       box-shadow: var(--shadow-card-hover);
     }
-    .workflow-card:active {
-      transform: scale(0.985);
-    }
 
     /* Trigger icon */
     .trigger-icon {

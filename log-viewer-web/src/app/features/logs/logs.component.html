@@ -11,12 +11,15 @@
   <!-- Filter Bar -->
   <app-filter-bar
     [availableDevices]="availableDevices()"
+    [availableRooms]="availableRooms()"
     [selectedCategories]="selectedCategories()"
     [selectedDevices]="selectedDevices()"
+    [selectedRooms]="selectedRooms()"
     [searchText]="searchText()"
     [logCount]="logCount()"
     (categoriesChange)="onCategoriesChange($event)"
     (devicesChange)="onDevicesChange($event)"
+    (roomsChange)="onRoomsChange($event)"
     (searchTextChange)="onSearchTextChange($event)"
     (dateRangeChange)="onDateRangeChange($event)"
     (clearAll)="onClearAll()"

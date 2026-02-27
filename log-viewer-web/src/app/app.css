@@ -54,7 +54,6 @@
   flex-direction: column;
   align-items: flex-end;
   justify-content: center;
-  gap: 3px;
   flex-shrink: 0;
   order: 2;
 }
@@ -136,24 +135,21 @@
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   color: var(--text-tertiary);
-  background: var(--bg-detail);
+  background: transparent;
   white-space: nowrap;
   transition: background var(--transition-fast);
 }
 
 .status-chip.status-ok {
   color: var(--status-active);
-  background: color-mix(in srgb, var(--status-active) 10%, transparent);
 }
 
 .status-chip.status-warn {
   color: var(--status-warning, #f0ad4e);
-  background: color-mix(in srgb, var(--status-warning, #f0ad4e) 12%, transparent);
 }
 
 .status-chip.status-err {
   color: var(--status-error);
-  background: color-mix(in srgb, var(--status-error) 10%, transparent);
 }
 
 .status-chip.status-muted {
@@ -222,7 +218,7 @@
 
   .status-chip {
     font-size: 10.5px;
-    padding: 5px 7px;
+    padding: 4px 7px;
   }
 
   .app-content {

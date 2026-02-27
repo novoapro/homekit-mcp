@@ -45,6 +45,7 @@ export class LogsComponent implements OnInit, OnDestroy {
 
   selectedCategories = signal<Set<string>>(new Set());
   selectedDevices = signal<Set<string>>(new Set());
+  selectedRooms = signal<Set<string>>(new Set());
   searchText = signal('');
   dateFrom = signal<string | null>(null);
   dateTo = signal<string | null>(null);
@@ -59,6 +60,16 @@ export class LogsComponent implements OnInit, OnDestroy {
       }
     }
     return Array.from(devices).sort();
+  });
+
+  readonly availableRooms = computed(() => {
+    const rooms = new Set<string>();
+    for (const log of this.polling.logs()) {
+      if (log.roomName) {
+        rooms.add(log.roomName);
+      }
+    }
+    return Array.from(rooms).sort();
   });
 
   readonly filteredLogs = computed(() => {
@@ -99,6 +110,12 @@ export class LogsComponent implements OnInit, OnDestroy {
     const devices = this.selectedDevices();
     if (devices.size > 0) {
       logs = logs.filter(l => devices.has(l.deviceName));
+    }
+
+    // Room filter — only applies to logs that have a roomName
+    const rooms = this.selectedRooms();
+    if (rooms.size > 0) {
+      logs = logs.filter(l => l.roomName && rooms.has(l.roomName));
     }
 
     return logs;
@@ -147,6 +164,7 @@ export class LogsComponent implements OnInit, OnDestroy {
     if (saved) {
       this.selectedCategories.set(saved.categories);
       this.selectedDevices.set(saved.devices);
+      this.selectedRooms.set(saved.rooms ?? new Set());
       this.searchText.set(saved.searchText);
       this.dateFrom.set(saved.dateFrom);
       this.dateTo.set(saved.dateTo);
@@ -203,6 +221,10 @@ export class LogsComponent implements OnInit, OnDestroy {
     this.selectedDevices.set(devices);
   }
 
+  onRoomsChange(rooms: Set<string>): void {
+    this.selectedRooms.set(rooms);
+  }
+
   onSearchTextChange(text: string): void {
     clearTimeout(this.searchTimeout);
     this.searchTimeout = setTimeout(() => {
@@ -219,6 +241,7 @@ export class LogsComponent implements OnInit, OnDestroy {
   onClearAll(): void {
     this.selectedCategories.set(new Set());
     this.selectedDevices.set(new Set());
+    this.selectedRooms.set(new Set());
     this.searchText.set('');
     this.dateFrom.set(null);
     this.dateTo.set(null);
@@ -248,6 +271,7 @@ export class LogsComponent implements OnInit, OnDestroy {
     this.filterState.save({
       categories: this.selectedCategories(),
       devices: this.selectedDevices(),
+      rooms: this.selectedRooms(),
       searchText: this.searchText(),
       dateFrom: this.dateFrom(),
       dateTo: this.dateTo(),

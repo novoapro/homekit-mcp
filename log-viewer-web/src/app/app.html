@@ -21,6 +21,7 @@
              [class.status-ok]="wsService.connectionState() === 'connected'"
              [class.status-warn]="wsService.connectionState() === 'connecting'"
              [class.status-err]="wsService.connectionState() === 'disconnected'">
+          <span class="status-chip-label">Server </span>
           <div class="status-dot"
                [class.connected]="wsService.connectionState() === 'connected'"
                [class.connecting]="wsService.connectionState() === 'connecting'">

@@ -12,7 +12,7 @@
   --tint-secondary: #30D5C8;
 
   /* Status */
-  --status-active: #34C759;
+  --status-active: #248A3D;
   --status-inactive: #8E8E93;
   --status-error: #FF3B30;
   --status-warning: #FF9500;
@@ -21,7 +21,7 @@
   /* Category colors (distinct palette) */
   --color-state-change: #FF9500;
   --color-mcp: #30D5C8;
-  --color-rest: #5856D6;
+  --color-rest: #C2820A;
   --color-webhook: #007AFF;
   --color-error: #FF3B30;
   --color-workflow: #AF52DE;
@@ -136,6 +136,24 @@
 
 /* Dark mode */
 [data-theme="dark"] {
+  --tint-main: #FFB340;
+  --tint-secondary: #5DE6F5;
+
+  --status-active: #4CD964;
+  --status-inactive: #C7C7CC;
+  --status-error: #FF6B63;
+  --status-warning: #FFB340;
+  --status-running: #40AAFF;
+
+  --color-state-change: #FFB340;
+  --color-mcp: #5DE6F5;
+  --color-rest: #FBBF24;
+  --color-webhook: #40AAFF;
+  --color-error: #FF6B63;
+  --color-workflow: #DA8FFF;
+  --color-scene: #FF6B8A;
+  --color-backup: #C7C7CC;
+
   --text-primary: rgba(255, 255, 255, 0.85);
   --text-secondary: rgba(255, 255, 255, 0.6);
   --text-tertiary: rgba(255, 255, 255, 0.3);
@@ -168,6 +186,24 @@
 /* Auto dark mode from system preference */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    --tint-main: #FFB340;
+    --tint-secondary: #5DE6F5;
+
+    --status-active: #4CD964;
+    --status-inactive: #C7C7CC;
+    --status-error: #FF6B63;
+    --status-warning: #FFB340;
+    --status-running: #40AAFF;
+
+    --color-state-change: #FFB340;
+    --color-mcp: #5DE6F5;
+    --color-rest: #FBBF24;
+    --color-webhook: #40AAFF;
+    --color-error: #FF6B63;
+    --color-workflow: #DA8FFF;
+    --color-scene: #FF6B8A;
+    --color-backup: #C7C7CC;
+
     --text-primary: rgba(255, 255, 255, 0.85);
     --text-secondary: rgba(255, 255, 255, 0.6);
     --text-tertiary: rgba(255, 255, 255, 0.3);

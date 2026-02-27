@@ -13,14 +13,17 @@ import { FilterSheetComponent } from './filter-sheet.component';
 })
 export class FilterBarComponent {
   availableDevices = input<string[]>([]);
+  availableRooms = input<string[]>([]);
   selectedCategories = input<Set<string>>(new Set());
   selectedDevices = input<Set<string>>(new Set());
+  selectedRooms = input<Set<string>>(new Set());
   searchText = input('');
 
   logCount = input(0);
 
   categoriesChange = output<Set<string>>();
   devicesChange = output<Set<string>>();
+  roomsChange = output<Set<string>>();
   searchTextChange = output<string>();
   dateRangeChange = output<{ from: string | null; to: string | null }>();
   clearAll = output<void>();
@@ -28,6 +31,7 @@ export class FilterBarComponent {
 
   showCategoryDropdown = signal(false);
   showDeviceDropdown = signal(false);
+  showRoomDropdown = signal(false);
   sheetOpen = signal(false);
   dateFrom = signal<string>('');
   dateTo = signal<string>('');
@@ -39,6 +43,7 @@ export class FilterBarComponent {
   readonly hasActiveFilters = computed(() => {
     return this.selectedCategories().size > 0 ||
       this.selectedDevices().size > 0 ||
+      this.selectedRooms().size > 0 ||
       this.searchText() !== '' ||
       this.dateFrom() !== '' ||
       this.dateTo() !== '';
@@ -48,6 +53,7 @@ export class FilterBarComponent {
     let count = 0;
     count += this.selectedCategories().size;
     count += this.selectedDevices().size;
+    count += this.selectedRooms().size;
     if (this.dateFrom() || this.dateTo()) count++;
     return count;
   });
@@ -64,6 +70,13 @@ export class FilterBarComponent {
     if (count === 0) return 'All Devices';
     if (count === 1) return Array.from(this.selectedDevices())[0];
     return `${count} Devices`;
+  });
+
+  readonly roomLabel = computed(() => {
+    const count = this.selectedRooms().size;
+    if (count === 0) return 'All Rooms';
+    if (count === 1) return Array.from(this.selectedRooms())[0];
+    return `${count} Rooms`;
   });
 
   constructor() {
@@ -88,6 +101,16 @@ export class FilterBarComponent {
       current.add(device);
     }
     this.devicesChange.emit(current);
+  }
+
+  toggleRoom(room: string): void {
+    const current = new Set(this.selectedRooms());
+    if (current.has(room)) {
+      current.delete(room);
+    } else {
+      current.add(room);
+    }
+    this.roomsChange.emit(current);
   }
 
   onSearchInput(value: string): void {
@@ -116,7 +139,7 @@ export class FilterBarComponent {
     this.sheetOpen.set(false);
   }
 
-  readonly isAnyDropdownOpen = computed(() => this.showCategoryDropdown() || this.showDeviceDropdown());
+  readonly isAnyDropdownOpen = computed(() => this.showCategoryDropdown() || this.showDeviceDropdown() || this.showRoomDropdown());
 
   @HostListener('document:click')
   onDocumentClick(): void {
@@ -126,5 +149,6 @@ export class FilterBarComponent {
   closeDropdowns(): void {
     this.showCategoryDropdown.set(false);
     this.showDeviceDropdown.set(false);
+    this.showRoomDropdown.set(false);
   }
 }

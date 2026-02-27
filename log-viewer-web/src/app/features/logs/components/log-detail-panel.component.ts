@@ -78,13 +78,13 @@ import { IconComponent } from '../../../shared/components/icon.component';
       background: var(--bg-code);
       border-radius: var(--radius-sm);
       padding: var(--spacing-sm);
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
-      max-height: 300px;
-      overflow-y: auto;
       line-height: 1.5;
       margin: 0;
+      width: 100%;
+      box-sizing: border-box;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   `]
 })

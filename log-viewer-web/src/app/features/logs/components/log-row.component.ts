@@ -184,6 +184,14 @@ export class LogRowComponent {
     if (name.includes('tv') || name.includes('television')) return 'hk-tv';
     if (name.includes('speaker') || name.includes('audio')) return 'hk-speaker';
     if (name.includes('valve') || name.includes('faucet') || name.includes('irrigation')) return 'hk-valve';
+    if (name.includes('doorbell') || name.includes('bell')) return 'hk-doorbell';
+    if (name.includes('purifier') || name.includes('air purifier')) return 'hk-air-purifier';
+    if (name.includes('air quality') || name.includes('airquality') || name.includes('air_quality')) return 'hk-air-quality';
+    if (name.includes('battery')) return 'hk-battery';
+    if (name.includes('microphone') || name.includes('mic')) return 'hk-microphone';
+    if (name.includes('filter')) return 'hk-filter';
+    if (name.includes('robot') || name.includes('vacuum') || name.includes('roomba')) return 'hk-robot-vacuum';
+    if (name.includes('curtain') || name.includes('drape')) return 'hk-curtain';
 
     return null;
   });
@@ -240,6 +248,21 @@ export class LogRowComponent {
       return `${te.deviceName}: ${oldStr} → ${newStr}`;
     }
     return null;
+  });
+
+  /** Splits responseBody into an HTTP status code (if present) + remainder. */
+  readonly parsedResponseBody = computed(() => {
+    const body = this.log().responseBody;
+    if (!body) return null;
+    const match = body.match(/^(\d{3})(\s.*|$)/s);
+    if (!match) return { code: null, color: '', rest: body };
+    const code = parseInt(match[1], 10);
+    const color = code < 300
+      ? 'var(--status-active)'
+      : code < 400
+        ? 'var(--status-warning)'
+        : 'var(--status-error)';
+    return { code: match[1], color, rest: match[2].trim() };
   });
 
   toggle(): void {

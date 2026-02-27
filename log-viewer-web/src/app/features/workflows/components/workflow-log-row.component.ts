@@ -76,9 +76,6 @@ import { DurationPipe } from '../../../shared/pipes/duration.pipe';
     .workflow-card:hover {
       box-shadow: var(--shadow-card-hover);
     }
-    .workflow-card:active {
-      transform: scale(0.985);
-    }
     .status-icon {
       flex-shrink: 0;
     }

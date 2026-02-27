@@ -60,6 +60,35 @@
     </div>
   }
 
+  <!-- Room Filter -->
+  @if (availableRooms().length > 0) {
+    <div class="filter-chip-wrapper">
+      <button
+        class="filter-chip"
+        [class.active]="selectedRooms().size > 0"
+        (click)="showRoomDropdown.set(!showRoomDropdown()); showCategoryDropdown.set(false); showDeviceDropdown.set(false)"
+      >
+        <app-icon name="map-pin" [size]="14" />
+        <span>{{ roomLabel() }}</span>
+        <app-icon name="chevron-down" [size]="12" />
+      </button>
+      @if (showRoomDropdown()) {
+        <div class="dropdown animate-scale-in">
+          @for (room of availableRooms(); track room) {
+            <button class="dropdown-item" (click)="toggleRoom(room)">
+              <span class="check-space">
+                @if (selectedRooms().has(room)) {
+                  <app-icon name="checkmark-circle-fill" [size]="16" />
+                }
+              </span>
+              <span>{{ room }}</span>
+            </button>
+          }
+        </div>
+      }
+    </div>
+  }
+
   <!-- Search -->
   <div class="search-input-wrapper">
     <app-icon name="magnifying-glass" [size]="14" />
@@ -139,11 +168,14 @@
 <app-filter-sheet
   [isOpen]="sheetOpen()"
   [availableDevices]="availableDevices()"
+  [availableRooms]="availableRooms()"
   [selectedCategories]="selectedCategories()"
   [selectedDevices]="selectedDevices()"
+  [selectedRooms]="selectedRooms()"
   (closed)="closeSheet()"
   (categoriesChange)="categoriesChange.emit($event)"
   (devicesChange)="devicesChange.emit($event)"
+  (roomsChange)="roomsChange.emit($event)"
   (dateRangeChange)="dateRangeChange.emit($event)"
   (clearAll)="onClearAll()"
 />

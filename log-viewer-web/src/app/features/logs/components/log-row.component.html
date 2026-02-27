@@ -1,6 +1,7 @@
 <div
   class="log-card"
   [class.expandable]="isExpandable()"
+  [class.expanded]="expanded()"
   [class.error]="isError()"
   [style.--accent-color]="categoryColor()"
   [style.animation-delay.ms]="index() * 30"
@@ -10,7 +11,7 @@
   <div class="content">
     <div class="header-row">
       <div class="header-left">
-        <app-category-icon [category]="log().category" [size]="32" />
+        <app-category-icon [category]="log().category" [size]="24" />
         <span class="device-name">{{ log().deviceName }}</span>
       </div>
       <div class="header-end">
@@ -42,10 +43,10 @@
           @if (serviceIconMatch(); as sIcon) {
             <span
               class="service-badge-icon"
-              [style.color]="serviceBadgeColors()[1]"
+              [style.color]="categoryColor()"
               [title]="log().serviceName"
             >
-              <app-icon [name]="sIcon" [size]="14" />
+              <app-icon [name]="sIcon" [size]="20" />
             </span>
           } @else {
             <span
@@ -86,10 +87,14 @@
             <span class="api-text">{{ log().requestBody }}</span>
           }
         </div>
-        @if (log().responseBody) {
+        @if (parsedResponseBody(); as parsed) {
           <div class="api-result">
-            <span class="result-arrow">&larr;</span>
-            <span class="result-text">{{ log().responseBody }}</span>
+            @if (parsed.code) {
+              <span class="result-status" [style.color]="parsed.color">{{ parsed.code }} -></span>
+            }
+            @if (parsed.rest) {
+              <span class="result-text" [style.color]="parsed.color">{{ parsed.rest }}</span>
+            }
           </div>
         }
       }
@@ -97,10 +102,14 @@
         <div class="api-content">
           <span class="method-badge rest">{{ log().characteristicType || 'REST' }}</span>
         </div>
-        @if (log().responseBody) {
+        @if (parsedResponseBody(); as parsed) {
           <div class="api-result">
-            <span class="result-arrow">&larr;</span>
-            <span class="result-text">{{ log().responseBody }}</span>
+            @if (parsed.code) {
+              <span class="result-status" [style.color]="parsed.color">{{ parsed.code }} -></span>
+            }
+            @if (parsed.rest) {
+              <span class="result-text" [style.color]="parsed.color">{{ parsed.rest }}</span>
+            }
           </div>
         }
       }
@@ -111,10 +120,14 @@
             <span class="api-text">{{ log().requestBody }}</span>
           }
         </div>
-        @if (log().responseBody) {
+        @if (parsedResponseBody(); as parsed) {
           <div class="api-result">
-            <span class="result-arrow">&larr;</span>
-            <span class="result-text">{{ log().responseBody }}</span>
+            @if (parsed.code) {
+              <span class="result-status" [style.color]="parsed.color">{{ parsed.code }} -></span>
+            }
+            @if (parsed.rest) {
+              <span class="result-text" [style.color]="parsed.color">{{ parsed.rest }}</span>
+            }
           </div>
         }
       }
@@ -138,15 +151,21 @@
       }
       @case ('workflow_execution') {
         @if (workflowTriggerDescription(); as desc) {
-          <div class="sub-content">{{ desc }}</div>
+          <div class="api-content">
+            <span class="api-text workflow-trigger">{{ desc }}</span>
+          </div>
         }
-        @if (log().workflowExecution?.errorMessage) {
-          <div class="sub-content">{{ log().workflowExecution!.errorMessage }}</div>
+        @if (log().workflowExecution?.errorMessage; as errMsg) {
+          <div class="api-result">
+            <span class="result-text" [style.color]="workflowStatusColor()">{{ errMsg }}</span>
+          </div>
         }
       }
       @case ('workflow_error') {
         @if (workflowTriggerDescription(); as desc) {
-          <div class="sub-content" [class.error-text]="isError()">{{ desc }}</div>
+          <div class="api-content">
+            <span class="api-text workflow-trigger">{{ desc }}</span>
+          </div>
         }
         @if (log().workflowExecution?.errorMessage; as errMsg) {
           <div class="error-banner-inline">
