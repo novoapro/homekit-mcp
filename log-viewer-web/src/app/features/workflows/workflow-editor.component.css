@@ -175,110 +175,68 @@ mat-form-field {
   width: 100%;
 }
 
-/* Inline row: tags + toggle */
-.inline-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-}
-.tags-field {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Toggle with label */
-.toggle-with-label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  margin-top: 14px;
-}
-.toggle-status {
-  font-size: 9px;
-  font-weight: var(--font-weight-bold);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-tertiary);
-  transition: color var(--transition-fast);
-  user-select: none;
-}
-.toggle-status.active {
-  color: var(--status-active);
-}
-
-/* Slide toggles — tint overrides */
-:host ::ng-deep .mat-mdc-slide-toggle {
-  --mdc-switch-selected-track-color: var(--status-active);
-  --mdc-switch-selected-hover-track-color: var(--status-active);
-  --mdc-switch-selected-focus-track-color: var(--status-active);
-  --mdc-switch-selected-pressed-track-color: var(--status-active);
-  --mdc-switch-unselected-track-color: color-mix(in srgb, var(--text-tertiary) 25%, transparent);
-  --mdc-switch-unselected-hover-track-color: color-mix(in srgb, var(--text-tertiary) 30%, transparent);
-  --mdc-switch-selected-handle-color: white;
-  --mdc-switch-selected-hover-handle-color: white;
-  --mdc-switch-selected-focus-handle-color: white;
-  --mdc-switch-selected-pressed-handle-color: white;
-}
-
-/* Tag chip colors */
-.tags-field {
-  --mdc-chip-elevated-container-color: color-mix(in srgb, var(--color-workflow) 12%, transparent);
-  --mdc-chip-label-text-color: var(--color-workflow);
-  --mdc-chip-with-trailing-icon-trailing-icon-color: var(--color-workflow);
-  --mdc-chip-elevated-selected-container-color: color-mix(in srgb, var(--color-workflow) 18%, transparent);
-}
-
-/* ===========================
-   Settings Expansion Panel
-   =========================== */
-.settings-panel {
-  margin-bottom: 12px;
-  background: var(--bg-card) !important;
-  box-shadow: var(--shadow-card) !important;
-  border-radius: var(--radius-md) !important;
-  --mat-expansion-container-background-color: var(--bg-card);
-  --mat-expansion-header-hover-state-layer-color: var(--bg-detail);
-  transition: box-shadow var(--transition-normal) !important;
-}
-.settings-panel:hover {
-  box-shadow: var(--shadow-card-hover) !important;
-}
-.settings-panel ::ng-deep .mat-expansion-panel-header {
-  padding: var(--spacing-sm) var(--spacing-md);
-}
-.settings-panel ::ng-deep .mat-expansion-panel-header-title {
-  font-size: 10px;
-  font-weight: var(--font-weight-bold);
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.settings-panel ::ng-deep .mat-expansion-panel-body {
-  padding: 0 var(--spacing-md) var(--spacing-md);
-}
-
-.toggle-row-compact {
+/* Detail toggle rows */
+.detail-toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-sm);
+  padding: 8px 4px;
 }
-.toggle-label-sm {
+.detail-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.detail-toggle-label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
-  display: block;
 }
-.toggle-hint-sm {
+.detail-toggle-hint {
   font-size: 10px;
   color: var(--text-tertiary);
-  display: block;
-  margin-top: 1px;
+}
+
+/* Custom toggle switch */
+.toggle-wrapper {
+  flex-shrink: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.toggle-wrapper input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-track {
+  width: 42px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--bg-pill);
+  position: relative;
+  transition: background 200ms ease;
+}
+.toggle-track::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 200ms ease;
+}
+.toggle-wrapper input:checked + .toggle-track {
+  background: var(--tint-main);
+}
+.toggle-wrapper input:checked + .toggle-track::before {
+  transform: translateX(18px);
 }
 
 /* ===========================
@@ -833,12 +791,18 @@ mat-form-field {
   justify-content: flex-end;
   gap: var(--spacing-sm);
 }
+.footer-actions-spread {
+  justify-content: space-between;
+}
 
 .footer-cancel-btn {
   --mdc-text-button-label-text-color: var(--text-secondary);
   --mdc-text-button-label-text-font: var(--font-family);
   --mdc-text-button-label-text-size: var(--font-size-sm);
   border-radius: var(--radius-sm) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .footer-cancel-btn:hover {
   background: color-mix(in srgb, var(--text-secondary) 8%, transparent);
@@ -851,9 +815,16 @@ mat-form-field {
   --mdc-filled-button-label-text-size: var(--font-size-sm);
   --mdc-filled-button-container-shape: var(--radius-sm);
   font-weight: var(--font-weight-semibold) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .footer-save-btn:disabled {
   opacity: 0.5;
+}
+
+.footer-btn-icon {
+  flex-shrink: 0;
 }
 
 /* ===========================

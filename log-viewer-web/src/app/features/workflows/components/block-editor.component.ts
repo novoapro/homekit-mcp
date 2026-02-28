@@ -27,7 +27,7 @@ export function newBlockDraft(type: string): WorkflowBlockDraft {
     case 'log': base.message = ''; break;
     case 'delay': base.seconds = 1; break;
     case 'waitForState': base.condition = newConditionDraft(); base.timeoutSeconds = 30; break;
-    case 'conditional': base.condition = newConditionDraft(); base.thenBlocks = []; break;
+    case 'conditional': base.condition = newConditionDraft(); base.thenBlocks = []; base.elseBlocks = []; break;
     case 'repeat': base.count = 1; base.blocks = []; break;
     case 'repeatWhile': base.condition = newConditionDraft(); base.blocks = []; base.maxIterations = 10; break;
     case 'group': base.label = ''; base.blocks = []; break;

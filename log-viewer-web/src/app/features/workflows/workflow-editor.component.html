@@ -2,7 +2,7 @@
   <!-- Back -->
   <button class="back-btn" (click)="cancel()">
     <app-icon name="chevron-left" [size]="16" />
-    <span>{{ isPanelOpen() ? 'Done' : nestingStack().length > 0 ? 'Back' : isEditMode() ? 'Cancel Edit' : 'Cancel' }}</span>
+    <span>{{ isEditMode() ? 'Cancel Edit' : 'Cancel' }}</span>
   </button>
 
   <!-- Loading state -->
@@ -49,61 +49,31 @@
                   cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="4"></textarea>
       </mat-form-field>
 
-      <div class="inline-row">
-        <mat-form-field appearance="fill" class="tags-field" subscriptSizing="dynamic">
-          <mat-label>Tags</mat-label>
-          <mat-chip-grid #chipGrid>
-            @for (tag of draft().tags; track $index) {
-              <mat-chip-row (removed)="removeTag(tag)">
-                {{ tag }}
-                <button matChipRemove>
-                  <mat-icon>cancel</mat-icon>
-                </button>
-              </mat-chip-row>
-            }
-          </mat-chip-grid>
-          <input matInput
-                 [matChipInputFor]="chipGrid"
-                 [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
-                 (matChipInputTokenEnd)="addTagFromChipInput($event)"
-                 placeholder="+ tag" />
-        </mat-form-field>
-
-        <div class="toggle-with-label">
-          <mat-slide-toggle
-            [checked]="draft().isEnabled"
-            (change)="patchDraft({ isEnabled: $event.checked })"
-            class="enabled-toggle">
-          </mat-slide-toggle>
-          <span class="toggle-status" [class.active]="draft().isEnabled">
-            {{ draft().isEnabled ? 'Enabled' : 'Disabled' }}
-          </span>
+      <div class="detail-toggle-row">
+        <div class="detail-toggle-info">
+          <span class="detail-toggle-label">Enabled</span>
         </div>
+        <label class="toggle-wrapper">
+          <input type="checkbox"
+                 [checked]="draft().isEnabled"
+                 (change)="patchDraft({ isEnabled: $any($event.target).checked })" />
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+
+      <div class="detail-toggle-row">
+        <div class="detail-toggle-info">
+          <span class="detail-toggle-label">Continue on Error</span>
+          <span class="detail-toggle-hint">Required for Block Result conditions</span>
+        </div>
+        <label class="toggle-wrapper">
+          <input type="checkbox"
+                 [checked]="draft().continueOnError"
+                 (change)="patchDraft({ continueOnError: $any($event.target).checked })" />
+          <span class="toggle-track"></span>
+        </label>
       </div>
     </div>
-
-    <!-- === SECTION: Settings (collapsible) === -->
-    <mat-expansion-panel class="settings-panel" [expanded]="showSettings()"
-                         (opened)="showSettings.set(true)" (closed)="showSettings.set(false)"
-                         togglePosition="before">
-      <mat-expansion-panel-header>
-        <mat-panel-title>
-          <app-icon name="gear" [size]="13" class="section-title-icon" />
-          Settings
-        </mat-panel-title>
-      </mat-expansion-panel-header>
-
-      <div class="toggle-row-compact">
-        <div>
-          <span class="toggle-label-sm">Continue on Error</span>
-          <span class="toggle-hint-sm">Required for Block Result conditions</span>
-        </div>
-        <mat-slide-toggle
-          [checked]="draft().continueOnError"
-          (change)="patchDraft({ continueOnError: $event.checked })">
-        </mat-slide-toggle>
-      </div>
-    </mat-expansion-panel>
 
     <!-- === SECTION: Triggers === -->
     <div class="section">
@@ -278,41 +248,70 @@
       <p class="section-footer">Actions and flow control steps</p>
     </div>
 
-    <!-- === Sticky Footer === -->
+    <!-- === Sticky Footer (context-aware) === -->
     <div class="sticky-footer">
       <div class="sticky-footer-inner">
-        @if (validationErrors().length > 0) {
-          <div class="validation-errors">
-            @for (err of validationErrors(); track $index) {
-              <span class="validation-error">
-                <app-icon name="exclamation-circle-fill" [size]="12" />
-                {{ err }}
-              </span>
+        @switch (footerContext()) {
+          @case ('root') {
+            @if (validationErrors().length > 0) {
+              <div class="validation-errors">
+                @for (err of validationErrors(); track $index) {
+                  <span class="validation-error">
+                    <app-icon name="exclamation-circle-fill" [size]="12" />
+                    {{ err }}
+                  </span>
+                }
+              </div>
             }
-          </div>
-        }
 
-        @if (saveError()) {
-          <div class="save-error">
-            <app-icon name="exclamation-triangle" [size]="14" />
-            {{ saveError() }}
-          </div>
-        }
-
-        <div class="footer-actions">
-          <button mat-button (click)="cancel()" type="button" class="footer-cancel-btn">Cancel</button>
-          <button mat-flat-button color="primary" (click)="save()" [disabled]="!isValid() || isSaving()" type="button" class="footer-save-btn">
-            @if (isSaving()) {
-              <app-icon name="spinner" [size]="15" />
-              Saving...
-            } @else {
-              <ng-container>
-                <mat-icon>check_circle</mat-icon>
-                {{ isEditMode() ? 'Save Changes' : 'Create Workflow' }}
-              </ng-container>
+            @if (saveError()) {
+              <div class="save-error">
+                <app-icon name="exclamation-triangle" [size]="14" />
+                {{ saveError() }}
+              </div>
             }
-          </button>
-        </div>
+
+            <div class="footer-actions">
+              <button mat-button (click)="cancel()" type="button" class="footer-cancel-btn">
+                <app-icon name="xmark" [size]="14" class="footer-btn-icon" />
+                Cancel
+              </button>
+              <button mat-flat-button color="primary" (click)="save()" [disabled]="!isValid() || isSaving()" type="button" class="footer-save-btn">
+                @if (isSaving()) {
+                  <app-icon name="spinner" [size]="15" class="footer-btn-icon" />
+                  Saving...
+                } @else {
+                  <app-icon name="checkmark" [size]="15" class="footer-btn-icon" />
+                  {{ isEditMode() ? 'Save' : 'Create' }}
+                }
+              </button>
+            </div>
+          }
+          @case ('panel') {
+            <div class="footer-actions">
+              <button mat-button (click)="discardPanel()" type="button" class="footer-cancel-btn">
+                <app-icon name="xmark" [size]="14" class="footer-btn-icon" />
+                Discard
+              </button>
+              <button mat-flat-button color="primary" (click)="applyPanel()" type="button" class="footer-save-btn">
+                <app-icon name="checkmark" [size]="15" class="footer-btn-icon" />
+                Apply
+              </button>
+            </div>
+          }
+          @case ('nesting') {
+            <div class="footer-actions footer-actions-spread">
+              <button mat-button (click)="popNesting()" type="button" class="footer-cancel-btn">
+                <app-icon name="chevron-left" [size]="14" class="footer-btn-icon" />
+                Back
+              </button>
+              <button mat-flat-button color="primary" (click)="addBlockSheetOpen.set(true)" type="button" class="footer-save-btn">
+                <app-icon name="plus" [size]="15" class="footer-btn-icon" />
+                Add Block
+              </button>
+            </div>
+          }
+        }
       </div>
     </div>
   }
@@ -320,15 +319,17 @@
 
 <!-- === Slide-Over Panel (triggers & conditions ONLY) === -->
 @if (isPanelOpen()) {
-  <div class="panel-overlay" (click)="closePanel()"></div>
+  <div class="panel-overlay" (click)="discardPanel()"></div>
   <div class="slide-panel" [class]="'panel-' + (currentFrame()?.kind || '')">
     <!-- Panel header -->
     <div class="panel-header">
       <div class="panel-header-top">
-        <button class="panel-back-btn" (click)="popPanel()">
-          <app-icon name="chevron-left" [size]="14" />
-          <span>{{ panelStack().length > 1 ? 'Back' : 'Done' }}</span>
-        </button>
+        @if (panelStack().length > 1) {
+          <button class="panel-back-btn" (click)="popPanel()">
+            <app-icon name="chevron-left" [size]="14" />
+            <span>Back</span>
+          </button>
+        }
       </div>
       <div class="panel-breadcrumbs">
         @for (crumb of breadcrumbs(); track $index; let i = $index; let last = $last) {

@@ -291,7 +291,6 @@ const EXEC_MODES = [
     :host {
       display: block;
       border-radius: var(--radius-sm);
-      overflow: hidden;
       transition: box-shadow var(--transition-fast);
     }
 

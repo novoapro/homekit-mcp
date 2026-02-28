@@ -11,13 +11,8 @@ import { AddBlockSheetComponent } from './components/add-block-sheet.component';
 import { newBlockDraft } from './components/block-editor.component';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatExpansionModule } from '@angular/material/expansion';
-import { COMMA, ENTER } from '@angular/cdk/keycodes';
-import { MatChipInputEvent } from '@angular/material/chips';
 import { TextFieldModule } from '@angular/cdk/text-field';
 import { CdkDragDrop, CdkDrag, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
 import { DeviceRegistryService } from '../../core/services/device-registry.service';
@@ -81,8 +76,8 @@ function newRootConditionGroup(): WorkflowConditionDraft {
   imports: [
     IconComponent, TriggerEditorComponent, ConditionEditorComponent, ConditionGroupEditorComponent,
     ExpandableBlockCardComponent, AddBlockSheetComponent,
-    MatFormFieldModule, MatInputModule, MatSlideToggleModule, MatChipsModule,
-    MatButtonModule, MatIconModule, MatExpansionModule, TextFieldModule,
+    MatFormFieldModule, MatInputModule,
+    MatButtonModule, MatIconModule, TextFieldModule,
     CdkDrag, CdkDropList,
   ],
   templateUrl: './workflow-editor.component.html',
@@ -103,17 +98,23 @@ export class WorkflowEditorComponent implements OnInit {
   saveError = signal<string | null>(null);
 
   draft = signal<WorkflowDraft>(emptyDraft());
-  tagInput = signal('');
-  showSettings = signal(false);
 
   readonly validationErrors = computed(() => validateDraft(this.draft()));
   readonly isValid = computed(() => this.validationErrors().length === 0);
 
-  readonly separatorKeyCodes = [ENTER, COMMA] as const;
+  // =============================================
+  // Footer context
+  // =============================================
+  readonly footerContext = computed((): 'root' | 'panel' | 'nesting' => {
+    if (this.isPanelOpen()) return 'panel';
+    if (this.nestingStack().length > 0) return 'nesting';
+    return 'root';
+  });
 
   // =============================================
   // Panel state (triggers & conditions ONLY)
   // =============================================
+  panelSnapshot = signal<{ path: ItemPath; data: any } | null>(null);
   panelStack = signal<PanelFrame[]>([]);
   readonly isPanelOpen = computed(() => this.panelStack().length > 0);
   readonly currentFrame = computed(() => {
@@ -159,7 +160,7 @@ export class WorkflowEditorComponent implements OnInit {
   /** Breadcrumb trail for block nesting */
   readonly nestingBreadcrumbs = computed(() => {
     const crumbs: { label: string; level: number }[] = [
-      { label: 'Blocks', level: -1 }
+      { label: 'Root', level: -1 }
     ];
     this.nestingStack().forEach((f, i) => crumbs.push({ label: f.label, level: i }));
     return crumbs;
@@ -192,7 +193,10 @@ export class WorkflowEditorComponent implements OnInit {
   // Panel navigation (triggers & conditions)
   // =============================================
   openPanel(kind: PanelItemKind, section: 'triggers' | 'conditions', index: number, label: string): void {
-    this.panelStack.set([{ kind, path: { section, index }, label }]);
+    const path: ItemPath = { section, index };
+    const item = this.resolveItemAtPath(path);
+    this.panelSnapshot.set({ path, data: JSON.parse(JSON.stringify(item)) });
+    this.panelStack.set([{ kind, path, label }]);
   }
 
   pushPanel(kind: PanelItemKind, path: ItemPath, label: string): void {
@@ -209,6 +213,21 @@ export class WorkflowEditorComponent implements OnInit {
 
   closePanel(): void {
     this.panelStack.set([]);
+    this.panelSnapshot.set(null);
+  }
+
+  applyPanel(): void {
+    this.panelStack.set([]);
+    this.panelSnapshot.set(null);
+  }
+
+  discardPanel(): void {
+    const snapshot = this.panelSnapshot();
+    if (snapshot) {
+      this.updateItemAtPath(snapshot.path, snapshot.data);
+    }
+    this.panelStack.set([]);
+    this.panelSnapshot.set(null);
   }
 
   // --- Path resolution (still used for triggers/conditions panel) ---
@@ -365,34 +384,31 @@ export class WorkflowEditorComponent implements OnInit {
     const parent = blocks[blockIndex];
     if (!parent) return;
 
-    this.nestingTransition.set('push');
-    setTimeout(() => {
-      this.nestingStack.update(s => [...s, {
-        parentBlockId: parent._draftId,
-        field: field as 'thenBlocks' | 'elseBlocks' | 'blocks',
-        label,
-      }]);
-      this.expandedBlockIds.set(new Set());
-      this.nestingTransition.set('none');
-    }, 20);
+    this.nestingStack.update(s => [...s, {
+      parentBlockId: parent._draftId,
+      field: field as 'thenBlocks' | 'elseBlocks' | 'blocks',
+      label,
+    }]);
+    this.expandedBlockIds.set(new Set());
+    this.playNestingTransition('push');
   }
 
   popNesting(): void {
-    this.nestingTransition.set('pop');
-    setTimeout(() => {
-      this.nestingStack.update(s => s.slice(0, -1));
-      this.expandedBlockIds.set(new Set());
-      this.nestingTransition.set('none');
-    }, 20);
+    this.nestingStack.update(s => s.slice(0, -1));
+    this.expandedBlockIds.set(new Set());
+    this.playNestingTransition('pop');
   }
 
   popToNestingLevel(level: number): void {
-    this.nestingTransition.set('pop');
-    setTimeout(() => {
-      this.nestingStack.update(s => level < 0 ? [] : s.slice(0, level + 1));
-      this.expandedBlockIds.set(new Set());
-      this.nestingTransition.set('none');
-    }, 20);
+    this.nestingStack.update(s => level < 0 ? [] : s.slice(0, level + 1));
+    this.expandedBlockIds.set(new Set());
+    this.playNestingTransition('pop');
+  }
+
+  private playNestingTransition(dir: 'push' | 'pop'): void {
+    // Reset then set in next frame so the CSS animation replays
+    this.nestingTransition.set('none');
+    requestAnimationFrame(() => this.nestingTransition.set(dir));
   }
 
   // =============================================
@@ -584,19 +600,6 @@ export class WorkflowEditorComponent implements OnInit {
     this.openPanel('conditionGroup', 'conditions', 0, 'Guard Conditions');
   }
 
-  // --- Tags ---
-  addTagFromChipInput(event: MatChipInputEvent): void {
-    const tag = (event.value || '').trim();
-    if (tag && !this.draft().tags.includes(tag)) {
-      this.draft.update(d => ({ ...d, tags: [...d.tags, tag] }));
-    }
-    event.chipInput.clear();
-  }
-
-  removeTag(tag: string): void {
-    this.draft.update(d => ({ ...d, tags: d.tags.filter(t => t !== tag) }));
-  }
-
   // --- Save ---
   save(): void {
     if (!this.isValid()) return;
@@ -623,7 +626,7 @@ export class WorkflowEditorComponent implements OnInit {
 
   cancel(): void {
     if (this.isPanelOpen()) {
-      this.closePanel();
+      this.discardPanel();
       return;
     }
     if (this.nestingStack().length > 0) {

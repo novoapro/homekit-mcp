@@ -10,6 +10,9 @@ class CloudBackupService: ObservableObject, CloudBackupServiceProtocol {
     @Published var autoBackupEnabled: Bool {
         didSet { storage.autoBackupEnabled = autoBackupEnabled }
     }
+    @Published var autoBackupIntervalHours: Int {
+        didSet { storage.autoBackupIntervalHours = autoBackupIntervalHours }
+    }
     @Published var lastCloudBackupDate: Date?
 
     private let container: CKContainer
@@ -33,6 +36,7 @@ class CloudBackupService: ObservableObject, CloudBackupServiceProtocol {
         self.container = CKContainer(identifier: Self.containerIdentifier)
         self.privateDB = container.privateCloudDatabase
         self.autoBackupEnabled = storage.autoBackupEnabled
+        self.autoBackupIntervalHours = storage.autoBackupIntervalHours
 
         setupAutoBackup(workflowStorageService: workflowStorageService)
     }
@@ -228,10 +232,19 @@ class CloudBackupService: ObservableObject, CloudBackupServiceProtocol {
 
         autoBackupTask?.cancel()
         autoBackupTask = Task { [weak self] in
-            // Debounce: wait 5 minutes before auto-backing up
+            // Debounce: wait 5 minutes to coalesce changes
             try? await Task.sleep(nanoseconds: 5 * 60 * 1_000_000_000)
             guard !Task.isCancelled else { return }
             guard let self else { return }
+
+            // Check if enough time has passed since last backup
+            if let lastBackup = self.lastCloudBackupDate {
+                let intervalSeconds = TimeInterval(self.autoBackupIntervalHours * 3600)
+                if Date().timeIntervalSince(lastBackup) < intervalSeconds {
+                    AppLogger.general.info("Auto-backup skipped: last backup within \(self.autoBackupIntervalHours)h interval")
+                    return
+                }
+            }
 
             do {
                 try await self.saveToCloud()

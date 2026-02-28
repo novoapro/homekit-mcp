@@ -59,6 +59,7 @@ class BackupService: ObservableObject, BackupServiceProtocol {
             pollingInterval: storage.pollingInterval,
             workflowsEnabled: storage.workflowsEnabled,
             autoBackupEnabled: storage.autoBackupEnabled,
+            autoBackupIntervalHours: storage.autoBackupIntervalHours,
             deviceStateLoggingEnabled: storage.deviceStateLoggingEnabled,
             logOnlyWebhookDevices: storage.logOnlyWebhookDevices,
             logCacheSize: storage.logCacheSize
@@ -137,6 +138,7 @@ class BackupService: ObservableObject, BackupServiceProtocol {
         storage.pollingInterval = s.pollingInterval
         storage.workflowsEnabled = s.workflowsEnabled
         storage.autoBackupEnabled = s.autoBackupEnabled
+        storage.autoBackupIntervalHours = s.autoBackupIntervalHours ?? 24
         storage.deviceStateLoggingEnabled = s.deviceStateLoggingEnabled ?? true
         storage.logOnlyWebhookDevices = s.logOnlyWebhookDevices ?? false
         storage.logCacheSize = s.logCacheSize ?? 500

@@ -107,6 +107,19 @@ struct AccountSettingsView: View {
                         set: { cloudBackupService.autoBackupEnabled = $0 }
                     ))
 
+                    if cloudBackupService.autoBackupEnabled {
+                        Picker("Backup Frequency", selection: Binding(
+                            get: { cloudBackupService.autoBackupIntervalHours },
+                            set: { cloudBackupService.autoBackupIntervalHours = $0 }
+                        )) {
+                            Text("Every hour").tag(1)
+                            Text("Every 6 hours").tag(6)
+                            Text("Every 12 hours").tag(12)
+                            Text("Every 24 hours").tag(24)
+                            Text("Every 48 hours").tag(48)
+                        }
+                    }
+
                     if let lastDate = cloudBackupService.lastCloudBackupDate {
                         LabeledContent("Last Cloud Backup") {
                             Text(lastDate, format: .dateTime.month().day().hour().minute())

@@ -40,6 +40,7 @@ struct BackupSettings: Codable {
     let pollingInterval: Int
     let workflowsEnabled: Bool
     let autoBackupEnabled: Bool
+    let autoBackupIntervalHours: Int?
     let deviceStateLoggingEnabled: Bool?
     let logOnlyWebhookDevices: Bool?
     let logCacheSize: Int?

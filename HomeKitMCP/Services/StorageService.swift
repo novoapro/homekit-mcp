@@ -112,6 +112,9 @@ class StorageService: ObservableObject, StorageServiceProtocol {
     @Published var autoBackupEnabled: Bool {
         didSet { defaults.set(autoBackupEnabled, forKey: Keys.autoBackupEnabled) }
     }
+    @Published var autoBackupIntervalHours: Int {
+        didSet { defaults.set(autoBackupIntervalHours, forKey: Keys.autoBackupIntervalHours) }
+    }
     @Published var deviceStateLoggingEnabled: Bool {
         didSet { defaults.set(deviceStateLoggingEnabled, forKey: Keys.deviceStateLoggingEnabled) }
     }
@@ -163,6 +166,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             Keys.pollingInterval: 30,
             Keys.workflowsEnabled: true,
             Keys.autoBackupEnabled: false,
+            Keys.autoBackupIntervalHours: 24,
             Keys.deviceStateLoggingEnabled: true,
             Keys.logOnlyWebhookDevices: false,
             Keys.registryMigrationCompleted: false,
@@ -208,6 +212,8 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         self.pollingInterval = defaults.integer(forKey: Keys.pollingInterval)
         self.workflowsEnabled = defaults.bool(forKey: Keys.workflowsEnabled)
         self.autoBackupEnabled = defaults.bool(forKey: Keys.autoBackupEnabled)
+        let rawIntervalHours = defaults.integer(forKey: Keys.autoBackupIntervalHours)
+        self.autoBackupIntervalHours = rawIntervalHours > 0 ? rawIntervalHours : 24
         self.deviceStateLoggingEnabled = defaults.bool(forKey: Keys.deviceStateLoggingEnabled)
         self.logOnlyWebhookDevices = defaults.bool(forKey: Keys.logOnlyWebhookDevices)
         self.registryMigrationCompleted = defaults.bool(forKey: Keys.registryMigrationCompleted)
@@ -375,6 +381,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         static let pollingInterval = "pollingInterval"
         static let workflowsEnabled = "workflowsEnabled"
         static let autoBackupEnabled = "autoBackupEnabled"
+        static let autoBackupIntervalHours = "autoBackupIntervalHours"
         static let deviceStateLoggingEnabled = "deviceStateLoggingEnabled"
         static let logOnlyWebhookDevices = "logOnlyWebhookDevices"
         static let registryMigrationCompleted = "registryMigrationCompleted"

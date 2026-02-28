@@ -39,13 +39,7 @@
   --mat-option-label-text-color: var(--text-primary);
 }
 
-/* Slide toggle */
-.mat-mdc-slide-toggle {
-  --mdc-switch-selected-track-color: var(--status-active);
-  --mdc-switch-selected-hover-track-color: var(--status-active);
-  --mdc-switch-selected-focus-track-color: var(--status-active);
-  --mdc-switch-selected-pressed-track-color: var(--status-active);
-}
+/* Slide toggle — use Material default styling */
 
 /* Buttons */
 .mat-mdc-unelevated-button.mat-primary {
