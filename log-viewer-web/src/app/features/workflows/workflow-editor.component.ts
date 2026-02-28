@@ -6,7 +6,9 @@ import { IconComponent } from '../../shared/components/icon.component';
 import { TriggerEditorComponent } from './components/trigger-editor.component';
 import { ConditionEditorComponent } from './components/condition-editor.component';
 import { ConditionGroupEditorComponent } from './components/condition-group-editor.component';
-import { BlockEditorComponent, newBlockDraft } from './components/block-editor.component';
+import { ExpandableBlockCardComponent } from './components/expandable-block-card.component';
+import { AddBlockSheetComponent } from './components/add-block-sheet.component';
+import { newBlockDraft } from './components/block-editor.component';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
@@ -17,14 +19,15 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
 import { MatChipInputEvent } from '@angular/material/chips';
 import { TextFieldModule } from '@angular/cdk/text-field';
+import { CdkDragDrop, CdkDrag, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
 import { DeviceRegistryService } from '../../core/services/device-registry.service';
 import { WorkflowDraft, WorkflowTriggerDraft, WorkflowConditionDraft, WorkflowBlockDraft, emptyDraft, newUUID } from './workflow-editor.types';
 import { validateDraft } from './workflow-editor-validation';
-import { draftToPayload, definitionToDraft, triggerAutoName, conditionAutoName, blockAutoName, newConditionLeaf } from './workflow-editor-utils';
+import { draftToPayload, definitionToDraft, triggerAutoName, conditionAutoName, blockAutoName } from './workflow-editor-utils';
 
-// --- Panel types ---
+// --- Panel types (triggers & conditions only) ---
 
-type PanelItemKind = 'trigger' | 'condition' | 'conditionGroup' | 'block';
+type PanelItemKind = 'trigger' | 'condition' | 'conditionGroup';
 
 interface NestedPath {
   field: 'thenBlocks' | 'elseBlocks' | 'blocks' | 'conditions' | 'condition';
@@ -44,66 +47,24 @@ interface PanelFrame {
   label: string;
 }
 
+// --- Nesting stack for blocks ---
+
+interface NestingFrame {
+  parentBlockId: string;  // _draftId of parent block
+  field: 'thenBlocks' | 'elseBlocks' | 'blocks';
+  label: string;
+}
+
 // --- Constants ---
 
-const ACTION_TYPES = [
-  { value: 'controlDevice', label: 'Control Device' },
-  { value: 'runScene', label: 'Run Scene' },
-  { value: 'webhook', label: 'Webhook' },
-  { value: 'log', label: 'Log' },
-];
-const FLOW_TYPES = [
-  { value: 'delay', label: 'Delay' },
-  { value: 'waitForState', label: 'Wait for State' },
-  { value: 'conditional', label: 'If / Else' },
-  { value: 'repeat', label: 'Repeat' },
-  { value: 'repeatWhile', label: 'Repeat While' },
-  { value: 'group', label: 'Group' },
-  { value: 'stop', label: 'Stop' },
-  { value: 'executeWorkflow', label: 'Call Workflow' },
-];
-
 const TRIGGER_ICONS: Record<string, string> = {
-  deviceStateChange: 'house',
-  schedule: 'clock',
-  sunEvent: 'sun-max-fill',
-  webhook: 'link',
-  workflow: 'arrow-triangle-branch',
-  compound: 'arrow-triangle-branch',
+  deviceStateChange: 'house', schedule: 'clock', sunEvent: 'sun-max-fill',
+  webhook: 'link', workflow: 'arrow-triangle-branch', compound: 'arrow-triangle-branch',
 };
 
 const TRIGGER_BADGES: Record<string, string> = {
-  deviceStateChange: 'Device',
-  schedule: 'Schedule',
-  sunEvent: 'Sun',
-  webhook: 'Webhook',
-  workflow: 'Callable',
-  compound: 'Compound',
-};
-
-const CONDITION_ICONS: Record<string, string> = {
-  deviceState: 'house',
-  timeCondition: 'clock',
-  sceneActive: 'sparkles',
-  blockResult: 'checkmark-circle',
-  and: 'arrow-triangle-branch',
-  or: 'arrow-triangle-branch',
-  not: 'exclamation-triangle',
-};
-
-const BLOCK_ICONS: Record<string, string> = {
-  controlDevice: 'house',
-  runScene: 'sparkles',
-  webhook: 'link',
-  log: 'doc-text',
-  delay: 'clock',
-  waitForState: 'clock',
-  conditional: 'arrow-triangle-branch',
-  repeat: 'arrow-2-squarepath',
-  repeatWhile: 'arrow-2-squarepath',
-  group: 'folder',
-  stop: 'xmark-circle',
-  executeWorkflow: 'arrow-right-circle',
+  deviceStateChange: 'Device', schedule: 'Schedule', sunEvent: 'Sun',
+  webhook: 'Webhook', workflow: 'Callable', compound: 'Compound',
 };
 
 function newTriggerDraft(): WorkflowTriggerDraft {
@@ -117,8 +78,13 @@ function newRootConditionGroup(): WorkflowConditionDraft {
 @Component({
   selector: 'app-workflow-editor',
   standalone: true,
-  imports: [IconComponent, TriggerEditorComponent, ConditionEditorComponent, ConditionGroupEditorComponent, BlockEditorComponent,
-            MatFormFieldModule, MatInputModule, MatSlideToggleModule, MatChipsModule, MatButtonModule, MatIconModule, MatExpansionModule, TextFieldModule],
+  imports: [
+    IconComponent, TriggerEditorComponent, ConditionEditorComponent, ConditionGroupEditorComponent,
+    ExpandableBlockCardComponent, AddBlockSheetComponent,
+    MatFormFieldModule, MatInputModule, MatSlideToggleModule, MatChipsModule,
+    MatButtonModule, MatIconModule, MatExpansionModule, TextFieldModule,
+    CdkDrag, CdkDropList,
+  ],
   templateUrl: './workflow-editor.component.html',
   styleUrl: './workflow-editor.component.css',
 })
@@ -144,10 +110,10 @@ export class WorkflowEditorComponent implements OnInit {
   readonly isValid = computed(() => this.validationErrors().length === 0);
 
   readonly separatorKeyCodes = [ENTER, COMMA] as const;
-  readonly actionTypes = ACTION_TYPES;
-  readonly flowTypes = FLOW_TYPES;
 
-  // --- Panel state ---
+  // =============================================
+  // Panel state (triggers & conditions ONLY)
+  // =============================================
   panelStack = signal<PanelFrame[]>([]);
   readonly isPanelOpen = computed(() => this.panelStack().length > 0);
   readonly currentFrame = computed(() => {
@@ -162,40 +128,70 @@ export class WorkflowEditorComponent implements OnInit {
     return this.resolveItemAtPath(frame.path);
   });
 
-  /** Guard conditions run before blocks, so blockResult is not applicable. */
   readonly isGuardConditionContext = computed(() => {
     const stack = this.panelStack();
     return stack.length > 0 && stack[0].path.section === 'conditions';
   });
 
-  // --- Icon/badge lookups for summary nodes ---
+  // =============================================
+  // Block nesting stack (replaces panel for blocks)
+  // =============================================
+  nestingStack = signal<NestingFrame[]>([]);
+  expandedBlockIds = signal<Set<string>>(new Set());
+  addBlockSheetOpen = signal(false);
+  reorderMode = signal(false);
+  nestingTransition = signal<'none' | 'push' | 'pop'>('none');
+
+  /** Resolve the current block list based on nesting depth */
+  readonly currentBlocks = computed((): WorkflowBlockDraft[] => {
+    const stack = this.nestingStack();
+    if (stack.length === 0) return this.draft().blocks;
+
+    let blocks: WorkflowBlockDraft[] = this.draft().blocks;
+    for (const frame of stack) {
+      const parent = blocks.find(b => b._draftId === frame.parentBlockId);
+      if (!parent) return [];
+      blocks = (parent as any)[frame.field] || [];
+    }
+    return blocks;
+  });
+
+  /** Breadcrumb trail for block nesting */
+  readonly nestingBreadcrumbs = computed(() => {
+    const crumbs: { label: string; level: number }[] = [
+      { label: 'Blocks', level: -1 }
+    ];
+    this.nestingStack().forEach((f, i) => crumbs.push({ label: f.label, level: i }));
+    return crumbs;
+  });
+
+  /** Depth-first ordinal map across ALL blocks */
+  readonly blockOrdinals = computed(() => {
+    const ordinals = new Map<string, number>();
+    let counter = 1;
+    function walk(blocks: WorkflowBlockDraft[]) {
+      for (const b of blocks) {
+        ordinals.set(b._draftId, counter++);
+        if (b.thenBlocks) walk(b.thenBlocks);
+        if (b.elseBlocks) walk(b.elseBlocks);
+        if (b.blocks) walk(b.blocks);
+      }
+    }
+    walk(this.draft().blocks);
+    return ordinals;
+  });
+
+  // =============================================
+  // Icon/badge lookups
+  // =============================================
   triggerIcon(t: WorkflowTriggerDraft): string { return TRIGGER_ICONS[t.type] || 'bolt'; }
   triggerBadge(t: WorkflowTriggerDraft): string { return TRIGGER_BADGES[t.type] || t.type; }
   triggerName(t: WorkflowTriggerDraft): string { return t.name || triggerAutoName(t, this.registry); }
-  conditionIcon(c: WorkflowConditionDraft): string { return CONDITION_ICONS[c.type] || 'questionmark-circle'; }
-  conditionName(c: WorkflowConditionDraft): string { return conditionAutoName(c, this.registry); }
-  blockIcon(b: WorkflowBlockDraft): string { return BLOCK_ICONS[b.type] || 'square'; }
-  blockName(b: WorkflowBlockDraft): string { return b.name || blockAutoName(b, this.registry); }
 
-  blockChildCount(b: WorkflowBlockDraft): string | null {
-    if (b.type === 'conditional') {
-      const thenCount = b.thenBlocks?.length || 0;
-      const elseCount = b.elseBlocks?.length || 0;
-      if (thenCount + elseCount === 0) return null;
-      const parts: string[] = [];
-      if (thenCount > 0) parts.push(`${thenCount} then`);
-      if (elseCount > 0) parts.push(`${elseCount} else`);
-      return parts.join(', ');
-    }
-    if (['repeat', 'repeatWhile', 'group'].includes(b.type)) {
-      const count = b.blocks?.length || 0;
-      return count > 0 ? `${count} block${count > 1 ? 's' : ''}` : null;
-    }
-    return null;
-  }
-
-  // --- Panel navigation ---
-  openPanel(kind: PanelItemKind, section: 'triggers' | 'conditions' | 'blocks', index: number, label: string): void {
+  // =============================================
+  // Panel navigation (triggers & conditions)
+  // =============================================
+  openPanel(kind: PanelItemKind, section: 'triggers' | 'conditions', index: number, label: string): void {
     this.panelStack.set([{ kind, path: { section, index }, label }]);
   }
 
@@ -215,7 +211,7 @@ export class WorkflowEditorComponent implements OnInit {
     this.panelStack.set([]);
   }
 
-  // --- Path resolution ---
+  // --- Path resolution (still used for triggers/conditions panel) ---
   private resolveItemAtPath(path: ItemPath): any {
     const d = this.draft();
     let list: any[];
@@ -309,7 +305,7 @@ export class WorkflowEditorComponent implements OnInit {
     return clone;
   }
 
-  // --- Panel event handlers ---
+  // --- Panel event handlers (triggers & conditions) ---
   onPanelItemChanged(item: any): void {
     const frame = this.currentFrame();
     if (!frame) return;
@@ -323,20 +319,11 @@ export class WorkflowEditorComponent implements OnInit {
     this.popPanel();
   }
 
-  onEditNestedBlock(event: { field: string, index: number, label: string }): void {
-    const frame = this.currentFrame();
-    if (!frame) return;
-    const nestedPath: NestedPath = { field: event.field as any, index: event.index };
-    const newPath = this.appendNestedPath(frame.path, nestedPath);
-    this.pushPanel('block', newPath, event.label);
-  }
-
   onEditNestedCondition(event: { field: string, index: number, label: string }): void {
     const frame = this.currentFrame();
     if (!frame) return;
     const nestedPath: NestedPath = { field: event.field as any, index: event.index };
     const newPath = this.appendNestedPath(frame.path, nestedPath);
-    // Resolve the item to determine if it's a group or leaf
     const item = this.resolveItemAtPath(newPath);
     const isGroup = item && (item.type === 'and' || item.type === 'or' ||
       (item.type === 'not' && item.condition &&
@@ -360,8 +347,156 @@ export class WorkflowEditorComponent implements OnInit {
     return newPath;
   }
 
-  // --- Lifecycle ---
+  // =============================================
+  // Block nesting navigation
+  // =============================================
+  toggleBlockExpanded(blockId: string): void {
+    if (this.reorderMode()) return;
+    this.expandedBlockIds.update(ids => {
+      const next = new Set(ids);
+      if (next.has(blockId)) next.delete(blockId);
+      else next.add(blockId);
+      return next;
+    });
+  }
 
+  pushNesting(blockIndex: number, field: string, label: string): void {
+    const blocks = this.currentBlocks();
+    const parent = blocks[blockIndex];
+    if (!parent) return;
+
+    this.nestingTransition.set('push');
+    setTimeout(() => {
+      this.nestingStack.update(s => [...s, {
+        parentBlockId: parent._draftId,
+        field: field as 'thenBlocks' | 'elseBlocks' | 'blocks',
+        label,
+      }]);
+      this.expandedBlockIds.set(new Set());
+      this.nestingTransition.set('none');
+    }, 20);
+  }
+
+  popNesting(): void {
+    this.nestingTransition.set('pop');
+    setTimeout(() => {
+      this.nestingStack.update(s => s.slice(0, -1));
+      this.expandedBlockIds.set(new Set());
+      this.nestingTransition.set('none');
+    }, 20);
+  }
+
+  popToNestingLevel(level: number): void {
+    this.nestingTransition.set('pop');
+    setTimeout(() => {
+      this.nestingStack.update(s => level < 0 ? [] : s.slice(0, level + 1));
+      this.expandedBlockIds.set(new Set());
+      this.nestingTransition.set('none');
+    }, 20);
+  }
+
+  // =============================================
+  // Block CRUD (operates on current nesting level)
+  // =============================================
+
+  /** Build a path to the current nesting level's block array */
+  private currentBlocksPath(): { rootIndex: number; nestedFields: { field: string; blockId: string }[] } | null {
+    const stack = this.nestingStack();
+    if (stack.length === 0) return null;
+    // Find root block index
+    const first = stack[0];
+    const rootIdx = this.draft().blocks.findIndex(b => b._draftId === first.parentBlockId);
+    if (rootIdx < 0) return null;
+    const fields = stack.map(f => ({ field: f.field, blockId: f.parentBlockId }));
+    return { rootIndex: rootIdx, nestedFields: fields };
+  }
+
+  private updateCurrentBlockList(updater: (blocks: WorkflowBlockDraft[]) => WorkflowBlockDraft[]): void {
+    const stack = this.nestingStack();
+    if (stack.length === 0) {
+      // Operating on root blocks
+      this.draft.update(d => ({ ...d, blocks: updater(d.blocks) }));
+      return;
+    }
+
+    // Deep update through nesting stack
+    this.draft.update(d => {
+      const newBlocks = [...d.blocks];
+      let currentArr = newBlocks;
+      const clones: { arr: WorkflowBlockDraft[]; idx: number; field: string }[] = [];
+
+      for (const frame of stack) {
+        const idx = currentArr.findIndex(b => b._draftId === frame.parentBlockId);
+        if (idx < 0) return d;
+        const clone = { ...currentArr[idx] };
+        currentArr[idx] = clone;
+        clones.push({ arr: currentArr, idx, field: frame.field });
+        currentArr = [...((clone as any)[frame.field] || [])];
+        (clone as any)[frame.field] = currentArr;
+      }
+
+      // Apply update to the innermost array
+      const updated = updater(currentArr);
+      if (clones.length > 0) {
+        const last = clones[clones.length - 1];
+        (last.arr[last.idx] as any)[last.field] = updated;
+      }
+
+      return { ...d, blocks: newBlocks };
+    });
+  }
+
+  addBlockFromSheet(type: string): void {
+    const b = newBlockDraft(type);
+    this.updateCurrentBlockList(blocks => [...blocks, b]);
+    // Auto-expand the new block
+    this.expandedBlockIds.update(ids => {
+      const next = new Set(ids);
+      next.add(b._draftId);
+      return next;
+    });
+  }
+
+  updateCurrentBlock(i: number, b: WorkflowBlockDraft): void {
+    this.updateCurrentBlockList(blocks => {
+      const arr = [...blocks];
+      arr[i] = b;
+      return arr;
+    });
+  }
+
+  removeCurrentBlock(i: number): void {
+    this.updateCurrentBlockList(blocks => blocks.filter((_, idx) => idx !== i));
+  }
+
+  moveCurrentBlock(i: number, dir: -1 | 1): void {
+    this.updateCurrentBlockList(blocks => {
+      const arr = [...blocks];
+      [arr[i], arr[i + dir]] = [arr[i + dir], arr[i]];
+      return arr;
+    });
+  }
+
+  onBlockDrop(event: CdkDragDrop<WorkflowBlockDraft[]>): void {
+    if (event.previousIndex === event.currentIndex) return;
+    this.updateCurrentBlockList(blocks => {
+      const arr = [...blocks];
+      moveItemInArray(arr, event.previousIndex, event.currentIndex);
+      return arr;
+    });
+  }
+
+  toggleReorderMode(): void {
+    const next = !this.reorderMode();
+    if (next) {
+      this.expandedBlockIds.set(new Set());
+    }
+    this.reorderMode.set(next);
+  }
+
+  // =============================================
+  // Lifecycle
+  // =============================================
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('workflowId');
     if (id) {
@@ -390,7 +525,9 @@ export class WorkflowEditorComponent implements OnInit {
     });
   }
 
-  // --- Draft helpers ---
+  // =============================================
+  // Draft helpers
+  // =============================================
   patchDraft(changes: Partial<WorkflowDraft>): void {
     this.draft.update(d => ({ ...d, ...changes }));
   }
@@ -403,20 +540,11 @@ export class WorkflowEditorComponent implements OnInit {
     this.openPanel('trigger', 'triggers', idx, 'New Trigger');
   }
 
-  updateTrigger(i: number, t: WorkflowTriggerDraft): void {
-    this.draft.update(d => {
-      const triggers = [...d.triggers];
-      triggers[i] = t;
-      return { ...d, triggers };
-    });
-  }
-
   removeTrigger(i: number): void {
     this.draft.update(d => ({ ...d, triggers: d.triggers.filter((_, idx) => idx !== i) }));
   }
 
-  // --- Guard conditions (root group pattern) ---
-
+  // --- Guard conditions ---
   readonly rootConditionGroup = computed(() => {
     const conds = this.draft().conditions;
     if (conds.length === 0) return null;
@@ -456,63 +584,7 @@ export class WorkflowEditorComponent implements OnInit {
     this.openPanel('conditionGroup', 'conditions', 0, 'Guard Conditions');
   }
 
-  updateCondition(i: number, c: WorkflowConditionDraft): void {
-    this.draft.update(d => {
-      const conditions = [...d.conditions];
-      conditions[i] = c;
-      return { ...d, conditions };
-    });
-  }
-
-  removeCondition(i: number): void {
-    this.draft.update(d => ({ ...d, conditions: d.conditions.filter((_, idx) => idx !== i) }));
-  }
-
-  // --- Blocks ---
-  addBlock(type: string): void {
-    const b = newBlockDraft(type);
-    this.draft.update(d => ({ ...d, blocks: [...d.blocks, b] }));
-    const idx = this.draft().blocks.length - 1;
-    const label = b.name || type;
-    this.openPanel('block', 'blocks', idx, label);
-  }
-
-  updateBlock(i: number, b: WorkflowBlockDraft): void {
-    this.draft.update(d => {
-      const blocks = [...d.blocks];
-      blocks[i] = b;
-      return { ...d, blocks };
-    });
-  }
-
-  removeBlock(i: number): void {
-    this.draft.update(d => ({ ...d, blocks: d.blocks.filter((_, idx) => idx !== i) }));
-  }
-
-  moveBlock(i: number, dir: -1 | 1): void {
-    this.draft.update(d => {
-      const blocks = [...d.blocks];
-      [blocks[i], blocks[i + dir]] = [blocks[i + dir], blocks[i]];
-      return { ...d, blocks };
-    });
-  }
-
   // --- Tags ---
-  onTagKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' || event.key === ',') {
-      event.preventDefault();
-      this.addTag();
-    }
-  }
-
-  addTag(): void {
-    const tag = this.tagInput().trim().replace(/,$/, '');
-    if (tag && !this.draft().tags.includes(tag)) {
-      this.draft.update(d => ({ ...d, tags: [...d.tags, tag] }));
-    }
-    this.tagInput.set('');
-  }
-
   addTagFromChipInput(event: MatChipInputEvent): void {
     const tag = (event.value || '').trim();
     if (tag && !this.draft().tags.includes(tag)) {
@@ -554,6 +626,10 @@ export class WorkflowEditorComponent implements OnInit {
       this.closePanel();
       return;
     }
+    if (this.nestingStack().length > 0) {
+      this.popNesting();
+      return;
+    }
     if (window.history.length > 1) {
       this.location.back();
     } else {
@@ -568,9 +644,4 @@ export class WorkflowEditorComponent implements OnInit {
   patchDescription(e: Event): void {
     this.patchDraft({ description: (e.target as HTMLTextAreaElement).value });
   }
-
-  patchTagInput(e: Event): void {
-    this.tagInput.set((e.target as HTMLInputElement).value);
-  }
-
 }

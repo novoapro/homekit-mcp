@@ -20,7 +20,9 @@ const ICON_MAP: Record<string, IconEntry> = {
   // ── Navigation ────────────────────────────────────────
   'chevron-down':            { ms: 'expand_more'                   },
   'chevron-right':           { ms: 'chevron_right'                 },
+  'chevron-left':            { ms: 'chevron_left'                  },
   'chevron-up':              { ms: 'expand_less'                   },
+  'arrow-left':              { ms: 'arrow_back'                    },
   'arrow-right':             { ms: 'arrow_forward'                 },
   'arrow-right-circle':      { ms: 'arrow_circle_right', fill: 1  },
 
@@ -34,6 +36,24 @@ const ICON_MAP: Record<string, IconEntry> = {
   'cpu':                     { ms: 'memory'                        },
   'house':                   { ms: 'home',               fill: 1  },
   'slider-horizontal':       { ms: 'tune'                          },
+  'bolt':                    { ms: 'electric_bolt'                 },
+  'sparkles':                { ms: 'auto_awesome',       fill: 1  },
+  'doc-text':                { ms: 'description'                   },
+  'folder':                  { ms: 'folder',             fill: 1  },
+  'arrow-2-squarepath':      { ms: 'repeat'                        },
+  'sun-max-fill':            { ms: 'light_mode',         fill: 1  },
+  'arrow-triangle-branch':   { ms: 'alt_route'                     },
+  'xmark-circle':            { ms: 'cancel'                        },
+  'link':                    { ms: 'link'                           },
+  'shield':                  { ms: 'shield',             fill: 1  },
+  'square-stack':            { ms: 'stacks',             fill: 1  },
+
+  // ── Workflow editor actions ──────────────────────────
+  'checkmark-circle':        { ms: 'check_circle'                  },
+  'questionmark-circle':     { ms: 'help_outline'                  },
+  'plus-circle-fill':        { ms: 'add_circle',          fill: 1  },
+  'line-3-horizontal':       { ms: 'drag_handle'                   },
+  'arrow-up-arrow-down':     { ms: 'swap_vert'                     },
 
   // ── General UI ────────────────────────────────────────
   'magnifying-glass':        { ms: 'search'                        },

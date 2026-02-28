@@ -1,8 +1,8 @@
 <div class="editor-page" [class.panel-open]="isPanelOpen()">
   <!-- Back -->
   <button class="back-btn" (click)="cancel()">
-    <app-icon name="chevron-down" [size]="14" />
-    <span>{{ isEditMode() ? 'Cancel Edit' : 'Cancel' }}</span>
+    <app-icon name="chevron-left" [size]="16" />
+    <span>{{ isPanelOpen() ? 'Done' : nestingStack().length > 0 ? 'Back' : isEditMode() ? 'Cancel Edit' : 'Cancel' }}</span>
   </button>
 
   <!-- Loading state -->
@@ -24,10 +24,16 @@
     <!-- Page title -->
     <div class="page-title">
       <h1>{{ isEditMode() ? 'Edit Workflow' : 'New Workflow' }}</h1>
+      <p class="page-subtitle">{{ isEditMode() ? 'Modify workflow configuration' : 'Configure triggers, conditions, and actions' }}</p>
     </div>
 
-    <!-- === SECTION: Basic Info (compact) === -->
+    <!-- === SECTION: Details (compact) === -->
     <div class="section compact">
+      <div class="section-header compact-header">
+        <app-icon name="pencil" [size]="13" class="section-title-icon" />
+        <h3 class="section-title">Details</h3>
+      </div>
+
       <mat-form-field appearance="fill" class="name-field" subscriptSizing="dynamic">
         <mat-label>Workflow Name</mat-label>
         <input matInput [value]="draft().name"
@@ -63,11 +69,16 @@
                  placeholder="+ tag" />
         </mat-form-field>
 
-        <mat-slide-toggle
-          [checked]="draft().isEnabled"
-          (change)="patchDraft({ isEnabled: $event.checked })"
-          class="enabled-toggle">
-        </mat-slide-toggle>
+        <div class="toggle-with-label">
+          <mat-slide-toggle
+            [checked]="draft().isEnabled"
+            (change)="patchDraft({ isEnabled: $event.checked })"
+            class="enabled-toggle">
+          </mat-slide-toggle>
+          <span class="toggle-status" [class.active]="draft().isEnabled">
+            {{ draft().isEnabled ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
       </div>
     </div>
 
@@ -76,7 +87,10 @@
                          (opened)="showSettings.set(true)" (closed)="showSettings.set(false)"
                          togglePosition="before">
       <mat-expansion-panel-header>
-        <mat-panel-title>Settings</mat-panel-title>
+        <mat-panel-title>
+          <app-icon name="gear" [size]="13" class="section-title-icon" />
+          Settings
+        </mat-panel-title>
       </mat-expansion-panel-header>
 
       <div class="toggle-row-compact">
@@ -94,35 +108,51 @@
     <!-- === SECTION: Triggers === -->
     <div class="section">
       <div class="section-header">
+        <app-icon name="bolt" [size]="13" class="section-title-icon" />
         <h3 class="section-title">Triggers</h3>
         <span class="count-badge">{{ draft().triggers.length }}</span>
       </div>
 
-      <div class="node-list">
-        @for (trigger of draft().triggers; track trigger._draftId; let i = $index) {
-          <div class="summary-node" (click)="openPanel('trigger', 'triggers', i, triggerName(trigger))">
-            <app-icon [name]="triggerIcon(trigger)" [size]="15" class="node-icon" />
-            <span class="node-name">{{ triggerName(trigger) }}</span>
-            <span class="node-badge">{{ triggerBadge(trigger) }}</span>
-            <div class="node-actions" (click)="$event.stopPropagation()">
-              <button mat-icon-button class="node-remove-btn" (click)="removeTrigger(i)" title="Remove">
-                <mat-icon>cancel</mat-icon>
-              </button>
+      @if (draft().triggers.length === 0) {
+        <div class="empty-state-inline">
+          <app-icon name="bolt" [size]="20" class="empty-state-icon" />
+          <span>No triggers yet. Add one to start your workflow.</span>
+        </div>
+      } @else {
+        <div class="node-list">
+          @for (trigger of draft().triggers; track trigger._draftId; let i = $index) {
+            <div class="summary-node accent-trigger" (click)="openPanel('trigger', 'triggers', i, triggerName(trigger))"
+                 [style.animation-delay]="(i * 40) + 'ms'">
+              <span class="node-icon-wrap trigger">
+                <app-icon [name]="triggerIcon(trigger)" [size]="15" class="node-icon" />
+              </span>
+              <div class="node-info">
+                <span class="node-name">{{ triggerName(trigger) }}</span>
+              </div>
+              <span class="node-badge" [class]="'badge-trigger-' + trigger.type">{{ triggerBadge(trigger) }}</span>
+              <div class="node-actions" (click)="$event.stopPropagation()">
+                <button mat-icon-button class="node-remove-btn" (click)="removeTrigger(i)" title="Remove">
+                  <mat-icon>cancel</mat-icon>
+                </button>
+              </div>
+              <app-icon name="chevron-right" [size]="12" class="node-chevron" />
             </div>
-            <app-icon name="chevron-down" [size]="12" class="node-chevron" />
-          </div>
-        }
-      </div>
+          }
+        </div>
+      }
 
-      <button mat-stroked-button class="add-btn" (click)="addTrigger()" type="button">
+      <button mat-button class="add-btn" (click)="addTrigger()" type="button">
         <mat-icon>add_circle_outline</mat-icon>
         Add Trigger
       </button>
+
+      <p class="section-footer">Events that start this workflow</p>
     </div>
 
     <!-- === SECTION: Guard Conditions === -->
     <div class="section">
       <div class="section-header">
+        <app-icon name="shield" [size]="13" class="section-title-icon" />
         <h3 class="section-title">Guard Conditions</h3>
         @if (rootConditionGroup(); as root) {
           <span class="count-badge">{{ conditionChildCount(root) }}</span>
@@ -131,131 +161,180 @@
 
       @if (rootConditionGroup(); as root) {
         <div class="node-list">
-          <div class="summary-node" (click)="openConditionGroup()">
-            <app-icon name="arrow-triangle-branch" [size]="15" class="node-icon" />
+          <div class="summary-node accent-condition" (click)="openConditionGroup()">
+            <span class="node-icon-wrap condition">
+              <app-icon name="arrow-triangle-branch" [size]="15" class="node-icon" />
+            </span>
             <div class="node-info">
               <span class="node-name">{{ conditionGroupSummary(root) }}</span>
             </div>
             <span class="node-badge condition">{{ rootOperatorLabel(root) }}</span>
-            <app-icon name="chevron-down" [size]="12" class="node-chevron" />
+            <app-icon name="chevron-right" [size]="12" class="node-chevron" />
           </div>
         </div>
       } @else {
-        <p class="empty-hint">No conditions -- workflow will always run.</p>
+        <div class="empty-state-inline">
+          <app-icon name="shield" [size]="20" class="empty-state-icon" />
+          <span>No conditions — workflow will always run.</span>
+        </div>
       }
 
-      <button mat-stroked-button class="add-btn" (click)="openConditionGroup()" type="button">
+      <button mat-button class="add-btn" (click)="openConditionGroup()" type="button">
         <mat-icon>{{ rootConditionGroup() ? 'edit' : 'add_circle_outline' }}</mat-icon>
         {{ rootConditionGroup() ? 'Edit Conditions' : 'Add Conditions' }}
       </button>
+
+      <p class="section-footer">Conditions checked before blocks run</p>
     </div>
 
-    <!-- === SECTION: Blocks === -->
-    <div class="section">
+    <!-- === SECTION: Blocks (Inline Expandable) === -->
+    <div class="section blocks-section">
       <div class="section-header">
+        <app-icon name="square-stack" [size]="13" class="section-title-icon" />
         <h3 class="section-title">Blocks</h3>
         <span class="count-badge">{{ draft().blocks.length }}</span>
-      </div>
-
-      <div class="node-list">
-        @for (block of draft().blocks; track block._draftId; let i = $index) {
-          <div class="summary-node" (click)="openPanel('block', 'blocks', i, blockName(block))">
-            <app-icon [name]="blockIcon(block)" [size]="15" class="node-icon" />
-            <div class="node-info">
-              <span class="node-name">{{ blockName(block) }}</span>
-              @if (blockChildCount(block)) {
-                <span class="node-children">{{ blockChildCount(block) }}</span>
-              }
-            </div>
-            <span class="node-badge" [class]="'badge-' + block.block">
-              {{ block.block === 'action' ? 'Action' : 'Flow' }}
-            </span>
-            <div class="node-actions" (click)="$event.stopPropagation()">
-              <button mat-icon-button class="node-move-btn" [disabled]="i === 0" (click)="moveBlock(i, -1)" title="Move up">
-                <mat-icon>expand_less</mat-icon>
-              </button>
-              <button mat-icon-button class="node-move-btn" [disabled]="i === draft().blocks.length - 1" (click)="moveBlock(i, 1)" title="Move down">
-                <mat-icon>expand_more</mat-icon>
-              </button>
-              <button mat-icon-button class="node-remove-btn" (click)="removeBlock(i)" title="Remove">
-                <mat-icon>cancel</mat-icon>
-              </button>
-            </div>
-            <app-icon name="chevron-down" [size]="12" class="node-chevron" />
-          </div>
+        <span class="flex-spacer"></span>
+        @if (currentBlocks().length > 1) {
+          <button class="reorder-toggle" [class.active]="reorderMode()" (click)="toggleReorderMode()">
+            <app-icon [name]="reorderMode() ? 'checkmark-circle' : 'arrow-up-arrow-down'" [size]="12" />
+            {{ reorderMode() ? 'Done' : 'Reorder' }}
+          </button>
         }
       </div>
 
-      <!-- Add block buttons -->
-      <div class="add-block-grid">
-        <div class="add-block-group">
-          <span class="add-group-label">Actions</span>
-          @for (t of actionTypes; track t.value) {
-            <button mat-stroked-button class="add-type-btn" (click)="addBlock(t.value)" type="button">{{ t.label }}</button>
+      <!-- Nesting breadcrumb bar -->
+      @if (nestingStack().length > 0) {
+        <div class="nesting-breadcrumb-bar">
+          @for (crumb of nestingBreadcrumbs(); track crumb.level; let last = $last) {
+            @if (!last) {
+              <button class="nesting-crumb" (click)="popToNestingLevel(crumb.level)">{{ crumb.label }}</button>
+              <app-icon name="chevron-right" [size]="9" class="crumb-sep" />
+            } @else {
+              <span class="nesting-crumb-current">{{ crumb.label }}</span>
+            }
           }
         </div>
-        <div class="add-block-group">
-          <span class="add-group-label">Flow</span>
-          @for (t of flowTypes; track t.value) {
-            <button mat-stroked-button class="add-type-btn flow" (click)="addBlock(t.value)" type="button">{{ t.label }}</button>
+      }
+
+      <!-- Block list -->
+      @if (currentBlocks().length === 0) {
+        <div class="empty-state-inline">
+          <app-icon name="square-stack" [size]="20" class="empty-state-icon" />
+          <span>No blocks yet. Add actions or flow control below.</span>
+        </div>
+      } @else {
+        <div class="block-list-expandable"
+             [class.transition-push]="nestingTransition() === 'push'"
+             [class.transition-pop]="nestingTransition() === 'pop'"
+             cdkDropList
+             [cdkDropListDisabled]="!reorderMode()"
+             (cdkDropListDropped)="onBlockDrop($event)">
+          @for (block of currentBlocks(); track block._draftId; let i = $index) {
+            @if (i > 0 && !reorderMode()) {
+              <div class="block-connector">
+                <div class="connector-line"></div>
+              </div>
+            }
+            <div cdkDrag [cdkDragDisabled]="!reorderMode()">
+              @if (reorderMode()) {
+                <!-- Reorder mode: compact drag handle row -->
+                <div class="reorder-row" cdkDragHandle>
+                  <app-icon name="line-3-horizontal" [size]="16" class="drag-handle-icon" />
+                  <span class="ordinal-badge-sm" [class]="'ord-' + block.block">{{ blockOrdinals().get(block._draftId) || (i+1) }}</span>
+                  <span class="reorder-name">{{ block.name || '' }}</span>
+                  <span class="reorder-type-badge" [class]="'tbadge-' + block.block">
+                    {{ block.block === 'action' ? 'Action' : 'Flow' }}
+                  </span>
+                </div>
+              } @else {
+                <app-expandable-block-card
+                  [draft]="block"
+                  [ordinal]="blockOrdinals().get(block._draftId) || (i+1)"
+                  [isFirst]="i === 0"
+                  [isLast]="i === currentBlocks().length - 1"
+                  [isExpanded]="expandedBlockIds().has(block._draftId)"
+                  (toggled)="toggleBlockExpanded(block._draftId)"
+                  (changed)="updateCurrentBlock(i, $event)"
+                  (removed)="removeCurrentBlock(i)"
+                  (movedUp)="moveCurrentBlock(i, -1)"
+                  (movedDown)="moveCurrentBlock(i, 1)"
+                  (navigateToNested)="pushNesting(i, $event.field, $event.label)"
+                  [style.animation-delay]="(i * 40) + 'ms'"
+                />
+              }
+            </div>
           }
         </div>
-      </div>
+      }
+
+      <!-- Add block button -->
+      @if (!reorderMode()) {
+        <button class="add-block-fab" (click)="addBlockSheetOpen.set(true)" type="button">
+          <app-icon name="plus-circle-fill" [size]="16" />
+          <span>Add Block</span>
+        </button>
+      }
+
+      <p class="section-footer">Actions and flow control steps</p>
     </div>
 
     <!-- === Sticky Footer === -->
     <div class="sticky-footer">
-      @if (validationErrors().length > 0) {
-        <div class="validation-errors">
-          @for (err of validationErrors(); track $index) {
-            <span class="validation-error">
-              <app-icon name="exclamation-circle-fill" [size]="12" />
-              {{ err }}
-            </span>
-          }
-        </div>
-      }
+      <div class="sticky-footer-inner">
+        @if (validationErrors().length > 0) {
+          <div class="validation-errors">
+            @for (err of validationErrors(); track $index) {
+              <span class="validation-error">
+                <app-icon name="exclamation-circle-fill" [size]="12" />
+                {{ err }}
+              </span>
+            }
+          </div>
+        }
 
-      @if (saveError()) {
-        <div class="save-error">
-          <app-icon name="exclamation-triangle" [size]="14" />
-          {{ saveError() }}
-        </div>
-      }
+        @if (saveError()) {
+          <div class="save-error">
+            <app-icon name="exclamation-triangle" [size]="14" />
+            {{ saveError() }}
+          </div>
+        }
 
-      <div class="footer-actions">
-        <button mat-stroked-button (click)="cancel()" type="button">Cancel</button>
-        <button mat-flat-button color="primary" (click)="save()" [disabled]="!isValid() || isSaving()" type="button">
-          @if (isSaving()) {
-            <app-icon name="spinner" [size]="15" />
-            Saving...
-          } @else {
-            <ng-container>
-              <mat-icon>check_circle</mat-icon>
-              {{ isEditMode() ? 'Save Changes' : 'Create Workflow' }}
-            </ng-container>
-          }
-        </button>
+        <div class="footer-actions">
+          <button mat-button (click)="cancel()" type="button" class="footer-cancel-btn">Cancel</button>
+          <button mat-flat-button color="primary" (click)="save()" [disabled]="!isValid() || isSaving()" type="button" class="footer-save-btn">
+            @if (isSaving()) {
+              <app-icon name="spinner" [size]="15" />
+              Saving...
+            } @else {
+              <ng-container>
+                <mat-icon>check_circle</mat-icon>
+                {{ isEditMode() ? 'Save Changes' : 'Create Workflow' }}
+              </ng-container>
+            }
+          </button>
+        </div>
       </div>
     </div>
   }
 </div>
 
-<!-- === Slide-Over Panel === -->
+<!-- === Slide-Over Panel (triggers & conditions ONLY) === -->
 @if (isPanelOpen()) {
   <div class="panel-overlay" (click)="closePanel()"></div>
-  <div class="slide-panel">
+  <div class="slide-panel" [class]="'panel-' + (currentFrame()?.kind || '')">
     <!-- Panel header -->
     <div class="panel-header">
-      <button class="panel-back-btn" (click)="popPanel()">
-        <app-icon name="chevron-down" [size]="14" />
-        <span>{{ panelStack().length > 1 ? 'Back' : 'Done' }}</span>
-      </button>
+      <div class="panel-header-top">
+        <button class="panel-back-btn" (click)="popPanel()">
+          <app-icon name="chevron-left" [size]="14" />
+          <span>{{ panelStack().length > 1 ? 'Back' : 'Done' }}</span>
+        </button>
+      </div>
       <div class="panel-breadcrumbs">
         @for (crumb of breadcrumbs(); track $index; let i = $index; let last = $last) {
           @if (!last) {
             <button class="crumb-btn" (click)="popToLevel(i)">{{ crumb }}</button>
-            <app-icon name="chevron-down" [size]="9" class="crumb-sep" />
+            <app-icon name="chevron-right" [size]="9" class="crumb-sep" />
           } @else {
             <span class="crumb-current">{{ crumb }}</span>
           }
@@ -298,22 +377,15 @@
               />
             }
           }
-          @case ('block') {
-            @if (currentEditItem(); as item) {
-              <app-block-editor
-                [draft]="item"
-                [isFirst]="true"
-                [isLast]="true"
-                [panelMode]="true"
-                (changed)="onPanelItemChanged($event)"
-                (removed)="onPanelItemRemoved()"
-                (editNestedBlock)="onEditNestedBlock($event)"
-                (editNestedCondition)="onEditNestedCondition($event)"
-              />
-            }
-          }
         }
       }
     </div>
   </div>
 }
+
+<!-- === Add Block Bottom Sheet === -->
+<app-add-block-sheet
+  [isOpen]="addBlockSheetOpen()"
+  (selected)="addBlockFromSheet($event)"
+  (closed)="addBlockSheetOpen.set(false)"
+/>
