@@ -81,21 +81,29 @@ actor DeviceRegistryService {
 
     // Thread-safe nonisolated lookups (NSLock-protected, updated after every sync).
     // These allow synchronous callers (e.g., HomeKitManager on MainActor) to resolve IDs
-    // without awaiting the actor. Marked nonisolated(unsafe) because thread safety is
-    // manually managed via syncLock.
+    // without awaiting the actor.
+    //
+    // SAFETY: All access to `_lookups` MUST be guarded by `syncLock`. The struct is
+    // consolidated into a single `nonisolated(unsafe)` field to minimize the surface area
+    // for accidental unprotected access.
     private let syncLock = NSLock()
-    private nonisolated(unsafe) var _stableToHkDevice: [String: String] = [:]
-    private nonisolated(unsafe) var _hkToStableDevice: [String: String] = [:]
-    private nonisolated(unsafe) var _stableToHkService: [String: String] = [:]
-    private nonisolated(unsafe) var _hkToStableService: [String: String] = [:]
-    private nonisolated(unsafe) var _stableToHkChar: [String: String] = [:]
-    private nonisolated(unsafe) var _hkToStableChar: [String: String] = [:]
-    private nonisolated(unsafe) var _stableToHkScene: [String: String] = [:]
-    private nonisolated(unsafe) var _hkToStableScene: [String: String] = [:]
-    // stable char ID → characteristic type string
-    private nonisolated(unsafe) var _stableCharToType: [String: String] = [:]
-    // "deviceStableId:charType" → stable char ID
-    private nonisolated(unsafe) var _deviceCharTypeToStableId: [String: String] = [:]
+
+    /// Consolidated lookup tables for bidirectional stable ↔ HomeKit ID resolution.
+    private struct LookupTables {
+        var stableToHkDevice: [String: String] = [:]
+        var hkToStableDevice: [String: String] = [:]
+        var stableToHkService: [String: String] = [:]
+        var hkToStableService: [String: String] = [:]
+        var stableToHkChar: [String: String] = [:]
+        var hkToStableChar: [String: String] = [:]
+        var stableToHkScene: [String: String] = [:]
+        var hkToStableScene: [String: String] = [:]
+        /// stable char ID → characteristic type string
+        var stableCharToType: [String: String] = [:]
+        /// "deviceStableId:charType" → stable char ID
+        var deviceCharTypeToStableId: [String: String] = [:]
+    }
+    private nonisolated(unsafe) var _lookups = LookupTables()
 
     // MARK: - Persistence
 
@@ -351,70 +359,70 @@ actor DeviceRegistryService {
     nonisolated func readHomeKitDeviceId(_ stableId: String) -> String? {
         syncLock.lock()
         defer { syncLock.unlock() }
-        return _stableToHkDevice[stableId]
+        return _lookups.stableToHkDevice[stableId]
     }
 
     /// Resolves a HomeKit UUID → stable device ID. Call from any thread.
     nonisolated func readStableDeviceId(_ homeKitId: String) -> String? {
         syncLock.lock()
         defer { syncLock.unlock() }
-        return _hkToStableDevice[homeKitId]
+        return _lookups.hkToStableDevice[homeKitId]
     }
 
     /// Resolves a stable service ID → HomeKit service UUID. Call from any thread.
     nonisolated func readHomeKitServiceId(_ stableServiceId: String) -> String? {
         syncLock.lock()
         defer { syncLock.unlock() }
-        return _stableToHkService[stableServiceId]
+        return _lookups.stableToHkService[stableServiceId]
     }
 
     /// Resolves a HomeKit service UUID → stable service ID. Call from any thread.
     nonisolated func readStableServiceId(_ homeKitServiceId: String) -> String? {
         syncLock.lock()
         defer { syncLock.unlock() }
-        return _hkToStableService[homeKitServiceId]
+        return _lookups.hkToStableService[homeKitServiceId]
     }
 
     /// Resolves a stable characteristic ID → HomeKit characteristic UUID. Call from any thread.
     nonisolated func readHomeKitCharacteristicId(_ stableCharId: String) -> String? {
         syncLock.lock()
         defer { syncLock.unlock() }
-        return _stableToHkChar[stableCharId]
+        return _lookups.stableToHkChar[stableCharId]
     }
 
     /// Resolves a HomeKit characteristic UUID → stable characteristic ID. Call from any thread.
     nonisolated func readStableCharacteristicId(_ homeKitCharId: String) -> String? {
         syncLock.lock()
         defer { syncLock.unlock() }
-        return _hkToStableChar[homeKitCharId]
+        return _lookups.hkToStableChar[homeKitCharId]
     }
 
     /// Resolves a stable characteristic ID → its HomeKit characteristic type string. Call from any thread.
     nonisolated func readCharacteristicType(forStableId stableCharId: String) -> String? {
         syncLock.lock()
         defer { syncLock.unlock() }
-        return _stableCharToType[stableCharId]
+        return _lookups.stableCharToType[stableCharId]
     }
 
     /// Finds the stable characteristic ID for a given device (by stable ID) and characteristic type. Call from any thread.
     nonisolated func readStableCharacteristicId(forDeviceStableId deviceStableId: String, characteristicType: String) -> String? {
         syncLock.lock()
         defer { syncLock.unlock() }
-        return _deviceCharTypeToStableId["\(deviceStableId):\(characteristicType)"]
+        return _lookups.deviceCharTypeToStableId["\(deviceStableId):\(characteristicType)"]
     }
 
     /// Resolves a stable scene ID → HomeKit scene UUID. Call from any thread.
     nonisolated func readHomeKitSceneId(_ stableSceneId: String) -> String? {
         syncLock.lock()
         defer { syncLock.unlock() }
-        return _stableToHkScene[stableSceneId]
+        return _lookups.stableToHkScene[stableSceneId]
     }
 
     /// Resolves a HomeKit scene UUID → stable scene ID. Call from any thread.
     nonisolated func readStableSceneId(_ homeKitSceneId: String) -> String? {
         syncLock.lock()
         defer { syncLock.unlock() }
-        return _hkToStableScene[homeKitSceneId]
+        return _lookups.hkToStableScene[homeKitSceneId]
     }
 
     // MARK: - Actor-Isolated Resolution (async)
@@ -1053,48 +1061,42 @@ actor DeviceRegistryService {
             }
         }
 
-        // Update thread-safe nonisolated lookup dictionaries
-        syncLock.lock()
-        _stableToHkDevice.removeAll()
-        _hkToStableDevice = hkDeviceIdToStableId.reduce(into: [:]) { $0[$1.value] = $1.key }
-        _stableToHkService.removeAll()
-        _hkToStableService = hkServiceIdToStableId.reduce(into: [:]) { $0[$1.value] = $1.key }
-        _stableToHkChar.removeAll()
-        _stableCharToType.removeAll()
-        _deviceCharTypeToStableId.removeAll()
-        _hkToStableChar = hkCharIdToStableId.reduce(into: [:]) { $0[$1.value] = $1.key }
-        _stableToHkScene.removeAll()
-        _hkToStableScene = hkSceneIdToStableId.reduce(into: [:]) { $0[$1.value] = $1.key }
+        // Build new lookup tables on the actor, then swap atomically under the lock.
+        var newLookups = LookupTables()
+
+        // Reverse lookups: homeKitId → stableId
+        newLookups.hkToStableDevice = hkDeviceIdToStableId
+        newLookups.hkToStableService = hkServiceIdToStableId
+        newLookups.hkToStableChar = hkCharIdToStableId
+        newLookups.hkToStableScene = hkSceneIdToStableId
 
         // Forward lookups: stableId → homeKitId
         for entry in devices.values {
             if let hkId = entry.homeKitId {
-                _stableToHkDevice[entry.stableId] = hkId
+                newLookups.stableToHkDevice[entry.stableId] = hkId
             }
             for svc in entry.services {
                 if let hkId = svc.homeKitServiceId {
-                    _stableToHkService[svc.stableServiceId] = hkId
+                    newLookups.stableToHkService[svc.stableServiceId] = hkId
                 }
                 for char in svc.characteristics {
                     if let hkId = char.homeKitCharacteristicId {
-                        _stableToHkChar[char.stableCharacteristicId] = hkId
+                        newLookups.stableToHkChar[char.stableCharacteristicId] = hkId
                     }
-                    _stableCharToType[char.stableCharacteristicId] = char.characteristicType
-                    _deviceCharTypeToStableId["\(entry.stableId):\(char.characteristicType)"] = char.stableCharacteristicId
+                    newLookups.stableCharToType[char.stableCharacteristicId] = char.characteristicType
+                    newLookups.deviceCharTypeToStableId["\(entry.stableId):\(char.characteristicType)"] = char.stableCharacteristicId
                 }
             }
         }
         for entry in scenes.values {
             if let hkId = entry.homeKitId {
-                _stableToHkScene[entry.stableId] = hkId
+                newLookups.stableToHkScene[entry.stableId] = hkId
             }
         }
 
-        // Reverse lookups: homeKitId → stableId
-        _hkToStableDevice = hkDeviceIdToStableId
-        _hkToStableService = hkServiceIdToStableId
-        _hkToStableChar = hkCharIdToStableId
-        _hkToStableScene = hkSceneIdToStableId
+        // Atomic swap under lock
+        syncLock.lock()
+        _lookups = newLookups
         syncLock.unlock()
     }
 

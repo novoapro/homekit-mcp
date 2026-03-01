@@ -15,6 +15,7 @@ export function SettingsPage() {
     bearerToken: config.bearerToken,
     pollingInterval: config.pollingInterval,
     websocketEnabled: config.websocketEnabled,
+    useHTTPS: config.useHTTPS,
   });
 
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
@@ -32,16 +33,35 @@ export function SettingsPage() {
     applyToConfig();
     setConnectionStatus('testing');
     try {
-      const url = `http://${localState.serverAddress}:${localState.serverPort}/health`;
-      const res = await fetch(url);
+      const protocol = localState.useHTTPS ? 'https' : 'http';
+      const url = `${protocol}://${localState.serverAddress}:${localState.serverPort}/health`;
+      const headers: Record<string, string> = {};
+      if (localState.bearerToken) {
+        headers['Authorization'] = `Bearer ${localState.bearerToken}`;
+      }
+      const res = await fetch(url, { headers });
       setConnectionStatus(res.ok ? 'success' : 'error');
     } catch {
       setConnectionStatus('error');
     }
     setTimeout(() => setConnectionStatus('idle'), 3000);
-  }, [applyToConfig, localState.serverAddress, localState.serverPort]);
+  }, [applyToConfig, localState.serverAddress, localState.serverPort, localState.bearerToken]);
+
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const handleSave = useCallback(() => {
+    // Validate server address (hostname, IP, or localhost)
+    const addressPattern = /^[a-zA-Z0-9]([a-zA-Z0-9.\-]*[a-zA-Z0-9])?$/;
+    if (!addressPattern.test(localState.serverAddress)) {
+      setValidationError('Invalid server address. Use a hostname or IP address.');
+      return;
+    }
+    if (localState.serverPort < 1 || localState.serverPort > 65535 || !Number.isInteger(localState.serverPort)) {
+      setValidationError('Port must be an integer between 1 and 65535.');
+      return;
+    }
+    setValidationError(null);
+
     applyToConfig();
     save(localState);
 
@@ -74,6 +94,7 @@ export function SettingsPage() {
             onChange={e => updateField('serverAddress', e.target.value)}
             placeholder="localhost"
             className="form-input"
+            maxLength={253}
           />
           <span className="hint">IP address or hostname of the HomeKit MCP server</span>
         </div>
@@ -93,6 +114,20 @@ export function SettingsPage() {
         </div>
 
         <div className="form-group">
+          <div className="toggle-row">
+            <label>Use HTTPS / WSS</label>
+            <Switch
+              checked={localState.useHTTPS}
+              onChange={v => updateField('useHTTPS', v)}
+              className={`toggle-switch ${localState.useHTTPS ? 'active' : ''}`}
+            >
+              <span className="toggle-switch-knob" />
+            </Switch>
+          </div>
+          <span className="hint">Enable for encrypted connections (requires server TLS support)</span>
+        </div>
+
+        <div className="form-group">
           <label htmlFor="bearerToken">Bearer Token</label>
           <input
             id="bearerToken"
@@ -101,6 +136,7 @@ export function SettingsPage() {
             onChange={e => updateField('bearerToken', e.target.value)}
             placeholder="Enter your API token"
             className="form-input"
+            maxLength={512}
           />
           <span className="hint">Found in the HomeKit MCP app settings under API tokens</span>
         </div>
@@ -158,6 +194,11 @@ export function SettingsPage() {
           </button>
         </div>
 
+        {validationError && (
+          <div className="status-message error animate-fade-in">
+            {validationError}
+          </div>
+        )}
         {connectionStatus === 'success' && (
           <div className="status-message success animate-fade-in">
             Successfully connected to the server

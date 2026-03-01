@@ -473,26 +473,8 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
         isPolling = true
         let accessories = allAccessories
 
-        var totalReads = 0
-        var completedReads = 0
-        let lock = NSLock()
-
-        for accessory in accessories where accessory.isReachable {
-            for service in accessory.services {
-                guard ServiceTypes.isSupported(service.serviceType) else { continue }
-                guard service.serviceType != HMServiceTypeAccessoryInformation else { continue }
-                for characteristic in service.characteristics {
-                    guard CharacteristicTypes.isSupported(characteristic.characteristicType) else { continue }
-                    guard characteristic.properties.contains(HMCharacteristicPropertyReadable) else { continue }
-                    totalReads += 1
-                }
-            }
-        }
-
-        guard totalReads > 0 else {
-            isPolling = false
-            return
-        }
+        let group = DispatchGroup()
+        var hasReads = false
 
         for accessory in accessories where accessory.isReachable {
             let deviceId = accessory.uniqueIdentifier.uuidString
@@ -507,19 +489,16 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
                     guard CharacteristicTypes.isSupported(characteristic.characteristicType) else { continue }
                     guard characteristic.properties.contains(HMCharacteristicPropertyReadable) else { continue }
 
+                    hasReads = true
                     let charId = characteristic.uniqueIdentifier.uuidString
 
+                    group.enter()
                     characteristic.readValue { [weak self] error in
+                        defer { group.leave() }
                         guard let self else { return }
-
-                        lock.lock()
-                        completedReads += 1
-                        let allDone = completedReads >= totalReads
-                        lock.unlock()
 
                         if let error = error {
                             AppLogger.homeKit.debug("Poll: failed to read \(characteristic.characteristicType) on \(accessory.name): \(error)")
-                            if allDone { DispatchQueue.main.async { self.isPolling = false } }
                             return
                         }
 
@@ -532,11 +511,19 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
                                 serviceId: serviceId,
                                 charId: charId
                             )
-                            if allDone { self.isPolling = false }
                         }
                     }
                 }
             }
+        }
+
+        guard hasReads else {
+            isPolling = false
+            return
+        }
+
+        group.notify(queue: .main) { [weak self] in
+            self?.isPolling = false
         }
     }
 

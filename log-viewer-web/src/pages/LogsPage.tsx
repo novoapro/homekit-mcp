@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { usePolling } from '@/hooks/usePolling';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -51,13 +51,14 @@ export function LogsPage() {
   const debouncedSearch = useDebounce(searchText, 300);
 
   // Build query params for server-side filtering
-  const buildQueryParams = useCallback(() => {
+  const buildQueryParams = useCallback((overrides?: { categories?: Set<string>; from?: string | null; to?: string | null }) => {
+    const cats = overrides?.categories ?? selectedCategories;
+    const from = overrides?.from !== undefined ? overrides.from : dateFrom;
+    const to = overrides?.to !== undefined ? overrides.to : dateTo;
     const params: { categories?: string[]; device_name?: string; from?: string; to?: string } = {};
-    if (selectedCategories.size > 0) {
-      params.categories = Array.from(selectedCategories);
-    }
-    if (dateFrom) params.from = dateFrom;
-    if (dateTo) params.to = dateTo;
+    if (cats.size > 0) params.categories = Array.from(cats);
+    if (from) params.from = from;
+    if (to) params.to = to;
     return params;
   }, [selectedCategories, dateFrom, dateTo]);
 
@@ -65,15 +66,22 @@ export function LogsPage() {
     polling.loadFresh(buildQueryParams());
   }, [polling, buildQueryParams]);
 
-  // Initial load + polling
+  // Initial load (runs once)
+  const hasLoadedRef = useRef(false);
   useEffect(() => {
-    fetchWithFilters();
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      fetchWithFilters();
+    }
+  }, [fetchWithFilters]);
+
+  // Polling lifecycle (restarts when interval changes)
+  useEffect(() => {
     if (config.pollingInterval > 0) {
       polling.startPolling();
     }
     return () => polling.stopPolling();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [config.pollingInterval, polling]);
 
   // WebSocket subscriptions
   useEffect(() => {
@@ -97,8 +105,7 @@ export function LogsPage() {
       }),
     ];
     return () => unsubs.forEach(fn => fn());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ws]);
+  }, [ws, polling, fetchWithFilters]);
 
   // Derived: available devices and rooms from loaded logs
   const availableDevices = useMemo(() => {
@@ -184,22 +191,13 @@ export function LogsPage() {
 
   function onCategoriesChange(cats: Set<string>) {
     setSelectedCategories(cats);
-    // Re-fetch with new categories
-    const params: { categories?: string[]; from?: string; to?: string } = {};
-    if (cats.size > 0) params.categories = Array.from(cats);
-    if (dateFrom) params.from = dateFrom;
-    if (dateTo) params.to = dateTo;
-    polling.loadFresh(params);
+    polling.loadFresh(buildQueryParams({ categories: cats }));
   }
 
   function onDateRangeChange(range: { from: string | null; to: string | null }) {
     setDateFrom(range.from);
     setDateTo(range.to);
-    const params: { categories?: string[]; from?: string; to?: string } = {};
-    if (selectedCategories.size > 0) params.categories = Array.from(selectedCategories);
-    if (range.from) params.from = range.from;
-    if (range.to) params.to = range.to;
-    polling.loadFresh(params);
+    polling.loadFresh(buildQueryParams({ from: range.from, to: range.to }));
   }
 
   function onClearAll() {

@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useRef, useMemo } from 'react';
+import { useReducer, useCallback, useRef } from 'react';
 import { produce } from 'immer';
 import type {
   WorkflowDraft,
@@ -7,11 +7,6 @@ import type {
   WorkflowBlockDraft,
 } from './workflow-editor-types';
 import { emptyDraft, newUUID } from './workflow-editor-types';
-
-/** Serialize draft for dirty comparison, stripping _draftId fields */
-function serializeForComparison(draft: WorkflowDraft): string {
-  return JSON.stringify(draft, (key, value) => (key === '_draftId' ? undefined : value));
-}
 
 // --- Action types ---
 
@@ -116,22 +111,29 @@ function draftReducer(state: WorkflowDraft, action: DraftAction): WorkflowDraft 
 }
 
 export function useWorkflowDraft(initial?: WorkflowDraft) {
-  const [draft, dispatch] = useReducer(draftReducer, initial ?? emptyDraft());
-  const savedSnapshotRef = useRef<string>(serializeForComparison(initial ?? emptyDraft()));
+  const [draft, rawDispatch] = useReducer(draftReducer, initial ?? emptyDraft());
+  const changeCountRef = useRef(0);
+  const savedCountRef = useRef(0);
 
-  const isDirty = useMemo(
-    () => serializeForComparison(draft) !== savedSnapshotRef.current,
-    [draft],
-  );
+  // Wrap dispatch to track changes for dirty detection
+  const dispatch = useCallback((action: DraftAction) => {
+    if (action.type !== 'RESET') {
+      changeCountRef.current++;
+    }
+    rawDispatch(action);
+  }, []);
+
+  const isDirty = changeCountRef.current !== savedCountRef.current;
 
   const reset = useCallback((d: WorkflowDraft) => {
-    dispatch({ type: 'RESET', draft: d });
-    savedSnapshotRef.current = serializeForComparison(d);
+    rawDispatch({ type: 'RESET', draft: d });
+    changeCountRef.current = 0;
+    savedCountRef.current = 0;
   }, []);
 
   const markSaved = useCallback(() => {
-    savedSnapshotRef.current = serializeForComparison(draft);
-  }, [draft]);
+    savedCountRef.current = changeCountRef.current;
+  }, []);
 
   const patchDraft = useCallback((changes: Partial<WorkflowDraft>) => dispatch({ type: 'PATCH', changes }), []);
 

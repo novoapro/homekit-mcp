@@ -22,6 +22,7 @@ export interface ConfigState {
   bearerToken: string;
   pollingInterval: number;
   websocketEnabled: boolean;
+  useHTTPS: boolean;
 }
 
 interface ConfigContextValue {
@@ -41,10 +42,12 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     bearerToken: loadString('bearerToken', ''),
     pollingInterval: loadNumber('pollingInterval', 10),
     websocketEnabled: loadBool('websocketEnabled', true),
+    useHTTPS: loadBool('useHTTPS', false),
   }));
 
   const isConfigured = !!config.bearerToken;
-  const baseUrl = `http://${config.serverAddress}:${config.serverPort}`;
+  const httpProtocol = config.useHTTPS ? 'https' : 'http';
+  const baseUrl = `${httpProtocol}://${config.serverAddress}:${config.serverPort}`;
 
   const setConfig = useCallback((updates: Partial<ConfigState>) => {
     setConfigState(prev => ({ ...prev, ...updates }));
@@ -57,6 +60,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(`${STORAGE_PREFIX}:bearerToken`, s.bearerToken);
     localStorage.setItem(`${STORAGE_PREFIX}:pollingInterval`, String(s.pollingInterval));
     localStorage.setItem(`${STORAGE_PREFIX}:websocketEnabled`, String(s.websocketEnabled));
+    localStorage.setItem(`${STORAGE_PREFIX}:useHTTPS`, String(s.useHTTPS));
   }, [config]);
 
   const value = useMemo<ConfigContextValue>(

@@ -1,7 +1,8 @@
 import Foundation
 
 /// Handles MCP JSON-RPC method dispatch and builds responses.
-class MCPRequestHandler {
+/// All stored properties are immutable (`let`), making this class safe to share across isolation domains.
+final class MCPRequestHandler: Sendable {
     private let homeKitManager: HomeKitManager
     private let loggingService: LoggingService
     private let configService: DeviceConfigurationService

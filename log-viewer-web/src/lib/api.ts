@@ -18,43 +18,76 @@ export interface ApiClient {
   getScenes(): Promise<RESTScene[]>;
 }
 
+const DEFAULT_TIMEOUT = 15_000;
+
 export function createApiClient(baseUrl: string, bearerToken: string): ApiClient {
-  async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  function buildHeaders(path: string, options: RequestInit = {}): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...((options.headers as Record<string, string>) ?? {}),
     };
-
-    // Add auth header for all endpoints except /health
     if (!path.endsWith('/health') && bearerToken) {
       headers['Authorization'] = `Bearer ${bearerToken}`;
     }
+    return headers;
+  }
 
-    const res = await fetch(`${baseUrl}${path}`, {
-      ...options,
-      headers,
-    });
+  async function parseError(res: Response): Promise<string> {
+    const errorText = await res.text();
+    let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
+    try {
+      const errorJson = JSON.parse(errorText);
+      if (typeof errorJson.error === 'string') errorMessage = errorJson.error;
+      else if (errorJson.reason) errorMessage = errorJson.reason;
+    } catch { /* use default message */ }
+    return errorMessage;
+  }
+
+  async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+    const controller = new AbortController();
+    const existingSignal = options.signal;
+
+    // Link external signal if provided
+    if (existingSignal) {
+      if (existingSignal.aborted) {
+        controller.abort(existingSignal.reason);
+      } else {
+        existingSignal.addEventListener('abort', () => controller.abort(existingSignal.reason), { once: true });
+      }
+    }
+
+    const timeout = setTimeout(() => controller.abort('Request timeout'), DEFAULT_TIMEOUT);
+
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const headers = buildHeaders(path, options);
+    const res = await fetchWithTimeout(`${baseUrl}${path}`, { ...options, headers });
 
     if (!res.ok) {
-      const errorText = await res.text();
-      let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
-      try {
-        const errorJson = JSON.parse(errorText);
-        // Custom error responses use { "error": "message" }
-        if (typeof errorJson.error === 'string') errorMessage = errorJson.error;
-        // Vapor's Abort errors use { "error": true, "reason": "message" }
-        else if (errorJson.reason) errorMessage = errorJson.reason;
-      } catch { /* use default message */ }
-      throw new Error(errorMessage);
+      throw new Error(await parseError(res));
     }
 
     const text = await res.text();
-    if (!text) return undefined as T;
+    if (!text) {
+      console.warn(`[API] Empty response from ${path}`);
+      return undefined as unknown as T;
+    }
 
-    try {
-      return JSON.parse(text) as T;
-    } catch {
-      return text as T;
+    return JSON.parse(text) as T;
+  }
+
+  async function requestVoid(path: string, options: RequestInit = {}): Promise<void> {
+    const headers = buildHeaders(path, options);
+    const res = await fetchWithTimeout(`${baseUrl}${path}`, { ...options, headers });
+
+    if (!res.ok) {
+      throw new Error(await parseError(res));
     }
   }
 
@@ -80,57 +113,57 @@ export function createApiClient(baseUrl: string, bearerToken: string): ApiClient
       if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
 
       const qs = searchParams.toString();
-      return request<PaginatedLogsResponse>(`/logs${qs ? `?${qs}` : ''}`);
+      return requestJson<PaginatedLogsResponse>(`/logs${qs ? `?${qs}` : ''}`);
     },
 
     async clearLogs() {
-      await request('/logs', { method: 'DELETE' });
+      await requestVoid('/logs', { method: 'DELETE' });
     },
 
     async getWorkflows() {
-      return request<Workflow[]>('/workflows');
+      return requestJson<Workflow[]>('/workflows');
     },
 
     async getWorkflow(workflowId: string) {
-      return request<WorkflowDefinition>(`/workflows/${workflowId}`);
+      return requestJson<WorkflowDefinition>(`/workflows/${workflowId}`);
     },
 
     async getWorkflowLogs(workflowId: string, limit?: number) {
       const qs = limit !== undefined ? `?limit=${limit}` : '';
-      return request<WorkflowExecutionLog[]>(`/workflows/${workflowId}/logs${qs}`);
+      return requestJson<WorkflowExecutionLog[]>(`/workflows/${workflowId}/logs${qs}`);
     },
 
     async updateWorkflow(workflowId: string, updates: Partial<Workflow>) {
-      return request<Workflow>(`/workflows/${workflowId}`, {
+      return requestJson<Workflow>(`/workflows/${workflowId}`, {
         method: 'PUT',
         body: JSON.stringify(updates),
       });
     },
 
     async createWorkflow(workflow: Partial<WorkflowDefinition>) {
-      return request<WorkflowDefinition>('/workflows', {
+      return requestJson<WorkflowDefinition>('/workflows', {
         method: 'POST',
         body: JSON.stringify(workflow),
       });
     },
 
     async deleteWorkflow(workflowId: string) {
-      await request(`/workflows/${workflowId}`, { method: 'DELETE' });
+      await requestVoid(`/workflows/${workflowId}`, { method: 'DELETE' });
     },
 
     async generateWorkflow(prompt: string) {
-      return request<{ id: string; name: string; description: string | null }>('/workflows/generate', {
+      return requestJson<{ id: string; name: string; description: string | null }>('/workflows/generate', {
         method: 'POST',
         body: JSON.stringify({ prompt }),
       });
     },
 
     async getDevices() {
-      return request<RESTDevice[]>('/devices');
+      return requestJson<RESTDevice[]>('/devices');
     },
 
     async getScenes() {
-      return request<RESTScene[]>('/scenes');
+      return requestJson<RESTScene[]>('/scenes');
     },
   };
 }

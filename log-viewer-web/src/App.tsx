@@ -34,13 +34,6 @@ export function App() {
         onToggleCollapse={toggleSidebarCollapse}
       />
 
-      {/* Sidebar offset — desktop only */}
-      <style>{`
-        @media (min-width: 769px) {
-          .content-offset-expanded { margin-left: var(--sidebar-width); }
-          .content-offset-collapsed { margin-left: var(--sidebar-collapsed-width); }
-        }
-      `}</style>
       <div
         className={`flex flex-col flex-1 overflow-hidden ${sidebarCollapsed ? 'content-offset-collapsed' : 'content-offset-expanded'}`}
         style={{ transition: 'margin-left var(--sidebar-transition)' }}

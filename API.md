@@ -488,7 +488,7 @@ Set a characteristic value on a device.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `device_id` | string | yes | Stable device identifier |
-| `characteristic_type` | string | yes | Human-readable name: `power`, `brightness`, `hue`, `saturation`, `color_temperature`, `target_temperature`, `target_position`, `lock_state`, `rotation_speed` |
+| `characteristic_type` | string | yes | Human-readable name or shorthand. Common shorthands: `power`, `brightness`, `hue`, `saturation`, `color_temperature`, `temperature`, `current_temperature`, `target_position`, `lock_state`, `rotation_speed`. Full display names (e.g. `Target Temperature`, `Door State`, `Motion Detected`) are also accepted (case-insensitive). |
 | `value` | varies | yes | Value to set. Type depends on characteristic (see below) |
 | `service_id` | string | no | Target a specific service when a device has multiple (e.g. fan + light) |
 
@@ -501,12 +501,13 @@ Set a characteristic value on a device.
 | `hue` | int | 0–360 |
 | `saturation` | int | 0–100 |
 | `color_temperature` | int | device-specific (typically 50–400) |
-| `target_temperature` | float | device-specific |
+| `temperature` / `target_temperature` | float | device-specific |
+| `current_temperature` | float | read-only |
 | `target_position` | int | 0–100 |
 | `lock_state` | bool | `true` (secured) / `false` (unsecured) |
 | `rotation_speed` | int | 0–100 |
 
-Values are validated against the characteristic's metadata (format, min/max, valid values).
+All 45+ HomeKit characteristic types are supported. The full display name (e.g., `Target Humidity`, `Door State`, `Active`) can also be used as the `characteristic_type` value. Values are validated against the characteristic's metadata (format, min/max, valid values).
 
 ---
 

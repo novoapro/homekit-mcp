@@ -3,6 +3,13 @@ import Vapor
 import NIOCore
 import Combine
 
+/// MCP server exposing HomeKit devices via HTTP/SSE/WebSocket.
+///
+/// Threading contract: `@Published` properties and `app` lifecycle are accessed from the main queue.
+/// Vapor route handlers run on NIO event loops but only call the `Sendable` `handler` and
+/// the actor-isolated `connectionTracker`. Marked `@unchecked Sendable` because mutable state
+/// (`app`, `wsCancellables`, `serverTask`) is only mutated from `start()`/`stopAsync()` which
+/// are serialized through the main-queue `stop()` entry point.
 class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     @Published var isRunning = false
     @Published var connectedClients = 0
@@ -22,6 +29,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     private let registry: DeviceRegistryService?
     private let aiWorkflowService: AIWorkflowService?
     private var wsCancellables = Set<AnyCancellable>()
+    private var serverTask: Task<Void, Never>?
 
     init(
         homeKitManager: HomeKitManager,
@@ -67,7 +75,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
         let env = Environment(name: "production", arguments: ["serve"])
 
-        Task.detached(priority: .userInitiated) { [weak self] in
+        serverTask = Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             do {
                 let app = try await Application.make(env)
@@ -128,6 +136,8 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     }
 
     private func stopAsync() async {
+        serverTask?.cancel()
+        serverTask = nil
         wsCancellables.removeAll()
         await connectionTracker.removeAll()
         if let app = self.app {
@@ -279,6 +289,9 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             } else {
                 let requestedAddr = storage.readBindAddress()
                 let bindAddr = NetworkInterfaceEnumerator.resolvedBindAddress(requestedAddr)
+                if bindAddr == "0.0.0.0" {
+                    AppLogger.server.warning("CORS is set to allow all origins because the server binds to 0.0.0.0. Configure specific allowed origins in settings for tighter security.")
+                }
                 corsOrigin = bindAddr == "0.0.0.0" ? .all : .custom("http://\(bindAddr):\(port)")
             }
             let corsConfig = CORSMiddleware.Configuration(
@@ -926,9 +939,9 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
     private func handleRestWebhookTrigger(_ req: Request) async throws -> Response {
         try guardWorkflowsEnabled()
-        guard let token = req.parameters.get("token"), !token.isEmpty else {
+        guard let token = req.parameters.get("token"), token.count >= 32 else {
             logRESTCall(method: "POST", path: "/workflows/webhook/:token", statusCode: 400, resultSummary: "Bad Request")
-            throw Abort(.badRequest, reason: "Missing webhook token")
+            throw Abort(.badRequest, reason: "Missing or invalid webhook token")
         }
 
         // Find all enabled workflows with a webhook trigger matching this token
@@ -1368,6 +1381,7 @@ private actor ConnectionTracker {
 
     func addWSConnection(id: UUID, ws: WebSocket) {
         wsConnections[id] = ws
+        startCleanupIfNeeded()
     }
 
     func removeWSConnection(id: UUID) {
@@ -1382,6 +1396,14 @@ private actor ConnectionTracker {
                 continue
             }
             ws.send(text)
+        }
+    }
+
+    /// Remove WebSocket connections that have silently closed.
+    func sweepStaleWSConnections() {
+        let stale = wsConnections.filter { $0.value.isClosed }
+        for id in stale.keys {
+            wsConnections.removeValue(forKey: id)
         }
     }
 
@@ -1449,7 +1471,11 @@ private actor ConnectionTracker {
         for key in expired.keys {
             activeSessions.removeValue(forKey: key)
         }
-        if activeSessions.isEmpty {
+
+        // Also sweep stale WebSocket connections that silently dropped
+        sweepStaleWSConnections()
+
+        if activeSessions.isEmpty && wsConnections.isEmpty {
             cleanupTask?.cancel()
             cleanupTask = nil
         }

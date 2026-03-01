@@ -106,6 +106,8 @@ export function usePolling() {
   const activeParamsRef = useRef<Partial<LogQueryParams>>({});
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isDocumentVisibleRef = useRef(true);
+  const logsLengthRef = useRef(0);
+  logsLengthRef.current = state.logs.length;
 
   // Track document visibility
   useEffect(() => {
@@ -183,12 +185,12 @@ export function usePolling() {
     dispatch({ type: 'SET_LOADING', payload: true });
 
     try {
-      const res = await api.getLogs({ ...params, offset: state.logs.length, limit: 50 });
+      const res = await api.getLogs({ ...params, offset: logsLengthRef.current, limit: 50 });
       dispatch({ type: 'APPEND_LOGS', payload: { logs: res.logs, total: res.total } });
     } catch (err) {
       dispatch({ type: 'SET_ERROR', payload: err instanceof Error ? err.message : 'Failed to load more' });
     }
-  }, [api, state.logs.length]);
+  }, [api]);
 
   const injectLog = useCallback((log: StateChangeLog) => {
     dispatch({ type: 'INJECT_LOG', payload: log });

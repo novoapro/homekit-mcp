@@ -45,8 +45,8 @@ export function DeviceRegistryProvider({ children }: { children: ReactNode }) {
       setScenes(scns);
       deviceMapRef.current = new Map(devs.map(d => [d.id, d]));
       sceneMapRef.current = new Map(scns.map(s => [s.id, s]));
-    } catch {
-      // Silently fail — devices/scenes are optional
+    } catch (err) {
+      console.warn('[DeviceRegistry] Failed to load devices/scenes:', err);
     } finally {
       setIsLoading(false);
     }

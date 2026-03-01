@@ -353,3 +353,10 @@ input, select, textarea {
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-card);
 }
+
+/* ── Sidebar content offset (desktop) ───────────────── */
+
+@media (min-width: 769px) {
+  .content-offset-expanded { margin-left: var(--sidebar-width); }
+  .content-offset-collapsed { margin-left: var(--sidebar-collapsed-width); }
+}

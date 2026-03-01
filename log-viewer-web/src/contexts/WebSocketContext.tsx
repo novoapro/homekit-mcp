@@ -96,7 +96,8 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     setConnectionState('connecting');
 
     const token = encodeURIComponent(cfg.bearerToken);
-    const url = `ws://${cfg.serverAddress}:${cfg.serverPort}/ws?token=${token}`;
+    const wsProtocol = cfg.useHTTPS ? 'wss' : 'ws';
+    const url = `${wsProtocol}://${cfg.serverAddress}:${cfg.serverPort}/ws?token=${token}`;
 
     let socket: WebSocket;
     try {
@@ -144,8 +145,8 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             logsClearedHandlers.current.forEach(h => h());
             break;
         }
-      } catch {
-        // Ignore malformed messages
+      } catch (err) {
+        console.warn('[WebSocket] Failed to parse message:', (event.data as string).substring(0, 200), err);
       }
     };
 
