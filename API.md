@@ -252,6 +252,7 @@ Requires: **REST API enabled** + **Workflows enabled**
 | `DELETE` | `/workflows/:workflowId` | Delete a workflow | 200 | `{"deleted": true}` |
 | `POST` | `/workflows/:workflowId/trigger` | Trigger a workflow | 202 | `TriggerResult` |
 | `GET` | `/workflows/:workflowId/logs` | Get execution history | 200 | `WorkflowExecutionLog[]` |
+| `POST` | `/workflows/generate` | Generate a workflow using AI | 201 | `GenerateResult` |
 
 **GET /workflows/:workflowId/logs query params:**
 
@@ -284,6 +285,47 @@ Requires: **REST API enabled** + **Workflows enabled**
 Finds all enabled workflows that have a webhook trigger matching the given token and triggers each one. Returns an array of results.
 
 **404** if no workflows match the token.
+
+---
+
+### AI Workflow Generation
+
+Requires: **REST API enabled** + **Workflows enabled** + **AI enabled** (with a valid API key configured in settings)
+
+| Method | Path | Description | Status | Response |
+|---|---|---|---|---|
+| `POST` | `/workflows/generate` | Generate a workflow from a natural language prompt | 201 | `GenerateResult` |
+
+The MCP server acts as a proxy — it enriches the prompt with device context, calls the configured LLM (Claude, OpenAI, or Gemini), parses the response into a workflow, saves it, and returns a summary.
+
+**Request body:**
+
+```json
+{ "prompt": "Turn on the living room lights at sunset" }
+```
+
+**Success response (201):**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "Sunset Living Room Lights",
+  "description": "Turns on the living room lights every day at sunset"
+}
+```
+
+**Error responses:**
+
+| Status | Reason |
+|---|---|
+| 400 | Missing or empty prompt |
+| 404 | REST API, Workflows, or AI features disabled |
+| 422 | Vague prompt or model refused to generate |
+| 500 | AI response could not be parsed into a valid workflow |
+| 502 | LLM API network or upstream error |
+| 503 | AI not configured (no API key set) |
+
+Error body: `{ "error": "Human-readable error message" }`
 
 ---
 

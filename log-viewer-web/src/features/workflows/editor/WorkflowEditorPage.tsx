@@ -854,7 +854,7 @@ export function WorkflowEditorPage() {
                 <TriggerEditor
                   index={panel.triggerIndex}
                   draft={panelTriggerRef.current}
-                  onChange={(updated) => { panelTriggerRef.current = updated; }}
+                  onChange={(updated) => { panelTriggerRef.current = updated; forcePanel(); }}
                   onRemove={() => {
                     removeTrigger(panel.triggerIndex!);
                     closePanel();

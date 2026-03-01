@@ -13,6 +13,7 @@ export interface ApiClient {
   updateWorkflow(workflowId: string, updates: Partial<Workflow>): Promise<Workflow>;
   createWorkflow(workflow: Partial<WorkflowDefinition>): Promise<WorkflowDefinition>;
   deleteWorkflow(workflowId: string): Promise<void>;
+  generateWorkflow(prompt: string): Promise<{ id: string; name: string; description: string | null }>;
   getDevices(): Promise<RESTDevice[]>;
   getScenes(): Promise<RESTScene[]>;
 }
@@ -35,7 +36,13 @@ export function createApiClient(baseUrl: string, bearerToken: string): ApiClient
     });
 
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      const errorText = await res.text();
+      let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error) errorMessage = errorJson.error;
+      } catch { /* use default message */ }
+      throw new Error(errorMessage);
     }
 
     const text = await res.text();
@@ -106,6 +113,13 @@ export function createApiClient(baseUrl: string, bearerToken: string): ApiClient
 
     async deleteWorkflow(workflowId: string) {
       await request(`/workflows/${workflowId}`, { method: 'DELETE' });
+    },
+
+    async generateWorkflow(prompt: string) {
+      return request<{ id: string; name: string; description: string | null }>('/workflows/generate', {
+        method: 'POST',
+        body: JSON.stringify({ prompt }),
+      });
     },
 
     async getDevices() {

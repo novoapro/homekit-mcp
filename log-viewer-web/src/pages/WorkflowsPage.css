@@ -20,8 +20,27 @@
   letter-spacing: -0.03em;
 }
 
-.wf-new-btn {
+.wf-ai-btn {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-main);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: filter var(--transition-fast), background var(--transition-fast);
+  flex-shrink: 0;
+}
+.wf-ai-btn:hover { background: var(--bg-detail); }
+.wf-ai-btn:active { transform: scale(0.97); }
+
+.wf-new-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -40,11 +59,19 @@
 .wf-new-btn:hover { filter: brightness(1.1); }
 .wf-new-btn:active { transform: scale(0.97); }
 
-.wf-fab {
+/* FAB stack (mobile) */
+.wf-fab-stack {
   display: none;
   position: fixed;
   bottom: calc(var(--spacing-lg) + env(safe-area-inset-bottom, 0px));
   right: var(--spacing-md);
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  z-index: 100;
+}
+
+.wf-fab {
   width: 52px;
   height: 52px;
   border-radius: 50%;
@@ -52,14 +79,31 @@
   background: var(--tint-main);
   color: white;
   cursor: pointer;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 16px color-mix(in srgb, var(--tint-main) 40%, transparent);
   transition: transform var(--transition-fast), filter var(--transition-fast);
-  z-index: 100;
 }
 .wf-fab:hover { filter: brightness(1.1); }
 .wf-fab:active { transform: scale(0.93); }
+
+.wf-fab-ai {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--border-main);
+  background: var(--bg-card);
+  color: var(--tint-main);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+.wf-fab-ai:hover { background: var(--bg-detail); }
+.wf-fab-ai:active { transform: scale(0.93); }
 
 .wf-loading-dot {
   width: 6px;
@@ -100,8 +144,8 @@
   .wf-page-header {
     display: none;
   }
-  .wf-fab {
-    display: inline-flex;
+  .wf-fab-stack {
+    display: flex;
   }
   .wf-card-list {
     padding: var(--spacing-sm) var(--spacing-sm) calc(var(--spacing-3xl) + env(safe-area-inset-bottom, 0px));

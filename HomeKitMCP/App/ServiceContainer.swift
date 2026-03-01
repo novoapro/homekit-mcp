@@ -63,6 +63,7 @@ final class ServiceContainer {
         workflowExecutionLogService: workflowExecutionLogService,
         keychainService: keychainService,
         registry: deviceRegistryService,
+        aiWorkflowService: aiWorkflowService,
         port: storageService.mcpServerPort
     )
 

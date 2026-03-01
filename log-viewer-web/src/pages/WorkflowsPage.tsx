@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Icon } from '@/components/Icon';
 import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { AIGenerateDialog } from '@/components/AIGenerateDialog';
 import { WorkflowCard } from '@/features/workflows/WorkflowCard';
 import { useApi } from '@/hooks/useApi';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -58,6 +59,16 @@ export function WorkflowsPage() {
   }, [api]);
 
   const [deleteTarget, setDeleteTarget] = useState<Workflow | null>(null);
+  const [showAIDialog, setShowAIDialog] = useState(false);
+
+  const handleGenerate = useCallback(async (prompt: string) => {
+    return api.generateWorkflow(prompt);
+  }, [api]);
+
+  const handleViewWorkflow = useCallback((id: string) => {
+    setShowAIDialog(false);
+    navigate(`/workflows/${id}/definition`);
+  }, [navigate]);
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -76,6 +87,10 @@ export function WorkflowsPage() {
       <div className="wf-page-header">
         <h1 className="wf-page-title">Workflows</h1>
         {isLoading && <span className="wf-loading-dot" />}
+        <button className="wf-ai-btn" onClick={() => setShowAIDialog(true)}>
+          <Icon name="sparkles" size={15} />
+          Generate with AI
+        </button>
         <button className="wf-new-btn" onClick={() => navigate('/workflows/new')}>
           <Icon name="plus" size={15} />
           New Workflow
@@ -124,10 +139,22 @@ export function WorkflowsPage() {
         </div>
       )}
 
-      {/* Mobile FAB */}
-      <button className="wf-fab" onClick={() => navigate('/workflows/new')}>
-        <Icon name="plus" size={18} />
-      </button>
+      {/* Mobile FABs */}
+      <div className="wf-fab-stack">
+        <button className="wf-fab-ai" onClick={() => setShowAIDialog(true)}>
+          <Icon name="sparkles" size={16} />
+        </button>
+        <button className="wf-fab" onClick={() => navigate('/workflows/new')}>
+          <Icon name="plus" size={18} />
+        </button>
+      </div>
+
+      <AIGenerateDialog
+        open={showAIDialog}
+        onClose={() => setShowAIDialog(false)}
+        onGenerate={handleGenerate}
+        onViewWorkflow={handleViewWorkflow}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

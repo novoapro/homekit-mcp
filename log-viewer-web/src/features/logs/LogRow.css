@@ -256,6 +256,7 @@
   font-size: var(--font-size-xs);
   line-height: 1.4;
   overflow: hidden;
+  min-width: 0;
 }
 
 .api-text {
@@ -285,7 +286,7 @@
   font-weight: var(--font-weight-medium);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  flex-shrink: 0;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

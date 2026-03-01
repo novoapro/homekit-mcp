@@ -20,6 +20,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     private let workflowExecutionLogService: WorkflowExecutionLogService
     private let keychainService: KeychainService
     private let registry: DeviceRegistryService?
+    private let aiWorkflowService: AIWorkflowService?
     private var wsCancellables = Set<AnyCancellable>()
 
     init(
@@ -32,6 +33,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         workflowExecutionLogService: WorkflowExecutionLogService,
         keychainService: KeychainService,
         registry: DeviceRegistryService? = nil,
+        aiWorkflowService: AIWorkflowService? = nil,
         port: Int = 3000,
         handler: MCPRequestHandler? = nil
     ) {
@@ -44,6 +46,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         self.workflowExecutionLogService = workflowExecutionLogService
         self.keychainService = keychainService
         self.registry = registry
+        self.aiWorkflowService = aiWorkflowService
         self.handler = handler ?? MCPRequestHandler(
             homeKitManager: homeKitManager,
             loggingService: loggingService,
@@ -464,6 +467,15 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             return try await self.handleRestGetWorkflowLogs(req)
         }
 
+        // AI Workflow Generation
+        protected.on(.POST, "workflows", "generate", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            try self.guardWorkflowsEnabled()
+            try self.guardAIEnabled()
+            return try await self.handleRestGenerateWorkflow(req)
+        }
+
         // Clear all logs (state-change logs + workflow execution logs)
         protected.on(.DELETE, "logs") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
@@ -499,6 +511,12 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     private func guardLogAccessEnabled() throws {
         guard storage.readLogAccessEnabled() else {
             throw Abort(.notFound)
+        }
+    }
+
+    private func guardAIEnabled() throws {
+        guard storage.readAIEnabled() else {
+            throw Abort(.notFound, reason: "AI features are not enabled")
         }
     }
 
@@ -949,6 +967,80 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                     req: req)
 
         return jsonResponse(data: data, status: .accepted)
+    }
+
+    // MARK: - AI Workflow Generation
+
+    private func handleRestGenerateWorkflow(_ req: Request) async throws -> Response {
+        guard let aiService = aiWorkflowService else {
+            logRESTCall(method: "POST", path: "/workflows/generate", statusCode: 503, resultSummary: "AI service unavailable")
+            throw Abort(.serviceUnavailable, reason: "AI service is not available")
+        }
+
+        guard let body = req.body.data,
+              let bodyData = body.getData(at: body.readerIndex, length: body.readableBytes) else {
+            logRESTCall(method: "POST", path: "/workflows/generate", statusCode: 400, resultSummary: "Missing body")
+            throw Abort(.badRequest, reason: "Missing request body")
+        }
+
+        struct GenerateRequest: Decodable {
+            let prompt: String
+        }
+
+        let generateReq: GenerateRequest
+        do {
+            generateReq = try JSONDecoder().decode(GenerateRequest.self, from: bodyData)
+        } catch {
+            logRESTCall(method: "POST", path: "/workflows/generate", statusCode: 400, resultSummary: "Invalid JSON")
+            throw Abort(.badRequest, reason: "Request body must contain a \"prompt\" string field")
+        }
+
+        guard !generateReq.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            logRESTCall(method: "POST", path: "/workflows/generate", statusCode: 400, resultSummary: "Empty prompt")
+            throw Abort(.badRequest, reason: "Prompt must not be empty")
+        }
+
+        let workflow: Workflow
+        do {
+            workflow = try await aiService.generateWorkflow(from: generateReq.prompt)
+        } catch let error as AIWorkflowError {
+            let statusCode: HTTPResponseStatus
+            switch error {
+            case .notConfigured:
+                statusCode = .serviceUnavailable
+            case .vagueprompt:
+                statusCode = .unprocessableEntity
+            case .modelRefused:
+                statusCode = .unprocessableEntity
+            case .networkError, .apiError:
+                statusCode = .badGateway
+            case .parseError, .noJSONFound:
+                statusCode = .internalServerError
+            }
+            let errorMessage = error.errorDescription ?? "AI generation failed"
+            logRESTCall(method: "POST", path: "/workflows/generate",
+                        statusCode: UInt(statusCode.code),
+                        resultSummary: "AI Error: \(errorMessage)")
+            let errorBody = try JSONSerialization.data(withJSONObject: ["error": errorMessage])
+            return jsonResponse(data: errorBody, status: statusCode)
+        } catch {
+            logRESTCall(method: "POST", path: "/workflows/generate", statusCode: 500,
+                        resultSummary: "Unexpected error: \(error.localizedDescription)")
+            throw Abort(.internalServerError, reason: error.localizedDescription)
+        }
+
+        let created = await workflowStorageService.createWorkflow(workflow)
+
+        let responseBody = try JSONSerialization.data(withJSONObject: [
+            "id": created.id.uuidString,
+            "name": created.name,
+            "description": created.description ?? ""
+        ])
+        logRESTCall(method: "POST", path: "/workflows/generate", statusCode: 201,
+                    resultSummary: "Generated: \(created.name)",
+                    req: req)
+
+        return jsonResponse(data: responseBody, status: .created)
     }
 
     // MARK: - Streamable HTTP Transport
