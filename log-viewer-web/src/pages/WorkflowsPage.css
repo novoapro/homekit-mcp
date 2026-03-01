@@ -151,12 +151,12 @@
 .wf-toolbar-icon-btn:active { transform: scale(0.93); }
 
 .wf-toolbar-icon-btn.ai {
-  background: color-mix(in srgb, var(--tint-main) 12%, transparent);
-  border-color: color-mix(in srgb, var(--tint-main) 25%, transparent);
+  background: none;
+  border: none;
   color: var(--tint-main);
 }
 .wf-toolbar-icon-btn.ai:hover {
-  background: color-mix(in srgb, var(--tint-main) 20%, transparent);
+  background: color-mix(in srgb, var(--tint-main) 12%, transparent);
 }
 
 .wf-toolbar-icon-btn.primary {
