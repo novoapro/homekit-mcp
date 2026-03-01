@@ -7,25 +7,15 @@ import { BlockEditor } from './BlockEditor';
 import type { WorkflowBlockDraft } from './workflow-editor-types';
 import { blockAutoName } from './workflow-editor-utils';
 import { BLOCK_ICONS } from './block-helpers';
-import type { MoveTarget } from './block-helpers';
 import './BlockCard.css';
 
 interface BlockCardProps {
   block: WorkflowBlockDraft;
   index: number;
   ordinal?: number;
-  isFirst: boolean;
-  isLast: boolean;
   expandedId: string | null;
-  moveTargets?: MoveTarget[];
   onToggleExpand: (id: string) => void;
   onChange: (updated: WorkflowBlockDraft) => void;
-  onRemove: () => void;
-  onClone: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  onMoveToContainer?: (targetDraftId: string, field: string) => void;
-  onMoveToParent?: () => void;
   onNavigateToNested?: (blockId: string, info: { field: string; label: string }) => void;
   reorderMode: boolean;
 }
@@ -34,18 +24,9 @@ export function BlockCard({
   block,
   index,
   ordinal,
-  isFirst,
-  isLast,
   expandedId,
-  moveTargets,
   onToggleExpand,
   onChange,
-  onRemove,
-  onClone,
-  onMoveUp,
-  onMoveDown,
-  onMoveToContainer,
-  onMoveToParent,
   onNavigateToNested,
   reorderMode,
 }: BlockCardProps) {
@@ -116,26 +97,6 @@ export function BlockCard({
           {block.block === 'action' ? 'Action' : 'Flow'}
         </span>
         {!reorderMode && (
-          <div className="bc-header-actions">
-            <button
-              className="bc-header-action-btn"
-              onClick={(e) => { e.stopPropagation(); onClone(); }}
-              title="Duplicate"
-              type="button"
-            >
-              <Icon name="doc-on-doc" size={13} />
-            </button>
-            <button
-              className="bc-header-action-btn danger"
-              onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              title="Remove"
-              type="button"
-            >
-              <Icon name="trash" size={13} />
-            </button>
-          </div>
-        )}
-        {!reorderMode && (
           <Icon name={isExpanded ? 'chevron-down' : 'chevron-right'} size={12} className="bc-chevron" />
         )}
       </div>
@@ -144,17 +105,8 @@ export function BlockCard({
         <div className="block-card-body">
           <BlockEditor
             draft={block}
-            isFirst={isFirst}
-            isLast={isLast}
             showHeader={false}
-            moveTargets={moveTargets}
             onChange={onChange}
-            onRemove={onRemove}
-            onClone={onClone}
-            onMoveUp={onMoveUp}
-            onMoveDown={onMoveDown}
-            onMoveToContainer={onMoveToContainer}
-            onMoveToParent={onMoveToParent}
             onNavigateToNested={onNavigateToNested ? (info) => onNavigateToNested(block._draftId, info) : undefined}
           />
         </div>

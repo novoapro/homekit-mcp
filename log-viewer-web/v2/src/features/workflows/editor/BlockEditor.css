@@ -44,39 +44,6 @@
   display: block;
 }
 
-.block-action-btns {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.block-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: none;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  padding: 0;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-.block-action-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--text-tertiary) 8%, transparent);
-}
-.block-action-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-.block-action-btn.danger {
-  color: var(--status-error);
-  opacity: 0.6;
-}
-.block-action-btn.danger:hover { opacity: 1; }
-
 /* Inline condition */
 .inline-condition {
   border-left: 2px solid color-mix(in srgb, var(--tint-secondary) 25%, transparent);

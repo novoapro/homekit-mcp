@@ -24,7 +24,7 @@ import { ConditionEditor } from './ConditionEditor';
 import { ConditionGroupEditor } from './ConditionGroupEditor';
 import { BlockCard } from './BlockCard';
 import { AddBlockSheet } from './AddBlockSheet';
-import { newBlockDraft, containerTargets, moveBlockToContainer, cloneBlockDraft } from './block-helpers';
+import { newBlockDraft, containerTargets, moveBlockToContainer, cloneBlockDraft, BLOCK_TYPE_LABELS, BLOCK_ICONS } from './block-helpers';
 import { validateDraft } from './workflow-editor-validation';
 import { draftToPayload, definitionToDraft, triggerAutoName, conditionAutoName, collectAllBlockInfos } from './workflow-editor-utils';
 import type { BlockInfo } from './workflow-editor-utils';
@@ -191,6 +191,21 @@ export function WorkflowEditorPage() {
   }, [draft.blocks, nestingStack]);
 
   const currentBlocks = useMemo(() => resolveNestedBlocks(), [resolveNestedBlocks]);
+
+  // Selected block info for footer actions
+  const selectedBlock = useMemo(() => {
+    if (!expandedBlockId || reorderMode) return null;
+    const idx = currentBlocks.findIndex((b) => b._draftId === expandedBlockId);
+    if (idx < 0) return null;
+    const block = currentBlocks[idx]!;
+    const ordinal = ordinalMap.get(block._draftId);
+    return { block, index: idx, ordinal };
+  }, [expandedBlockId, reorderMode, currentBlocks, ordinalMap]);
+
+  const selectedMoveTargets = useMemo(() => {
+    if (!selectedBlock) return [];
+    return containerTargets(selectedBlock.block._draftId, currentBlocks, ordinalMap);
+  }, [selectedBlock, currentBlocks, ordinalMap]);
 
   const setNestedBlocks = useCallback(
     (blocks: WorkflowBlockDraft[]) => {
@@ -593,11 +608,11 @@ export function WorkflowEditorPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await api.updateWorkflow(workflowId, payload as any);
         markSaved();
-        navigate(`/workflows/${workflowId}/definition`);
+        navigate(`/workflows/${workflowId}/definition`, { replace: true });
       } else {
         const created = await api.createWorkflow(payload);
         markSaved();
-        navigate(`/workflows/${created.id}/definition`);
+        navigate(`/workflows/${created.id}/definition`, { replace: true });
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save workflow');
@@ -789,18 +804,9 @@ export function WorkflowEditorPage() {
                     block={block}
                     index={i}
                     ordinal={ordinalMap.get(block._draftId)}
-                    isFirst={i === 0}
-                    isLast={i === currentBlocks.length - 1}
                     expandedId={expandedBlockId}
                     onToggleExpand={(id) => setExpandedBlockId(expandedBlockId === id ? null : id)}
                     onChange={(updated) => handleBlockChange(i, updated)}
-                    onRemove={() => handleBlockRemove(i)}
-                    onClone={() => handleBlockClone(i)}
-                    onMoveUp={() => handleBlockMoveUp(i)}
-                    onMoveDown={() => handleBlockMoveDown(i)}
-                    moveTargets={containerTargets(block._draftId, currentBlocks, ordinalMap)}
-                    onMoveToContainer={(targetId, field) => handleMoveToContainer(block._draftId, targetId, field)}
-                    onMoveToParent={nestingStack.length > 0 ? () => handleMoveToParent(i) : undefined}
                     onNavigateToNested={navigateToNested}
                     reorderMode={reorderMode}
                   />
@@ -897,6 +903,90 @@ export function WorkflowEditorPage() {
       {/* Sticky Footer */}
       <div className="wfe-footer">
         <div className="wfe-footer-inner">
+          {selectedBlock && (
+            <div className="wfe-footer-block" key={selectedBlock.block._draftId}>
+              <div className="wfe-footer-block-row">
+                <div className="wfe-footer-block-info">
+                  <span className={`wfe-footer-block-icon ${selectedBlock.block.block}`}>
+                    <Icon name={BLOCK_ICONS[selectedBlock.block.type] || 'square'} size={13} />
+                  </span>
+                  <span className="wfe-footer-block-label">
+                    #{selectedBlock.ordinal ?? selectedBlock.index + 1}{' '}
+                    {selectedBlock.block.name || BLOCK_TYPE_LABELS[selectedBlock.block.type] || selectedBlock.block.type}
+                  </span>
+                </div>
+                <div className="wfe-footer-block-actions">
+                  <button
+                    className="wfe-footer-block-btn"
+                    disabled={selectedBlock.index === 0}
+                    onClick={() => handleBlockMoveUp(selectedBlock.index)}
+                    title="Move up"
+                    type="button"
+                  >
+                    <Icon name="chevron-up" size={14} />
+                  </button>
+                  <button
+                    className="wfe-footer-block-btn"
+                    disabled={selectedBlock.index === currentBlocks.length - 1}
+                    onClick={() => handleBlockMoveDown(selectedBlock.index)}
+                    title="Move down"
+                    type="button"
+                  >
+                    <Icon name="chevron-down" size={14} />
+                  </button>
+                  <div className="wfe-footer-block-sep" />
+                  <button
+                    className="wfe-footer-block-btn"
+                    onClick={() => handleBlockClone(selectedBlock.index)}
+                    title="Duplicate"
+                    type="button"
+                  >
+                    <Icon name="doc-on-doc" size={13} />
+                  </button>
+                  <button
+                    className="wfe-footer-block-btn danger"
+                    onClick={() => handleBlockRemove(selectedBlock.index)}
+                    title="Delete"
+                    type="button"
+                  >
+                    <Icon name="trash" size={13} />
+                  </button>
+                </div>
+              </div>
+              {(nestingStack.length > 0 || selectedMoveTargets.length > 0) && (
+                <div className="wfe-footer-block-move">
+                  {nestingStack.length > 0 && (
+                    <button
+                      className="wfe-footer-move-btn"
+                      onClick={() => handleMoveToParent(selectedBlock.index)}
+                      type="button"
+                    >
+                      <Icon name="arrow-up-circle" size={13} />
+                      <span>Move to Parent</span>
+                    </button>
+                  )}
+                  {selectedMoveTargets.length > 0 && (
+                    <select
+                      className="wfe-footer-move-select"
+                      value=""
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        const [targetId, field] = e.target.value.split('::');
+                        if (targetId && field) handleMoveToContainer(selectedBlock.block._draftId, targetId, field);
+                      }}
+                    >
+                      <option value="" disabled>Move into...</option>
+                      {selectedMoveTargets.map((t) => (
+                        <option key={`${t.containerDraftId}::${t.field}`} value={`${t.containerDraftId}::${t.field}`}>
+                          {t.description}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {validationErrors.length > 0 && (
             <div className="wfe-validation-errors">
               {validationErrors.map((err, i) => (

@@ -6,39 +6,20 @@ import { CharacteristicValueInput } from './CharacteristicValueInput';
 import type { WorkflowBlockDraft } from './workflow-editor-types';
 import { blockAutoName, conditionAutoName } from './workflow-editor-utils';
 import { HTTP_METHODS, OUTCOMES, EXEC_MODES } from './block-helpers';
-import type { MoveTarget } from './block-helpers';
 import './BlockEditor.css';
 import './TriggerEditor.css'; // shared form styles
 
 interface BlockEditorProps {
   draft: WorkflowBlockDraft;
-  isFirst?: boolean;
-  isLast?: boolean;
   showHeader?: boolean;
-  moveTargets?: MoveTarget[];
   onChange: (updated: WorkflowBlockDraft) => void;
-  onRemove?: () => void;
-  onClone?: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  onMoveToContainer?: (targetDraftId: string, field: string) => void;
-  onMoveToParent?: () => void;
   onNavigateToNested?: (info: { field: string; label: string }) => void;
 }
 
 export function BlockEditor({
   draft,
-  isFirst = false,
-  isLast = false,
   showHeader = true,
-  moveTargets,
   onChange,
-  onRemove,
-  onClone,
-  onMoveUp,
-  onMoveDown,
-  onMoveToContainer,
-  onMoveToParent,
   onNavigateToNested,
 }: BlockEditorProps) {
   const registry = useDeviceRegistry();
@@ -84,28 +65,6 @@ export function BlockEditor({
           </span>
           <div className="block-title-group">
             <span className="block-type-label">{autoDescription}</span>
-          </div>
-          <div className="block-action-btns">
-            {onMoveUp && (
-              <button className="block-action-btn" disabled={isFirst} onClick={onMoveUp} title="Move up" type="button">
-                <Icon name="chevron-up" size={16} />
-              </button>
-            )}
-            {onMoveDown && (
-              <button className="block-action-btn" disabled={isLast} onClick={onMoveDown} title="Move down" type="button">
-                <Icon name="chevron-down" size={16} />
-              </button>
-            )}
-            {onClone && (
-              <button className="block-action-btn" onClick={onClone} title="Duplicate" type="button">
-                <Icon name="doc-on-doc" size={16} />
-              </button>
-            )}
-            {onRemove && (
-              <button className="block-action-btn danger" onClick={onRemove} title="Remove" type="button">
-                <Icon name="xmark-circle-fill" size={16} />
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -356,38 +315,6 @@ export function BlockEditor({
             </select>
           </div>
         </>
-      )}
-
-      {/* Move to parent level */}
-      {onMoveToParent && (
-        <button className="nested-nav-btn" type="button" onClick={onMoveToParent}>
-          <span className="nested-nav-icon"><Icon name="arrow-up-circle" size={14} /></span>
-          <span className="nested-nav-text">Move to Parent Level</span>
-          <Icon name="chevron-right" size={12} className="nested-nav-chevron" />
-        </button>
-      )}
-
-      {/* Move to container */}
-      {onMoveToContainer && moveTargets && moveTargets.length > 0 && (
-        <div className="editor-field">
-          <label>Move to</label>
-          <select
-            className="editor-select"
-            value=""
-            onChange={(e) => {
-              if (!e.target.value) return;
-              const [targetId, field] = e.target.value.split('::');
-              if (targetId && field) onMoveToContainer(targetId, field);
-            }}
-          >
-            <option value="" disabled>Select destination...</option>
-            {moveTargets.map((t) => (
-              <option key={`${t.containerDraftId}::${t.field}`} value={`${t.containerDraftId}::${t.field}`}>
-                {t.description}
-              </option>
-            ))}
-          </select>
-        </div>
       )}
     </div>
   );

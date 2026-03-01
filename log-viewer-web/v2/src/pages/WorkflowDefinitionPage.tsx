@@ -50,11 +50,7 @@ export function WorkflowDefinitionPage() {
   }, [ws, workflowId, loadWorkflow]);
 
   const goBack = useCallback(() => {
-    if (window.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate('/workflows');
-    }
+    navigate('/workflows');
   }, [navigate]);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);

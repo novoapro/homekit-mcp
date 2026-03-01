@@ -105,43 +105,6 @@
   color: var(--color-workflow);
 }
 
-/* Header action buttons (clone, delete) */
-.bc-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-.block-card-header:hover .bc-header-actions {
-  opacity: 1;
-}
-.bc-header-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: none;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  padding: 0;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-.bc-header-action-btn:hover {
-  background: color-mix(in srgb, var(--text-tertiary) 10%, transparent);
-}
-.bc-header-action-btn.danger {
-  color: var(--status-error);
-  opacity: 0.5;
-}
-.bc-header-action-btn.danger:hover {
-  opacity: 1;
-  background: color-mix(in srgb, var(--status-error) 10%, transparent);
-}
-
 .bc-chevron {
   color: var(--text-tertiary);
   opacity: 0.3;
