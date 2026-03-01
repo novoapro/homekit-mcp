@@ -35,18 +35,63 @@ function workflowExecToStateChangeLog(e: WorkflowExecutionLog): StateChangeLog {
   };
 }
 
+const FILTERS_STORAGE_KEY = 'logs-filters';
+
+interface StoredFilters {
+  categories: string[];
+  devices: string[];
+  rooms: string[];
+  searchText: string;
+  dateFrom: string | null;
+  dateTo: string | null;
+}
+
+function loadStoredFilters(): StoredFilters | null {
+  try {
+    const raw = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as StoredFilters;
+  } catch {
+    return null;
+  }
+}
+
+function saveFilters(filters: StoredFilters) {
+  sessionStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+}
+
 export function LogsPage() {
   const polling = usePolling();
+  const { startPolling, stopPolling, loadFresh, loadMore: pollingLoadMore, injectLog, updateLog, clearAll: clearPolling } = polling;
   const ws = useWebSocket();
   const { config } = useConfig();
   const api = useApi();
 
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
-  const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set());
-  const [selectedRooms, setSelectedRooms] = useState<Set<string>>(new Set());
-  const [searchText, setSearchText] = useState('');
-  const [dateFrom, setDateFrom] = useState<string | null>(null);
-  const [dateTo, setDateTo] = useState<string | null>(null);
+  const stored = useRef(loadStoredFilters());
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
+    () => new Set(stored.current?.categories ?? [])
+  );
+  const [selectedDevices, setSelectedDevices] = useState<Set<string>>(
+    () => new Set(stored.current?.devices ?? [])
+  );
+  const [selectedRooms, setSelectedRooms] = useState<Set<string>>(
+    () => new Set(stored.current?.rooms ?? [])
+  );
+  const [searchText, setSearchText] = useState(stored.current?.searchText ?? '');
+  const [dateFrom, setDateFrom] = useState<string | null>(stored.current?.dateFrom ?? null);
+  const [dateTo, setDateTo] = useState<string | null>(stored.current?.dateTo ?? null);
+
+  // Persist filters to sessionStorage on change
+  useEffect(() => {
+    saveFilters({
+      categories: Array.from(selectedCategories),
+      devices: Array.from(selectedDevices),
+      rooms: Array.from(selectedRooms),
+      searchText,
+      dateFrom,
+      dateTo,
+    });
+  }, [selectedCategories, selectedDevices, selectedRooms, searchText, dateFrom, dateTo]);
 
   const debouncedSearch = useDebounce(searchText, 300);
 
@@ -63,8 +108,8 @@ export function LogsPage() {
   }, [selectedCategories, dateFrom, dateTo]);
 
   const fetchWithFilters = useCallback(() => {
-    polling.loadFresh(buildQueryParams());
-  }, [polling, buildQueryParams]);
+    loadFresh(buildQueryParams());
+  }, [loadFresh, buildQueryParams]);
 
   // Initial load (runs once)
   const hasLoadedRef = useRef(false);
@@ -78,34 +123,34 @@ export function LogsPage() {
   // Polling lifecycle (restarts when interval changes)
   useEffect(() => {
     if (config.pollingInterval > 0) {
-      polling.startPolling();
+      startPolling();
     }
-    return () => polling.stopPolling();
-  }, [config.pollingInterval, polling]);
+    return () => stopPolling();
+  }, [config.pollingInterval, startPolling, stopPolling]);
 
   // WebSocket subscriptions
   useEffect(() => {
     const unsubs = [
       ws.onLog((log) => {
-        polling.injectLog(log);
+        injectLog(log);
       }),
       ws.onWorkflowLog(({ type, data }) => {
         const entry = workflowExecToStateChangeLog(data);
         if (type === 'new') {
-          polling.injectLog(entry);
+          injectLog(entry);
         } else {
-          polling.updateLog(entry);
+          updateLog(entry);
         }
       }),
       ws.onLogsCleared(() => {
-        polling.clearAll();
+        clearPolling();
       }),
       ws.onReconnected(() => {
         fetchWithFilters();
       }),
     ];
     return () => unsubs.forEach(fn => fn());
-  }, [ws, polling, fetchWithFilters]);
+  }, [ws, injectLog, updateLog, clearPolling, fetchWithFilters]);
 
   // Derived: available devices and rooms from loaded logs
   const availableDevices = useMemo(() => {
@@ -191,13 +236,13 @@ export function LogsPage() {
 
   function onCategoriesChange(cats: Set<string>) {
     setSelectedCategories(cats);
-    polling.loadFresh(buildQueryParams({ categories: cats }));
+    loadFresh(buildQueryParams({ categories: cats }));
   }
 
   function onDateRangeChange(range: { from: string | null; to: string | null }) {
     setDateFrom(range.from);
     setDateTo(range.to);
-    polling.loadFresh(buildQueryParams({ from: range.from, to: range.to }));
+    loadFresh(buildQueryParams({ from: range.from, to: range.to }));
   }
 
   function onClearAll() {
@@ -207,7 +252,7 @@ export function LogsPage() {
     setSearchText('');
     setDateFrom(null);
     setDateTo(null);
-    polling.loadFresh({});
+    loadFresh({});
   }
 
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -218,13 +263,13 @@ export function LogsPage() {
 
   function confirmClearLogs() {
     api.clearLogs().then(() => {
-      polling.clearAll();
+      clearPolling();
     });
     setShowClearConfirm(false);
   }
 
-  function loadMore() {
-    polling.loadMore(buildQueryParams());
+  function handleLoadMore() {
+    pollingLoadMore(buildQueryParams());
   }
 
   return (
@@ -295,7 +340,7 @@ export function LogsPage() {
           {/* Load More */}
           {hasMore && (
             <div className="load-more">
-              <button className="load-more-btn" onClick={loadMore} disabled={polling.isLoading}>
+              <button className="load-more-btn" onClick={handleLoadMore} disabled={polling.isLoading}>
                 {polling.isLoading ? (
                   <>
                     <Icon name="spinner" size={16} />

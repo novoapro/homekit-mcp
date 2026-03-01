@@ -43,7 +43,7 @@ export function createApiClient(baseUrl: string, bearerToken: string): ApiClient
     return errorMessage;
   }
 
-  async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT): Promise<Response> {
     const controller = new AbortController();
     const existingSignal = options.signal;
 
@@ -56,7 +56,7 @@ export function createApiClient(baseUrl: string, bearerToken: string): ApiClient
       }
     }
 
-    const timeout = setTimeout(() => controller.abort('Request timeout'), DEFAULT_TIMEOUT);
+    const timeout = setTimeout(() => controller.abort('Request timeout'), timeoutMs);
 
     try {
       return await fetch(url, { ...options, signal: controller.signal });
@@ -65,9 +65,9 @@ export function createApiClient(baseUrl: string, bearerToken: string): ApiClient
     }
   }
 
-  async function requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
+  async function requestJson<T>(path: string, options: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT): Promise<T> {
     const headers = buildHeaders(path, options);
-    const res = await fetchWithTimeout(`${baseUrl}${path}`, { ...options, headers });
+    const res = await fetchWithTimeout(`${baseUrl}${path}`, { ...options, headers }, timeoutMs);
 
     if (!res.ok) {
       throw new Error(await parseError(res));
@@ -155,7 +155,7 @@ export function createApiClient(baseUrl: string, bearerToken: string): ApiClient
       return requestJson<{ id: string; name: string; description: string | null }>('/workflows/generate', {
         method: 'POST',
         body: JSON.stringify({ prompt }),
-      });
+      }, 90_000);
     },
 
     async getDevices() {
