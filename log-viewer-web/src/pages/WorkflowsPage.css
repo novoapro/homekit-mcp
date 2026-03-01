@@ -200,6 +200,122 @@
   overflow-y: auto;
   padding: var(--spacing-sm) var(--spacing-md) calc(var(--spacing-3xl) + env(safe-area-inset-bottom, 0px));
 }
+.wf-card-list.with-bulk-bar {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Selection mode header */
+.wf-selection-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-left: auto;
+}
+.wf-selection-count {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--tint-main);
+  white-space: nowrap;
+}
+.wf-selection-select-all {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-detail);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.wf-selection-select-all:hover {
+  background: var(--bg-pill);
+}
+.wf-selection-cancel {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+.wf-selection-cancel:hover {
+  color: var(--text-primary);
+}
+
+/* Bulk operations bar */
+.wf-bulk-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md) calc(var(--spacing-sm) + env(safe-area-inset-bottom, 0px));
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
+  z-index: 100;
+  animation: bulk-bar-slide-up 200ms ease;
+}
+
+@keyframes bulk-bar-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.wf-bulk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: filter var(--transition-fast), opacity var(--transition-fast);
+}
+.wf-bulk-btn:active {
+  transform: scale(0.97);
+}
+.wf-bulk-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.wf-bulk-btn.enable {
+  background: var(--tint-main);
+  color: white;
+}
+.wf-bulk-btn.enable:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.wf-bulk-btn.disable {
+  background: var(--bg-pill);
+  color: var(--text-primary);
+}
+.wf-bulk-btn.disable:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+
+.wf-bulk-btn.delete {
+  background: var(--status-error);
+  color: white;
+}
+.wf-bulk-btn.delete:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
 
 @media (max-width: 768px) {
   .wf-page-header {
@@ -210,6 +326,9 @@
   }
   .wf-card-list {
     padding: var(--spacing-sm) var(--spacing-sm) calc(var(--spacing-xl) + env(safe-area-inset-bottom, 0px));
+  }
+  .wf-card-list.with-bulk-bar {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
   .wf-skeleton-list {
     padding: var(--spacing-xs) var(--spacing-sm);

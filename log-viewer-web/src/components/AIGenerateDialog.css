@@ -138,7 +138,7 @@
 .aig-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid var(--border-main);
+  border: 3px solid color-mix(in srgb, var(--tint-main) 25%, transparent);
   border-top-color: var(--tint-main);
   border-radius: 50%;
   animation: aigSpin 0.8s linear infinite;

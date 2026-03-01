@@ -1,4 +1,31 @@
+/* Swipe container */
+.wf-card-swipe-container {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--card-gap);
+}
+
+.wf-swipe-action-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-right: 24px;
+  background: var(--status-error);
+  color: white;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  pointer-events: none;
+}
+
 .wf-card {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: var(--spacing-sm);
@@ -7,12 +34,45 @@
   border-radius: var(--radius-md);
   border: none;
   box-shadow: var(--shadow-card);
-  margin-bottom: var(--card-gap);
   cursor: pointer;
   transition: background 150ms ease, box-shadow 150ms ease;
+  will-change: transform;
+  z-index: 1;
 }
 .wf-card:hover {
   box-shadow: var(--shadow-card-hover);
+}
+
+/* Selection mode */
+.wf-card.selection-mode {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.wf-card.selected {
+  background: color-mix(in srgb, var(--tint-main) 8%, var(--bg-card));
+  box-shadow: inset 0 0 0 1.5px var(--tint-main), var(--shadow-card);
+}
+
+.wf-select-check {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding-top: 8px;
+}
+.wf-checkbox {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.wf-checkbox.checked {
+  background: var(--tint-main);
+  border-color: var(--tint-main);
+  color: white;
 }
 
 .wf-trigger-icon {
@@ -96,28 +156,6 @@
   gap: var(--spacing-xs);
   padding-top: 4px;
 }
-.wf-delete-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-xs);
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--status-error);
-  opacity: 0;
-  transition: opacity var(--transition-fast), background var(--transition-fast);
-  font-family: inherit;
-}
-.wf-card:hover .wf-delete-btn {
-  opacity: 0.6;
-}
-.wf-delete-btn:hover {
-  opacity: 1 !important;
-  background: color-mix(in srgb, var(--status-error) 10%, transparent);
-}
 
 /* Toggle switch */
 .wf-toggle-wrapper {
@@ -162,6 +200,9 @@
 }
 
 @media (max-width: 768px) {
+  .wf-card-swipe-container {
+    border-radius: var(--radius-sm);
+  }
   .wf-card {
     --card-padding: 12px;
     border-radius: var(--radius-sm);

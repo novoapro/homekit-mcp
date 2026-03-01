@@ -20,6 +20,10 @@ export function WorkflowsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Selection mode
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   const loadWorkflows = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -68,6 +72,9 @@ export function WorkflowsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Workflow | null>(null);
   const [showAIDialog, setShowAIDialog] = useState(false);
 
+  // Bulk delete confirmation
+  const [bulkDeletePending, setBulkDeletePending] = useState(false);
+
   const handleGenerate = useCallback(async (prompt: string) => {
     return api.generateWorkflow(prompt);
   }, [api]);
@@ -88,60 +95,154 @@ export function WorkflowsPage() {
     setDeleteTarget(null);
   }, [api, deleteTarget]);
 
+  // Selection mode handlers
+  const enterSelectionMode = useCallback((workflowId: string) => {
+    setSelectionMode(true);
+    setSelectedIds(new Set([workflowId]));
+  }, []);
+
+  const toggleSelection = useCallback((workflowId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(workflowId)) {
+        next.delete(workflowId);
+      } else {
+        next.add(workflowId);
+      }
+      // Exit selection mode if nothing selected
+      if (next.size === 0) {
+        setSelectionMode(false);
+      }
+      return next;
+    });
+  }, []);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(filteredWorkflows.map(wf => wf.id)));
+  }, [filteredWorkflows]);
+
+  // Derive enable/disable counts from selection
+  const selectedWorkflows = useMemo(() =>
+    workflows.filter(w => selectedIds.has(w.id)),
+    [workflows, selectedIds]
+  );
+  const enabledCount = useMemo(() => selectedWorkflows.filter(w => w.isEnabled).length, [selectedWorkflows]);
+  const disabledCount = useMemo(() => selectedWorkflows.filter(w => !w.isEnabled).length, [selectedWorkflows]);
+
+  // Bulk set enabled state — skips workflows already in the desired state
+  const bulkSetEnabled = useCallback(async (enabled: boolean) => {
+    const toUpdate = selectedWorkflows.filter(w => w.isEnabled !== enabled);
+    if (toUpdate.length === 0) { exitSelectionMode(); return; }
+
+    const ids = toUpdate.map(w => w.id);
+    // Optimistic
+    setWorkflows(prev => prev.map(w => ids.includes(w.id) ? { ...w, isEnabled: enabled } : w));
+
+    try {
+      await Promise.all(ids.map(id => api.updateWorkflow(id, { isEnabled: enabled })));
+    } catch {
+      setError(`Failed to ${enabled ? 'enable' : 'disable'} some workflows`);
+      loadWorkflows();
+    }
+    exitSelectionMode();
+  }, [selectedWorkflows, api, exitSelectionMode, loadWorkflows]);
+
+  // Bulk delete
+  const confirmBulkDelete = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    try {
+      await Promise.all(ids.map(id => api.deleteWorkflow(id)));
+      setWorkflows(prev => prev.filter(w => !ids.includes(w.id)));
+    } catch {
+      setError('Failed to delete some workflows');
+      loadWorkflows();
+    }
+    setBulkDeletePending(false);
+    exitSelectionMode();
+  }, [selectedIds, api, exitSelectionMode, loadWorkflows]);
+
+  const selectedCount = selectedIds.size;
+
   return (
     <div className="wf-list-page">
       {/* Desktop page header */}
       <div className="wf-page-header">
         <h1 className="wf-page-title">Workflows</h1>
         {isLoading && <span className="wf-loading-dot" />}
-        <div className="wf-search-wrap desktop">
-          <Icon name="magnifyingglass" size={13} className="wf-search-icon" />
-          <input
-            className="wf-search-input"
-            type="text"
-            placeholder="Search workflows..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button className="wf-search-clear" onClick={() => setSearchQuery('')} type="button">
-              <Icon name="xmark-circle-fill" size={14} />
+
+        {selectionMode ? (
+          <div className="wf-selection-header">
+            <span className="wf-selection-count">{selectedCount} selected</span>
+            <button className="wf-selection-select-all" onClick={selectAll}>Select All</button>
+            <button className="wf-selection-cancel" onClick={exitSelectionMode}>Cancel</button>
+          </div>
+        ) : (
+          <>
+            <div className="wf-search-wrap desktop">
+              <Icon name="magnifyingglass" size={13} className="wf-search-icon" />
+              <input
+                className="wf-search-input"
+                type="text"
+                placeholder="Search workflows..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button className="wf-search-clear" onClick={() => setSearchQuery('')} type="button">
+                  <Icon name="xmark-circle-fill" size={14} />
+                </button>
+              )}
+            </div>
+            <button className="wf-ai-btn" onClick={() => setShowAIDialog(true)}>
+              <Icon name="sparkles" size={15} />
+              Generate with AI
             </button>
-          )}
-        </div>
-        <button className="wf-ai-btn" onClick={() => setShowAIDialog(true)}>
-          <Icon name="sparkles" size={15} />
-          Generate with AI
-        </button>
-        <button className="wf-new-btn" onClick={() => navigate('/workflows/new')}>
-          <Icon name="plus" size={15} />
-          New Workflow
-        </button>
+            <button className="wf-new-btn" onClick={() => navigate('/workflows/new')}>
+              <Icon name="plus" size={15} />
+              New Workflow
+            </button>
+          </>
+        )}
       </div>
 
       {/* Mobile toolbar: search + icon CTAs */}
       <div className="wf-mobile-toolbar">
-        <div className="wf-search-wrap">
-          <Icon name="magnifyingglass" size={13} className="wf-search-icon" />
-          <input
-            className="wf-search-input"
-            type="text"
-            placeholder="Search workflows..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button className="wf-search-clear" onClick={() => setSearchQuery('')} type="button">
-              <Icon name="xmark-circle-fill" size={14} />
+        {selectionMode ? (
+          <>
+            <span className="wf-selection-count">{selectedCount} selected</span>
+            <button className="wf-selection-select-all" onClick={selectAll}>All</button>
+            <button className="wf-selection-cancel" onClick={exitSelectionMode}>Cancel</button>
+          </>
+        ) : (
+          <>
+            <div className="wf-search-wrap">
+              <Icon name="magnifyingglass" size={13} className="wf-search-icon" />
+              <input
+                className="wf-search-input"
+                type="text"
+                placeholder="Search workflows..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button className="wf-search-clear" onClick={() => setSearchQuery('')} type="button">
+                  <Icon name="xmark-circle-fill" size={14} />
+                </button>
+              )}
+            </div>
+            <button className="wf-toolbar-icon-btn ai" onClick={() => setShowAIDialog(true)} title="Generate with AI">
+              <Icon name="sparkles" size={17} />
             </button>
-          )}
-        </div>
-        <button className="wf-toolbar-icon-btn ai" onClick={() => setShowAIDialog(true)} title="Generate with AI">
-          <Icon name="sparkles" size={17} />
-        </button>
-        <button className="wf-toolbar-icon-btn primary" onClick={() => navigate('/workflows/new')} title="New Workflow">
-          <Icon name="plus" size={17} />
-        </button>
+            <button className="wf-toolbar-icon-btn primary" onClick={() => navigate('/workflows/new')} title="New Workflow">
+              <Icon name="plus" size={17} />
+            </button>
+          </>
+        )}
       </div>
 
       {/* Error */}
@@ -181,7 +282,7 @@ export function WorkflowsPage() {
 
       {/* Workflow card list */}
       {filteredWorkflows.length > 0 && (
-        <div className="wf-card-list">
+        <div className={`wf-card-list${selectionMode ? ' with-bulk-bar' : ''}`}>
           {filteredWorkflows.map((wf, i) => (
             <WorkflowCard
               key={wf.id}
@@ -190,8 +291,34 @@ export function WorkflowsPage() {
               onToggleEnabled={(enabled) => toggleWorkflow(wf, enabled)}
               onDelete={() => setDeleteTarget(wf)}
               onClick={() => navigate(`/workflows/${wf.id}/definition`)}
+              selectionMode={selectionMode}
+              isSelected={selectedIds.has(wf.id)}
+              onSelect={() => toggleSelection(wf.id)}
+              onLongPress={() => enterSelectionMode(wf.id)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Bulk operations bar */}
+      {selectionMode && selectedCount > 0 && (
+        <div className="wf-bulk-bar">
+          {disabledCount > 0 && (
+            <button className="wf-bulk-btn enable" onClick={() => bulkSetEnabled(true)}>
+              <Icon name="play-circle-fill" size={16} />
+              <span>Enable ({disabledCount})</span>
+            </button>
+          )}
+          {enabledCount > 0 && (
+            <button className="wf-bulk-btn disable" onClick={() => bulkSetEnabled(false)}>
+              <Icon name="stop-circle" size={16} />
+              <span>Disable ({enabledCount})</span>
+            </button>
+          )}
+          <button className="wf-bulk-btn delete" onClick={() => setBulkDeletePending(true)}>
+            <Icon name="trash" size={16} />
+            <span>Remove ({selectedCount})</span>
+          </button>
         </div>
       )}
 
@@ -210,6 +337,16 @@ export function WorkflowsPage() {
         destructive
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={bulkDeletePending}
+        title="Delete Workflows"
+        message={`Delete ${selectedCount} workflow${selectedCount !== 1 ? 's' : ''}? This cannot be undone.`}
+        confirmLabel="Delete All"
+        destructive
+        onConfirm={confirmBulkDelete}
+        onCancel={() => setBulkDeletePending(false)}
       />
     </div>
   );

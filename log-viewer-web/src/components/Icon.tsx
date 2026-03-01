@@ -74,6 +74,7 @@ const ICON_MAP: Record<string, IconEntry> = {
   'pencil':                  { ms: 'edit'                           },
   'trash':                   { ms: 'delete'                        },
   'plus':                    { ms: 'add'                           },
+  'checkmark':               { ms: 'check'                         },
   'eye':                     { ms: 'visibility'                    },
   'eye-slash':               { ms: 'visibility_off'                },
 
