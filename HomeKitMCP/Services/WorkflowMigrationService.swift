@@ -163,8 +163,6 @@ enum WorkflowMigrationService {
             switch trigger {
             case let .deviceStateChange(t):
                 refs.insert(DeviceRef(deviceId: t.deviceId, serviceId: t.serviceId, contextName: nil, contextRoom: nil, contextServiceType: nil, location: "trigger"))
-            case let .compound(c):
-                collectCompoundTriggerRefs(c.triggers, into: &refs)
             default:
                 break
             }
@@ -183,19 +181,6 @@ enum WorkflowMigrationService {
         }
 
         return refs
-    }
-
-    private static func collectCompoundTriggerRefs(_ triggers: [WorkflowTrigger], into refs: inout Set<DeviceRef>) {
-        for trigger in triggers {
-            switch trigger {
-            case let .deviceStateChange(t):
-                refs.insert(DeviceRef(deviceId: t.deviceId, serviceId: t.serviceId, contextName: nil, contextRoom: nil, contextServiceType: nil, location: "trigger"))
-            case let .compound(c):
-                collectCompoundTriggerRefs(c.triggers, into: &refs)
-            default:
-                break
-            }
-        }
     }
 
     private static func collectConditionRefs(_ condition: WorkflowCondition, into refs: inout Set<DeviceRef>) {
@@ -773,8 +758,6 @@ extension WorkflowMigrationService {
         switch trigger {
         case .deviceStateChange(let t):
             types.insert(t.characteristicId)
-        case .compound(let c):
-            for t in c.triggers { collectTriggerCharTypes(t, into: &types) }
         default: break
         }
     }
@@ -959,8 +942,6 @@ extension WorkflowMigrationService {
         switch trigger {
         case .deviceStateChange(let t):
             refs.insert(CharRef(deviceId: t.deviceId, characteristicId: t.characteristicId))
-        case .compound(let c):
-            for t in c.triggers { collectTriggerCharRefs(t, into: &refs) }
         default: break
         }
     }

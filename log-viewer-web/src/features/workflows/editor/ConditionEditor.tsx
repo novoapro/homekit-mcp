@@ -24,11 +24,13 @@ const COMPARISON_OPS = [
 ];
 
 const TIME_MODES = [
-  { value: 'between', label: 'Between two times' },
-  { value: 'before', label: 'Before a time' },
-  { value: 'after', label: 'After a time' },
-  { value: 'daytime', label: 'Daytime (sunrise-sunset)' },
-  { value: 'nighttime', label: 'Nighttime (sunset-sunrise)' },
+  { value: 'timeRange', label: 'Between two times' },
+  { value: 'beforeSunrise', label: 'Before Sunrise' },
+  { value: 'afterSunrise', label: 'After Sunrise' },
+  { value: 'beforeSunset', label: 'Before Sunset' },
+  { value: 'afterSunset', label: 'After Sunset' },
+  { value: 'daytime', label: 'Daytime (sunrise–sunset)' },
+  { value: 'nighttime', label: 'Nighttime (sunset–sunrise)' },
 ];
 
 interface ConditionEditorProps {
@@ -136,39 +138,39 @@ export function ConditionEditor({ draft, allowBlockResult = true, allBlocks, cur
         <>
           <div className="editor-field">
             <label>Mode</label>
-            <select className="editor-select" value={draft.mode || 'between'} onChange={(e) => patch({ mode: e.target.value })}>
+            <select className="editor-select" value={draft.mode || 'timeRange'} onChange={(e) => patch({ mode: e.target.value })}>
               {TIME_MODES.map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
               ))}
             </select>
           </div>
-          {(draft.mode === 'between' || draft.mode === 'after') && (
-            <div className="editor-field">
-              <label>Start Time</label>
-              <input
-                className="editor-input"
-                type="time"
-                value={timeStr(draft.startTime)}
-                onChange={(e) => {
-                  const [h, m] = e.target.value.split(':');
-                  patch({ startTime: { hour: +h!, minute: +m! } });
-                }}
-              />
-            </div>
-          )}
-          {(draft.mode === 'between' || draft.mode === 'before') && (
-            <div className="editor-field">
-              <label>End Time</label>
-              <input
-                className="editor-input"
-                type="time"
-                value={timeStr(draft.endTime)}
-                onChange={(e) => {
-                  const [h, m] = e.target.value.split(':');
-                  patch({ endTime: { hour: +h!, minute: +m! } });
-                }}
-              />
-            </div>
+          {draft.mode === 'timeRange' && (
+            <>
+              <div className="editor-field">
+                <label>Start Time</label>
+                <input
+                  className="editor-input"
+                  type="time"
+                  value={timeStr(draft.startTime)}
+                  onChange={(e) => {
+                    const [h, m] = e.target.value.split(':');
+                    patch({ startTime: { hour: +h!, minute: +m! } });
+                  }}
+                />
+              </div>
+              <div className="editor-field">
+                <label>End Time</label>
+                <input
+                  className="editor-input"
+                  type="time"
+                  value={timeStr(draft.endTime)}
+                  onChange={(e) => {
+                    const [h, m] = e.target.value.split(':');
+                    patch({ endTime: { hour: +h!, minute: +m! } });
+                  }}
+                />
+              </div>
+            </>
           )}
         </>
       )}

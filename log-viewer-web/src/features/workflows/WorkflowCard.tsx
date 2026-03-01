@@ -49,6 +49,7 @@ export function WorkflowCard({
   const pillBg = `color-mix(in srgb, ${statusColor} 12%, transparent)`;
 
   // Swipe state refs (no re-renders needed during gesture)
+  const containerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const startXRef = useRef(0);
   const currentXRef = useRef(0);
@@ -91,6 +92,7 @@ export function WorkflowCard({
     }
 
     if (diff > 10) {
+      if (!swipingRef.current) containerRef.current?.classList.add('swiping');
       swipingRef.current = true;
       // Apply resistance after threshold
       const capped = Math.min(diff, SWIPE_THRESHOLD * 1.8);
@@ -129,6 +131,7 @@ export function WorkflowCard({
     }
     swipingRef.current = false;
     currentXRef.current = 0;
+    containerRef.current?.classList.remove('swiping');
   }, [selectionMode, onDelete, clearLongPress]);
 
   const handleClick = useCallback(() => {
@@ -141,7 +144,7 @@ export function WorkflowCard({
   }, [selectionMode, onSelect, onClick]);
 
   return (
-    <div className="wf-card-swipe-container">
+    <div ref={containerRef} className="wf-card-swipe-container">
       {/* Delete action revealed behind the card */}
       <div className="wf-swipe-action-delete">
         <Icon name="trash" size={18} />

@@ -44,14 +44,6 @@ export interface DeviceStateTriggerDef {
   retriggerPolicy?: string;
 }
 
-export interface CompoundTriggerDef {
-  type: 'compound';
-  name?: string;
-  operator: string;
-  triggers: WorkflowTriggerDef[];
-  retriggerPolicy?: string;
-}
-
 export interface ScheduleTriggerDef {
   type: 'schedule';
   name?: string;
@@ -81,7 +73,7 @@ export interface SunEventTriggerDef {
 }
 
 export type WorkflowTriggerDef =
-  | DeviceStateTriggerDef | CompoundTriggerDef | ScheduleTriggerDef
+  | DeviceStateTriggerDef | ScheduleTriggerDef
   | WebhookTriggerDef | WorkflowCallTriggerDef | SunEventTriggerDef;
 
 // Workflow Conditions

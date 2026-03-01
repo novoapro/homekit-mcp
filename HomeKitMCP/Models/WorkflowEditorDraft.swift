@@ -1302,9 +1302,6 @@ extension WorkflowDraft {
                 sunEventType: t.event,
                 sunEventOffsetMinutes: t.offsetMinutes
             )
-        case .compound:
-            // Compound triggers not editable in the UI editor
-            return nil
         }
     }
 

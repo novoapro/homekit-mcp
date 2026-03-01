@@ -660,9 +660,8 @@ struct ExecuteWorkflowBlock: Codable {
 
 // MARK: - Trigger System
 
-indirect enum WorkflowTrigger: Codable {
+enum WorkflowTrigger: Codable {
     case deviceStateChange(DeviceStateTrigger)
-    case compound(CompoundTrigger)
     case schedule(ScheduleTrigger)
     case webhook(WebhookTrigger)
     case workflow(WorkflowCallTrigger)
@@ -670,7 +669,6 @@ indirect enum WorkflowTrigger: Codable {
 
     private enum TriggerType: String, Codable {
         case deviceStateChange
-        case compound
         case schedule
         case webhook
         case workflow
@@ -680,8 +678,6 @@ indirect enum WorkflowTrigger: Codable {
     private enum CodingKeys: String, CodingKey {
         case type, name
         case deviceId, serviceId, characteristicId, characteristicType, condition
-        case logicOperator = "operator"
-        case triggers
         case scheduleType, token
         case event, offsetMinutes
         case retriggerPolicy
@@ -701,13 +697,6 @@ indirect enum WorkflowTrigger: Codable {
                 serviceId: container.decodeIfPresent(String.self, forKey: .serviceId),
                 characteristicId: charId,
                 condition: container.decode(TriggerCondition.self, forKey: .condition),
-                name: name,
-                retriggerPolicy: policy
-            ))
-        case .compound:
-            self = try .compound(CompoundTrigger(
-                logicOperator: container.decode(LogicOperator.self, forKey: .logicOperator),
-                triggers: container.decode([WorkflowTrigger].self, forKey: .triggers),
                 name: name,
                 retriggerPolicy: policy
             ))
@@ -746,12 +735,6 @@ indirect enum WorkflowTrigger: Codable {
             try container.encode(trigger.characteristicId, forKey: .characteristicId)
             try container.encode(trigger.condition, forKey: .condition)
             try container.encodeIfPresent(trigger.retriggerPolicy, forKey: .retriggerPolicy)
-        case let .compound(trigger):
-            try container.encode(TriggerType.compound, forKey: .type)
-            try container.encodeIfPresent(trigger.name, forKey: .name)
-            try container.encode(trigger.logicOperator, forKey: .logicOperator)
-            try container.encode(trigger.triggers, forKey: .triggers)
-            try container.encodeIfPresent(trigger.retriggerPolicy, forKey: .retriggerPolicy)
         case let .schedule(trigger):
             try container.encode(TriggerType.schedule, forKey: .type)
             try container.encodeIfPresent(trigger.name, forKey: .name)
@@ -778,7 +761,6 @@ indirect enum WorkflowTrigger: Codable {
     var retriggerPolicy: ConcurrentExecutionPolicy? {
         switch self {
         case .deviceStateChange(let t): return t.retriggerPolicy
-        case .compound(let t): return t.retriggerPolicy
         case .schedule(let t): return t.retriggerPolicy
         case .webhook(let t): return t.retriggerPolicy
         case .workflow(let t): return t.retriggerPolicy
@@ -798,11 +780,6 @@ indirect enum WorkflowTrigger: Codable {
             return .deviceStateChange(DeviceStateTrigger(
                 deviceId: t.deviceId, serviceId: t.serviceId,
                 characteristicId: t.characteristicId, condition: t.condition,
-                name: t.name, retriggerPolicy: policy
-            ))
-        case .compound(let t):
-            return .compound(CompoundTrigger(
-                logicOperator: t.logicOperator, triggers: t.triggers,
                 name: t.name, retriggerPolicy: policy
             ))
         case .schedule(let t):
@@ -839,20 +816,6 @@ struct DeviceStateTrigger {
         self.serviceId = serviceId
         self.characteristicId = characteristicId
         self.condition = condition
-        self.name = name
-        self.retriggerPolicy = retriggerPolicy
-    }
-}
-
-struct CompoundTrigger {
-    let logicOperator: LogicOperator
-    let triggers: [WorkflowTrigger]
-    let name: String?
-    let retriggerPolicy: ConcurrentExecutionPolicy?
-
-    init(logicOperator: LogicOperator, triggers: [WorkflowTrigger], name: String? = nil, retriggerPolicy: ConcurrentExecutionPolicy? = nil) {
-        self.logicOperator = logicOperator
-        self.triggers = triggers
         self.name = name
         self.retriggerPolicy = retriggerPolicy
     }

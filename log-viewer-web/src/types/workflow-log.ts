@@ -54,7 +54,7 @@ export interface WorkflowMetadata {
 }
 
 export interface WorkflowTrigger {
-  type: 'deviceStateChange' | 'schedule' | 'webhook' | 'compound' | 'workflow' | 'sunEvent';
+  type: 'deviceStateChange' | 'schedule' | 'webhook' | 'workflow' | 'sunEvent';
   [key: string]: unknown;
 }
 
@@ -76,7 +76,6 @@ export const TRIGGER_TYPE_LABELS: Record<TriggerTypeKey, string> = {
   deviceStateChange: 'Device',
   schedule: 'Schedule',
   webhook: 'Webhook',
-  compound: 'Compound',
   workflow: 'Workflow',
   sunEvent: 'Sun Event',
 };
@@ -85,7 +84,6 @@ export const TRIGGER_TYPE_ICONS: Record<TriggerTypeKey, string> = {
   deviceStateChange: 'bolt-circle-fill',
   schedule: 'clock',
   webhook: 'link-circle-fill',
-  compound: 'arrows-circle-fill',
   workflow: 'play-circle-fill',
   sunEvent: 'sun',
 };

@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Icon } from '@/components/Icon';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import type {
-  WorkflowTriggerDef, CompoundTriggerDef, DeviceStateTriggerDef,
+  WorkflowTriggerDef, DeviceStateTriggerDef,
   ScheduleTriggerDef, SunEventTriggerDef, WebhookTriggerDef,
 } from '@/types/workflow-definition';
 import { TRIGGER_TYPE_ICONS } from '@/types/workflow-log';
@@ -24,10 +24,6 @@ interface DefinitionTriggerProps {
 
 export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps) {
   const registry = useDeviceRegistry();
-  const [collapsed, setCollapsed] = useState(false);
-
-  const compoundTriggers = trigger.type === 'compound' ? (trigger as CompoundTriggerDef).triggers : [];
-  const hasChildren = compoundTriggers.length > 0;
   const depthRange = Array.from({ length: depth }, (_, i) => i);
 
   const triggerIcon = TRIGGER_TYPE_ICONS[trigger.type] || 'bolt-circle-fill';
@@ -41,7 +37,6 @@ export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps
       }
       case 'schedule': return 'Schedule';
       case 'webhook': return 'Webhook';
-      case 'compound': return 'Compound Trigger';
       case 'workflow': return 'Callable Trigger';
       case 'sunEvent': {
         const s = trigger as SunEventTriggerDef;
@@ -78,7 +73,6 @@ export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps
         const dir = s.offsetMinutes > 0 ? 'after' : 'before';
         return `${abs} min ${dir}`;
       }
-      case 'compound': return undefined;
       case 'workflow': return 'Can be triggered by other workflows';
       default: return undefined;
     }
@@ -90,16 +84,9 @@ export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps
     return formatRetriggerPolicy(policy);
   }, [trigger]);
 
-  const operatorLabel = trigger.type === 'compound'
-    ? (trigger as CompoundTriggerDef).operator.toUpperCase()
-    : '';
-
   return (
     <div className="tree-node">
-      <div
-        className={`tree-row ${hasChildren ? 'collapsible' : ''}`}
-        onClick={() => hasChildren && setCollapsed(v => !v)}
-      >
+      <div className="tree-row">
         {depthRange.map(i => (
           <div
             key={i}
@@ -108,19 +95,9 @@ export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps
           />
         ))}
 
-        {hasChildren && (
-          <span className={`tree-chevron ${collapsed ? 'collapsed' : ''}`}>
-            <Icon name="chevron-down" size={12} />
-          </span>
-        )}
-
         <span className="tree-icon" style={{ color: 'var(--tint-main)' }}>
           <Icon name={triggerIcon} size={16} />
         </span>
-
-        {operatorLabel && (
-          <span className="logic-badge">{operatorLabel}</span>
-        )}
 
         <div className="tree-info">
           <span className="tree-name">{displayName}</span>
@@ -131,15 +108,8 @@ export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps
               {retriggerLabel}
             </span>
           )}
-          {collapsed && hasChildren && (
-            <span className="collapsed-hint">{compoundTriggers.length} nested</span>
-          )}
         </div>
       </div>
-
-      {!collapsed && compoundTriggers.map((sub, i) => (
-        <DefinitionTrigger key={i} trigger={sub} depth={depth + 1} />
-      ))}
     </div>
   );
 }

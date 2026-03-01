@@ -274,20 +274,6 @@ private struct WorkflowTriggerRow: View {
                     .foregroundColor(Theme.Text.secondary)
             }
             .padding(.vertical, 2)
-        case let .compound(t):
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.footnote)
-                        .foregroundColor(Theme.Tint.main)
-                    Text(t.name ?? "Compound (\(t.logicOperator.rawValue.uppercased()))")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                }
-                Text("\(t.triggers.count) sub-triggers")
-                    .font(.footnote)
-                    .foregroundColor(Theme.Text.secondary)
-            }
         case let .schedule(t):
             VStack(alignment: .leading, spacing: 4) {
                 HStack {

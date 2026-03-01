@@ -14,7 +14,7 @@ export function newUUID(): string {
 
 export interface WorkflowTriggerDraft {
   _draftId: string;
-  type: 'deviceStateChange' | 'schedule' | 'webhook' | 'workflow' | 'sunEvent' | 'compound';
+  type: 'deviceStateChange' | 'schedule' | 'webhook' | 'workflow' | 'sunEvent';
   name?: string;
   // deviceStateChange
   deviceId?: string;

@@ -38,7 +38,6 @@ const TRIGGER_ICONS: Record<string, string> = {
   sunEvent: 'sun-max',
   webhook: 'globe',
   workflow: 'arrow-triangle-branch',
-  compound: 'arrow-triangle-branch',
 };
 
 const TRIGGER_BADGES: Record<string, string> = {
@@ -47,7 +46,6 @@ const TRIGGER_BADGES: Record<string, string> = {
   sunEvent: 'Sun',
   webhook: 'Webhook',
   workflow: 'Callable',
-  compound: 'Compound',
 };
 
 interface PanelFrame {

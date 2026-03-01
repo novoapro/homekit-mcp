@@ -1,6 +1,6 @@
 import Foundation
 
-/// Evaluates `.deviceStateChange` and `.compound` triggers against state change events.
+/// Evaluates `.deviceStateChange` triggers against state change events.
 struct DeviceStateChangeTriggerEvaluator: TriggerEvaluator {
 
     let registry: DeviceRegistryService?
@@ -11,7 +11,7 @@ struct DeviceStateChangeTriggerEvaluator: TriggerEvaluator {
 
     func canEvaluate(_ trigger: WorkflowTrigger) -> Bool {
         switch trigger {
-        case .deviceStateChange, .compound:
+        case .deviceStateChange:
             return true
         case .schedule, .webhook, .workflow, .sunEvent:
             return false
@@ -31,8 +31,6 @@ struct DeviceStateChangeTriggerEvaluator: TriggerEvaluator {
         switch trigger {
         case .deviceStateChange(let t):
             return evaluateDeviceStateTrigger(t, change: change)
-        case .compound(let t):
-            return evaluateCompoundTrigger(t, change: change)
         case .schedule, .webhook, .workflow, .sunEvent:
             return false
         }
@@ -55,15 +53,6 @@ struct DeviceStateChangeTriggerEvaluator: TriggerEvaluator {
 
         // Evaluate condition
         return evaluateTriggerCondition(trigger.condition, oldValue: change.oldValue, newValue: change.newValue)
-    }
-
-    private func evaluateCompoundTrigger(_ trigger: CompoundTrigger, change: StateChange) -> Bool {
-        switch trigger.logicOperator {
-        case .and:
-            return trigger.triggers.allSatisfy { evaluateTrigger($0, change: change) }
-        case .or:
-            return trigger.triggers.contains { evaluateTrigger($0, change: change) }
-        }
     }
 
     private func evaluateTriggerCondition(_ condition: TriggerCondition, oldValue: Any?, newValue: Any?) -> Bool {

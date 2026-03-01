@@ -63,7 +63,7 @@ export function newConditionLeaf(type: string): WorkflowConditionDraft {
       base.comparison = { type: 'equals', value: true };
       break;
     case 'timeCondition':
-      base.mode = 'between';
+      base.mode = 'timeRange';
       base.startTime = { hour: 8, minute: 0 };
       base.endTime = { hour: 20, minute: 0 };
       break;
@@ -168,10 +168,6 @@ function triggerDraftToPayload(t: WorkflowTriggerDraft): WorkflowTriggerDef {
       base.offsetMinutes = t.offsetMinutes ?? 0;
       break;
     case 'workflow':
-      break;
-    case 'compound':
-      base.operator = 'and';
-      base.triggers = [];
       break;
   }
   return base as WorkflowTriggerDef;
@@ -602,12 +598,16 @@ export function conditionAutoName(c: WorkflowConditionDraft, registry: RegistryL
     }
     case 'timeCondition': {
       switch (c.mode) {
-        case 'between':
+        case 'timeRange':
           return `${fmtTime(c.startTime)}\u2013${fmtTime(c.endTime)}`;
-        case 'before':
-          return `Before ${fmtTime(c.endTime)}`;
-        case 'after':
-          return `After ${fmtTime(c.startTime)}`;
+        case 'beforeSunrise':
+          return 'Before Sunrise';
+        case 'afterSunrise':
+          return 'After Sunrise';
+        case 'beforeSunset':
+          return 'Before Sunset';
+        case 'afterSunset':
+          return 'After Sunset';
         case 'daytime':
           return 'Daytime';
         case 'nighttime':

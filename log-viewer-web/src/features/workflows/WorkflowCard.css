@@ -22,6 +22,11 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+.wf-card-swipe-container.swiping .wf-swipe-action-delete {
+  opacity: 1;
 }
 
 .wf-card {

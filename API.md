@@ -935,18 +935,6 @@ Sunrise/sunset trigger.
 | `offsetMinutes` | integer | no | Negative = before, positive = after, 0 = exact |
 | `retriggerPolicy` | string | no | |
 
-#### compound
-
-Logical combination of triggers.
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `type` | `"compound"` | yes | |
-| `name` | string | no | |
-| `operator` | `"and"` or `"or"` | yes | |
-| `triggers` | WorkflowTrigger[] | yes | Nested triggers |
-| `retriggerPolicy` | string | no | |
-
 #### webhook
 
 External HTTP trigger with a unique token.

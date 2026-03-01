@@ -27,7 +27,6 @@ struct WorkflowRow: View {
         case .deviceStateChange: return "bolt.fill"
         case .schedule: return "clock.fill"
         case .webhook: return "arrow.down.circle.fill"
-        case .compound: return "arrow.triangle.branch"
         case .workflow: return "arrow.triangle.turn.up.right.diamond"
         case .sunEvent: return "sunrise.fill"
         }
@@ -151,7 +150,6 @@ struct WorkflowRow: View {
         case .deviceStateChange: return "Device"
         case .schedule: return "Schedule"
         case .webhook: return "Webhook"
-        case .compound: return "Compound"
         case .workflow: return "Workflow"
         case .sunEvent: return "Sun Event"
         }

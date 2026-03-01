@@ -469,6 +469,42 @@ actor AIWorkflowService {
         - "queueAndExecute": queue the trigger for after the current run
         - "cancelOnly": cancel the running execution without restarting
 
+        ## CRITICAL: How Triggers and Guard Conditions Work Together
+
+        Triggers are **atomic event detectors**. Each trigger fires on exactly ONE event \
+        (a device state change, a schedule tick, a webhook call, a sun event). \
+        Triggers do NOT have logical operators (AND/OR). They cannot be combined.
+
+        Multiple triggers in the "triggers" array act as **OR** — any single trigger can start the workflow.
+
+        Guard conditions (the workflow-level "conditions" array) control whether the workflow \
+        actually executes after a trigger fires. They check for **readiness** — is the environment \
+        in the right state for this workflow to run? If any guard condition fails, the workflow is skipped.
+
+        For "when X happens AND Y is true" logic, use:
+        - ONE trigger (the event that starts the workflow)
+        - Guard conditions in the "conditions" array (readiness checks evaluated when the trigger fires)
+
+        Guard conditions are the primary mechanism for AND/OR/NOT logic. They are evaluated \
+        against current device/scene/time state when a trigger fires.
+
+        ### Common Patterns
+
+        "When motion is detected AND it's nighttime → turn on light":
+        - Trigger: deviceStateChange on motion sensor (Motion Detected equals true)
+        - Guard condition: timeCondition with mode "nighttime"
+        - Block: controlDevice to turn on the light
+
+        "When door opens AND hallway light is off → turn on light":
+        - Trigger: deviceStateChange on door sensor (Contact State equals 1)
+        - Guard condition: deviceState on hallway light (Power equals false)
+        - Block: controlDevice to turn on hallway light
+
+        "At sunset, if temperature is above 75 → turn on fan":
+        - Trigger: sunEvent with event "sunset"
+        - Guard condition: deviceState on temperature sensor (Current Temperature greaterThan 75)
+        - Block: controlDevice to turn on fan
+
         ## Trigger Types
 
         All triggers accept an optional "retriggerPolicy" field (see above).
@@ -507,13 +543,6 @@ actor AIWorkflowService {
         { "type": "sunEvent", "name": "optional label", "event": "sunrise", "offsetMinutes": -15 }
         ```
         Events: "sunrise", "sunset". offsetMinutes: negative = before, positive = after, 0 = exact.
-
-        ### compound
-        Combines multiple triggers with AND/OR logic:
-        ```json
-        { "type": "compound", "name": "optional label", "operator": "and", "triggers": [ ... ] }
-        ```
-        Note: the JSON key is "operator" (not "logicOperator").
 
         ### webhook
         ```json
@@ -565,8 +594,11 @@ actor AIWorkflowService {
 
         ## Guard Condition Types (workflow-level "conditions" array)
 
-        Guard conditions are checked before the workflow runs. If any fail, the workflow is skipped. \
-        IMPORTANT: Only deviceState, timeCondition, sceneActive (and compound and/or/not) are valid here. \
+        Guard conditions are **readiness checks** — they determine whether the environment is in the \
+        right state for this workflow to run. They are the PRIMARY mechanism for AND/OR/NOT logic. \
+        Use guard conditions whenever the user describes multi-condition scenarios like \
+        "when X AND Y", "only if Z", "unless W", "but only during...", "if ... is on/off". \
+        IMPORTANT: Only deviceState, timeCondition, sceneActive (and logical and/or/not) are valid here. \
         Do NOT use blockResult in guard conditions — no blocks have executed yet at that point.
 
         ```json

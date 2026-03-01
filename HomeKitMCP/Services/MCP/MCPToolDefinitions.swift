@@ -246,8 +246,6 @@ enum MCPToolDefinitions {
                 • sunEvent — { "type":"sunEvent", "name":"optional", "retriggerPolicy":"ignoreNew", \
                 "event":"sunrise"|"sunset", "offsetMinutes":-15 } \
                 offsetMinutes: negative=before, positive=after, 0=exact.
-                • compound — { "type":"compound", "name":"optional", "retriggerPolicy":"ignoreNew", \
-                "operator":"and"|"or", "triggers":[...] }
                 • webhook — { "type":"webhook", "name":"optional", "retriggerPolicy":"ignoreNew", "token":"unique-string" }
                 • workflow — { "type":"workflow", "name":"optional", "retriggerPolicy":"ignoreNew" } \
                 (makes this workflow callable by others)
@@ -327,7 +325,7 @@ enum MCPToolDefinitions {
                 ("ignoreNew"|"cancelAndRestart"|"queueAndExecute"|"cancelOnly").
 
                 The schema for triggers, blocks, and conditions is identical to create_workflow. \
-                Trigger types: deviceStateChange, schedule, sunEvent, compound, webhook, workflow. \
+                Trigger types: deviceStateChange, schedule, sunEvent, webhook, workflow. \
                 Block types (use "block":"action"|"flowControl" discriminator): \
                 controlDevice, runScene, webhook, log, delay, waitForState, conditional, repeat, \
                 repeatWhile, group, return, executeWorkflow. \
