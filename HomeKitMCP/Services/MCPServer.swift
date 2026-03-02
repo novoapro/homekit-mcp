@@ -255,6 +255,49 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                 }
                 .store(in: &wsCancellables)
         }
+
+        // Broadcast granular characteristic value changes (webhookEnabled devices only)
+        homeKitManager.characteristicValueChangePublisher
+            .receive(on: DispatchQueue.global(qos: .utility))
+            .collect(.byTime(DispatchQueue.global(qos: .utility), .milliseconds(100)))
+            .filter { !$0.isEmpty }
+            .sink { [weak self] changes in
+                guard self != nil else { return }
+                Task {
+                    guard await tracker.wsConnectionCount > 0 else { return }
+                    let isoFormatter = ISO8601DateFormatter()
+                    isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                    for change in changes {
+                        let valueJson: Any
+                        if let v = change.value {
+                            let encoded = try? JSONEncoder.iso8601.encode(AnyCodable(v))
+                            valueJson = encoded.flatMap({ try? JSONSerialization.jsonObject(with: $0) }) ?? v
+                        } else {
+                            valueJson = NSNull()
+                        }
+                        let msg: [String: Any] = [
+                            "type": "characteristic_updated",
+                            "data": [
+                                "deviceId": change.deviceId,
+                                "serviceId": change.serviceId,
+                                "characteristicId": change.characteristicId,
+                                "characteristicType": change.characteristicType,
+                                "value": valueJson,
+                                "timestamp": isoFormatter.string(from: change.timestamp)
+                            ] as [String: Any]
+                        ]
+                        do {
+                            let msgData = try JSONSerialization.data(withJSONObject: msg)
+                            if let text = String(data: msgData, encoding: .utf8) {
+                                await tracker.broadcastToWS(text)
+                            }
+                        } catch {
+                            AppLogger.server.error("Failed to encode characteristic_updated for WS: \(error)")
+                        }
+                    }
+                }
+            }
+            .store(in: &wsCancellables)
     }
 
     private func broadcastWorkflowLog(_ entry: WorkflowExecutionLog, type: String, tracker: ConnectionTracker) {

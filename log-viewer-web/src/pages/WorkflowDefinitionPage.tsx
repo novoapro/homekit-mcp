@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Icon } from '@/components/Icon';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -39,15 +39,19 @@ export function WorkflowDefinitionPage() {
     loadWorkflow();
   }, [loadWorkflow]);
 
-  // Reload on WebSocket workflows_updated if this workflow changed
+  // Reload on WebSocket workflows_updated if this workflow changed.
+  // Use a ref so the effect doesn't re-run (and re-fetch) when loadWorkflow changes.
+  const loadRef = useRef(loadWorkflow);
+  loadRef.current = loadWorkflow;
+
   useEffect(() => {
     const unsub = ws.onWorkflowsUpdated((workflows) => {
       if (workflows.some(w => w.id === workflowId)) {
-        loadWorkflow();
+        loadRef.current();
       }
     });
     return unsub;
-  }, [ws, workflowId, loadWorkflow]);
+  }, [ws, workflowId]);
 
   const goBack = useCallback(() => {
     navigate('/workflows');

@@ -11,12 +11,14 @@ import {
 import { useConfig } from './ConfigContext';
 import type { StateChangeLog } from '@/types/state-change-log';
 import type { WorkflowExecutionLog, Workflow } from '@/types/workflow-log';
+import type { CharacteristicUpdateEvent } from '@/types/homekit-device';
 
 export type WSConnectionState = 'disconnected' | 'connecting' | 'connected';
 
 type LogHandler = (log: StateChangeLog) => void;
 type WorkflowLogHandler = (event: { type: 'new' | 'updated'; data: WorkflowExecutionLog }) => void;
 type WorkflowsUpdatedHandler = (workflows: Workflow[]) => void;
+type CharacteristicUpdatedHandler = (event: CharacteristicUpdateEvent) => void;
 type VoidHandler = () => void;
 
 interface WebSocketContextValue {
@@ -28,6 +30,7 @@ interface WebSocketContextValue {
   onWorkflowLog: (handler: WorkflowLogHandler) => () => void;
   onWorkflowsUpdated: (handler: WorkflowsUpdatedHandler) => () => void;
   onDevicesUpdated: (handler: VoidHandler) => () => void;
+  onCharacteristicUpdated: (handler: CharacteristicUpdatedHandler) => () => void;
   onLogsCleared: (handler: VoidHandler) => () => void;
   onReconnected: (handler: VoidHandler) => () => void;
 }
@@ -52,6 +55,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const workflowLogHandlers = useRef(new Set<WorkflowLogHandler>());
   const workflowsUpdatedHandlers = useRef(new Set<WorkflowsUpdatedHandler>());
   const devicesUpdatedHandlers = useRef(new Set<VoidHandler>());
+  const characteristicUpdatedHandlers = useRef(new Set<CharacteristicUpdatedHandler>());
   const logsClearedHandlers = useRef(new Set<VoidHandler>());
   const reconnectedHandlers = useRef(new Set<VoidHandler>());
 
@@ -141,6 +145,9 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           case 'devices_updated':
             devicesUpdatedHandlers.current.forEach(h => h());
             break;
+          case 'characteristic_updated':
+            characteristicUpdatedHandlers.current.forEach(h => h(msg.data as CharacteristicUpdateEvent));
+            break;
           case 'logs_cleared':
             logsClearedHandlers.current.forEach(h => h());
             break;
@@ -205,6 +212,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const onWorkflowLog = useCallback((h: WorkflowLogHandler) => subscribe(workflowLogHandlers, h), [subscribe]);
   const onWorkflowsUpdated = useCallback((h: WorkflowsUpdatedHandler) => subscribe(workflowsUpdatedHandlers, h), [subscribe]);
   const onDevicesUpdated = useCallback((h: VoidHandler) => subscribe(devicesUpdatedHandlers, h), [subscribe]);
+  const onCharacteristicUpdated = useCallback((h: CharacteristicUpdatedHandler) => subscribe(characteristicUpdatedHandlers, h), [subscribe]);
   const onLogsCleared = useCallback((h: VoidHandler) => subscribe(logsClearedHandlers, h), [subscribe]);
   const onReconnected = useCallback((h: VoidHandler) => subscribe(reconnectedHandlers, h), [subscribe]);
 
@@ -218,10 +226,11 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       onWorkflowLog,
       onWorkflowsUpdated,
       onDevicesUpdated,
+      onCharacteristicUpdated,
       onLogsCleared,
       onReconnected,
     }),
-    [connectionState, reconnect, disconnect, onLog, onWorkflowLog, onWorkflowsUpdated, onDevicesUpdated, onLogsCleared, onReconnected],
+    [connectionState, reconnect, disconnect, onLog, onWorkflowLog, onWorkflowsUpdated, onDevicesUpdated, onCharacteristicUpdated, onLogsCleared, onReconnected],
   );
 
   return (

@@ -40,7 +40,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     serverAddress: loadString('serverAddress', 'localhost'),
     serverPort: loadNumber('serverPort', 3000),
     bearerToken: loadString('bearerToken', ''),
-    pollingInterval: loadNumber('pollingInterval', 10),
+    pollingInterval: loadNumber('pollingInterval', 300),
     websocketEnabled: loadBool('websocketEnabled', true),
     useHTTPS: loadBool('useHTTPS', false),
   }));

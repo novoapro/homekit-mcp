@@ -2,6 +2,16 @@ import Foundation
 import HomeKit
 import Combine
 
+/// Lightweight event for broadcasting a single characteristic value change via WebSocket.
+struct CharacteristicValueChange {
+    let deviceId: String        // stable registry ID
+    let serviceId: String       // stable registry ID
+    let characteristicId: String // stable registry ID
+    let characteristicType: String
+    let value: Any?
+    let timestamp: Date
+}
+
 class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
     @Published var homes: [HMHome] = []
     @Published var allAccessories: [HMAccessory] = []
@@ -29,6 +39,9 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
     /// Publishes every HomeKit state change. WorkflowEngine subscribes to this
     /// instead of being directly referenced — eliminates the bidirectional coupling.
     let stateChangePublisher = PassthroughSubject<StateChange, Never>()
+
+    /// Publishes granular characteristic value changes for WebSocket broadcast (gated by webhookEnabled).
+    let characteristicValueChangePublisher = PassthroughSubject<CharacteristicValueChange, Never>()
 
     /// Coalesces rapid objectWillChange signals during bulk reads.
     private var uiUpdateWorkItem: DispatchWorkItem?
@@ -210,7 +223,7 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
 
     /// Rebuilds the device model cache from the current HMAccessory list.
     /// Called when accessories change, characteristic values are read, or settings change.
-    private func rebuildDeviceCache() {
+    private func rebuildDeviceCache(suppressRegistrySync: Bool = false) {
         let devices = allAccessories.compactMap { accessory -> DeviceModel? in
             // Read hardware identity from HMAccessory properties (iOS 11+)
             let manufacturer = accessory.manufacturer
@@ -282,8 +295,8 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
         deviceLookupLock.unlock()
         objectWillChange.send()
 
-        // Sync the device registry with the latest HomeKit state
-        if let registry = deviceRegistryService {
+        // Sync the device registry with the latest HomeKit state (skip for value-only cache patches)
+        if !suppressRegistrySync, let registry = deviceRegistryService {
             let snapshot = devices
             Task { await registry.syncDevices(snapshot) }
         }
@@ -360,8 +373,8 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
         deviceLookupLock.unlock()
 
         guard let device = existingDevice else {
-            // Device not in cache yet — trigger a full rebuild.
-            rebuildDeviceCache()
+            // Device not in cache yet — trigger a full rebuild (suppress registry sync since topology hasn't changed).
+            rebuildDeviceCache(suppressRegistrySync: true)
             return
         }
 
@@ -389,8 +402,8 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
         }
 
         guard patched else {
-            // Characteristic not found in cache — fall back to full rebuild.
-            rebuildDeviceCache()
+            // Characteristic not found in cache — fall back to full rebuild (suppress registry sync since topology hasn't changed).
+            rebuildDeviceCache(suppressRegistrySync: true)
             return
         }
 
@@ -613,6 +626,16 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
 
             if config.webhookEnabled {
                 await self.webhookService.sendStateChange(change)
+
+                let stableCharId = self.deviceRegistryService?.readStableCharacteristicId(charId) ?? charId
+                self.characteristicValueChangePublisher.send(CharacteristicValueChange(
+                    deviceId: stableDeviceId,
+                    serviceId: stableServiceId,
+                    characteristicId: stableCharId,
+                    characteristicType: characteristic.characteristicType,
+                    value: newValue,
+                    timestamp: Date()
+                ))
             }
 
             await MainActor.run {
@@ -976,6 +999,16 @@ extension HomeKitManager: HMAccessoryDelegate {
 
             if config.webhookEnabled {
                 await webhookService.sendStateChange(change)
+
+                let stableCharId = self.deviceRegistryService?.readStableCharacteristicId(charId) ?? charId
+                self.characteristicValueChangePublisher.send(CharacteristicValueChange(
+                    deviceId: stableDeviceId,
+                    serviceId: stableServiceId,
+                    characteristicId: stableCharId,
+                    characteristicType: characteristic.characteristicType,
+                    value: value,
+                    timestamp: Date()
+                ))
             }
 
             // Publish state change for any subscribers (e.g. WorkflowEngine).

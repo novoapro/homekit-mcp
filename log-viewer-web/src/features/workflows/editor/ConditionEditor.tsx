@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import { DevicePicker } from './DevicePicker';
 import { CharacteristicValueInput } from './CharacteristicValueInput';
+import { CurrentValueIndicator } from './CurrentValueIndicator';
 import type { WorkflowConditionDraft } from './workflow-editor-types';
 import { newConditionLeaf } from './workflow-editor-utils';
 import type { BlockInfo } from './workflow-editor-utils';
@@ -98,6 +99,12 @@ export function ConditionEditor({ draft, allowBlockResult = true, allBlocks, cur
             initialCharId={draft.characteristicId}
             onChange={(val) => patch({ deviceId: val.deviceId, serviceId: val.serviceId, characteristicId: val.characteristicId })}
           />
+          {draft.deviceId && draft.characteristicId && (
+            <CurrentValueIndicator
+              characteristic={registry.lookupCharacteristic(draft.deviceId, draft.characteristicId)}
+              isReachable={registry.lookupDevice(draft.deviceId)?.isReachable}
+            />
+          )}
           <div className="editor-field-row">
             <div className="editor-field">
               <label>Comparison</label>

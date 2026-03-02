@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { AIGenerateDialog } from '@/components/AIGenerateDialog';
 import { WorkflowCard } from '@/features/workflows/WorkflowCard';
 import { useApi } from '@/hooks/useApi';
+import { useConfig } from '@/contexts/ConfigContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import type { Workflow } from '@/types/workflow-log';
 import './WorkflowsPage.css';
@@ -13,6 +14,7 @@ import './WorkflowsPage.css';
 export function WorkflowsPage() {
   const api = useApi();
   const ws = useWebSocket();
+  const { config } = useConfig();
   const navigate = useNavigate();
 
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -48,6 +50,20 @@ export function WorkflowsPage() {
     });
     return unsub;
   }, [ws]);
+
+  // Periodic polling — safety net regardless of WebSocket status
+  useEffect(() => {
+    const interval = config.pollingInterval;
+    if (interval <= 0) return;
+
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadWorkflows();
+      }
+    }, interval * 1000);
+
+    return () => clearInterval(timer);
+  }, [config.pollingInterval, loadWorkflows]);
 
   const filteredWorkflows = useMemo(() => {
     if (!searchQuery.trim()) return workflows;

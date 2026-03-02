@@ -446,6 +446,14 @@ private struct ConditionLeafEditSheet: View {
                 }
             )
 
+            if !condition.deviceId.isEmpty && !condition.characteristicId.isEmpty {
+                CurrentValueBadge(
+                    devices: devices,
+                    deviceId: condition.deviceId,
+                    characteristicId: condition.characteristicId
+                )
+            }
+
             ComparisonValueRow(
                 comparisonType: $condition.comparisonType,
                 value: $condition.comparisonValue,

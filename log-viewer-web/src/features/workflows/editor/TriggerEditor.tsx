@@ -3,6 +3,7 @@ import { Icon } from '@/components/Icon';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import { DevicePicker } from './DevicePicker';
 import { CharacteristicValueInput } from './CharacteristicValueInput';
+import { CurrentValueIndicator } from './CurrentValueIndicator';
 import type { WorkflowTriggerDraft } from './workflow-editor-types';
 import { triggerAutoName } from './workflow-editor-utils';
 import './TriggerEditor.css';
@@ -128,6 +129,12 @@ export function TriggerEditor({ index, draft, onChange, onRemove }: TriggerEdito
             initialCharId={draft.characteristicId}
             onChange={(val) => patch({ deviceId: val.deviceId, serviceId: val.serviceId, characteristicId: val.characteristicId })}
           />
+          {draft.deviceId && draft.characteristicId && (
+            <CurrentValueIndicator
+              characteristic={registry.lookupCharacteristic(draft.deviceId, draft.characteristicId)}
+              isReachable={registry.lookupDevice(draft.deviceId)?.isReachable}
+            />
+          )}
           <div className="editor-field">
             <label>Condition</label>
             <select

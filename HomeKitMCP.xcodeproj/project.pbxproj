@@ -39,6 +39,7 @@
 		51D65E0D80FAEBF11D00DC67 /* OrphanedDevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECB228F0485D9ED0E614C0F /* OrphanedDevicesView.swift */; };
 		54475060D52E744734FF1DA1 /* WorkflowBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F36D48D99BFA9E35B9E383 /* WorkflowBuilderView.swift */; };
 		59ACF5B7B3FBF3AD9500E27C /* ComparisonValueRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7743F38F9749DE64A8E45679 /* ComparisonValueRow.swift */; };
+		D7E4F5A6B7C8D9E0F1A2B3C4 /* CurrentValueBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B4C5D6E7F8091A2B3C4D5E /* CurrentValueBadge.swift */; };
 		5AE43961CFE3A9DEE90C7522 /* AIWorkflowService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB96C0E817BA1FAEA56BE62 /* AIWorkflowService.swift */; };
 		5B1591BA359229D986B8FD63 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76A1CCA31A2168A2B8D12DD0 /* MenuBarController.swift */; };
 		5D1DF4EE7848F0AFF3FCD041 /* DeviceNameFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65766D71479AEC864A35E452 /* DeviceNameFormatter.swift */; };
@@ -159,6 +160,7 @@
 		747594DFEFA7DA0580A1D98D /* WorkflowEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEngine.swift; sourceTree = "<group>"; };
 		76A1CCA31A2168A2B8D12DD0 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		7743F38F9749DE64A8E45679 /* ComparisonValueRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComparisonValueRow.swift; sourceTree = "<group>"; };
+		A3B4C5D6E7F8091A2B3C4D5E /* CurrentValueBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentValueBadge.swift; sourceTree = "<group>"; };
 		7760FE5637D902D59F614907 /* DeviceConfigurationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConfigurationService.swift; sourceTree = "<group>"; };
 		7764344448C610926DACCBCC /* WorkflowEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorView.swift; sourceTree = "<group>"; };
 		77E7DB8F5E5A2E47859F9BE1 /* PreviewData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewData.swift; sourceTree = "<group>"; };
@@ -320,6 +322,7 @@
 				6CA300C7BE20DD7095E5804F /* BlockEditorRow.swift */,
 				181A0EC78879A33D77F39CAC /* BlockEditorSection.swift */,
 				7743F38F9749DE64A8E45679 /* ComparisonValueRow.swift */,
+				A3B4C5D6E7F8091A2B3C4D5E /* CurrentValueBadge.swift */,
 				BD6C2347887E05C5A346B0E4 /* ConditionEditorSection.swift */,
 				4BBC2F6AA87E4D0C329F2595 /* DeviceCharacteristicPicker.swift */,
 				918FA14242FE41FBD8F7DF47 /* DeviceRow.swift */,
@@ -593,6 +596,7 @@
 				AFA9259AC83BA0636FEC4710 /* BlockEditorSection.swift in Sources */,
 				9C2B2547888DD514D726B727 /* CharacteristicTypes.swift in Sources */,
 				59ACF5B7B3FBF3AD9500E27C /* ComparisonValueRow.swift in Sources */,
+				D7E4F5A6B7C8D9E0F1A2B3C4 /* CurrentValueBadge.swift in Sources */,
 				8B84A6A4579A82D8D658DBFB /* ConditionEditorSection.swift in Sources */,
 				6625A28A385E37F4D0FDF787 /* ConditionEvaluator.swift in Sources */,
 				AB07C4D64420E214C4175EE0 /* DeviceCharacteristicPicker.swift in Sources */,

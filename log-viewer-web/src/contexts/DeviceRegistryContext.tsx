@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useApi } from '@/hooks/useApi';
+import { useConfig } from './ConfigContext';
 import { useWebSocket } from './WebSocketContext';
 import type { RESTDevice, RESTScene, RESTCharacteristic } from '@/types/homekit-device';
 
@@ -27,6 +28,7 @@ const DeviceRegistryContext = createContext<DeviceRegistryContextValue | null>(n
 export function DeviceRegistryProvider({ children }: { children: ReactNode }) {
   const api = useApi();
   const ws = useWebSocket();
+  const { config } = useConfig();
 
   const [devices, setDevices] = useState<RESTDevice[]>([]);
   const [scenes, setScenes] = useState<RESTScene[]>([]);
@@ -55,12 +57,61 @@ export function DeviceRegistryProvider({ children }: { children: ReactNode }) {
     loadRegistry();
   }, [loadRegistry]);
 
-  // Reload on WebSocket events
+  // Reload on WebSocket structural events
   useEffect(() => {
     const unsub1 = ws.onDevicesUpdated(() => loadRegistry());
     const unsub2 = ws.onReconnected(() => loadRegistry());
     return () => { unsub1(); unsub2(); };
   }, [ws, loadRegistry]);
+
+  // Granular characteristic value updates — patch local state without REST call
+  useEffect(() => {
+    const unsub = ws.onCharacteristicUpdated((event) => {
+      setDevices(prev => {
+        const deviceIndex = prev.findIndex(d => d.id === event.deviceId);
+        if (deviceIndex === -1) return prev;
+
+        const device = prev[deviceIndex]!;
+        let patched = false;
+
+        const updatedServices = device.services.map(svc => {
+          if (svc.id !== event.serviceId) return svc;
+          const updatedChars = svc.characteristics.map(char => {
+            if (char.id !== event.characteristicId) return char;
+            patched = true;
+            return { ...char, value: event.value };
+          });
+          return { ...svc, characteristics: updatedChars };
+        });
+
+        if (!patched) return prev;
+
+        const updatedDevice = { ...device, services: updatedServices };
+        const next = [...prev];
+        next[deviceIndex] = updatedDevice;
+
+        // Update the lookup map
+        deviceMapRef.current.set(updatedDevice.id, updatedDevice);
+
+        return next;
+      });
+    });
+    return unsub;
+  }, [ws]);
+
+  // Periodic polling — always runs regardless of WebSocket status
+  useEffect(() => {
+    const interval = config.pollingInterval;
+    if (interval <= 0) return;
+
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadRegistry();
+      }
+    }, interval * 1000);
+
+    return () => clearInterval(timer);
+  }, [config.pollingInterval, loadRegistry]);
 
   const lookupDevice = useCallback((deviceId: string) => {
     return deviceMapRef.current.get(deviceId);

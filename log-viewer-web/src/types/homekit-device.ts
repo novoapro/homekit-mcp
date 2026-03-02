@@ -39,3 +39,12 @@ export interface RESTScene {
   isExecuting: boolean;
   actionCount: number;
 }
+
+export interface CharacteristicUpdateEvent {
+  deviceId: string;
+  serviceId: string;
+  characteristicId: string;
+  characteristicType: string;
+  value: unknown;
+  timestamp: string;
+}
