@@ -30,6 +30,4 @@ protocol HomeKitManaging: AnyObject {
     func getScene(id: String) -> SceneModel?
     func executeScene(id: String) async throws
 
-    // MARK: - Configuration
-    var configService: DeviceConfigurationService { get }
 }

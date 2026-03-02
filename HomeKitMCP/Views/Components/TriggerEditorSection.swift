@@ -154,6 +154,7 @@ private struct TriggerRow: View {
             selectedDeviceId: $trigger.deviceId,
             selectedServiceId: $trigger.serviceId,
             selectedCharacteristicType: $trigger.characteristicId,
+            requiredPermission: "notify",
             onCharacteristicSelected: { char in
                 trigger.characteristicFormat = char?.format
                 trigger.characteristicMinValue = char?.minValue

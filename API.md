@@ -108,11 +108,11 @@ All messages are JSON objects with a `type` field.
 | `workflow_log_updated` | Existing workflow execution updated (completed/failed) | `{"type":"workflow_log_updated","data":{...WorkflowExecutionLog...}}` |
 | `workflows_updated` | Workflow definitions changed (created/updated/deleted/enabled/disabled) | `{"type":"workflows_updated","data":[{...Workflow...}]}` |
 | `devices_updated` | Structural device/scene change (added/removed/renamed/reachability) | `{"type":"devices_updated"}` |
-| `characteristic_updated` | Single characteristic value changed (only for `webhookEnabled` characteristics) | `{"type":"characteristic_updated","data":{"deviceId":"...","serviceId":"...","characteristicId":"...","characteristicType":"...","value":...,"timestamp":"..."}}` |
+| `characteristic_updated` | Single characteristic value changed (only for `observed` characteristics) | `{"type":"characteristic_updated","data":{"deviceId":"...","serviceId":"...","characteristicId":"...","characteristicType":"...","value":...,"timestamp":"..."}}` |
 | `logs_cleared` | All logs have been cleared on the server | `{"type":"logs_cleared"}` |
 | `pong` | Response to client ping | `{"type":"pong"}` |
 
-The `data` field in `log` messages has the same shape as items in the `GET /logs` response. The `data` field in `workflow_log` / `workflow_log_updated` messages has the same shape as items in the `GET /workflows/:id/logs` response. The `data` field in `workflows_updated` messages is an array with the same shape as the `GET /workflows` response. The `data` field in `characteristic_updated` messages contains: `deviceId` (stable registry ID), `serviceId` (stable registry ID), `characteristicId` (stable registry ID), `characteristicType` (HomeKit type string), `value` (the new value), and `timestamp` (ISO 8601). This event is only sent for characteristics with `webhookEnabled = true` in the device configuration, and is batched with a 100ms window.
+The `data` field in `log` messages has the same shape as items in the `GET /logs` response. The `data` field in `workflow_log` / `workflow_log_updated` messages has the same shape as items in the `GET /workflows/:id/logs` response. The `data` field in `workflows_updated` messages is an array with the same shape as the `GET /workflows` response. The `data` field in `characteristic_updated` messages contains: `deviceId` (stable registry ID), `serviceId` (stable registry ID), `characteristicId` (stable registry ID), `characteristicType` (HomeKit type string), `value` (the new value), and `timestamp` (ISO 8601). This event is only sent for characteristics marked as `observed` in the device registry, and is batched with a 100ms window.
 
 #### Client → Server
 
@@ -170,9 +170,27 @@ Requires: **REST API enabled**
 | `GET` | `/devices` | List all devices with current state | `RESTDevice[]` |
 | `GET` | `/devices/:deviceId` | Get a single device by ID | `RESTDevice` |
 
-Devices are filtered by the per-characteristic "external access" configuration. Only characteristics marked as externally accessible are included. All IDs in responses are stable app-generated IDs (not raw HomeKit UUIDs).
+Devices are filtered by the per-characteristic "enabled" setting in the device registry. Only characteristics marked as enabled are included in API responses. The `permissions` array on each characteristic reflects the MCP app's effective permissions — `notify` is only present when the characteristic is marked as observed. All IDs in responses are stable app-generated IDs (not raw HomeKit UUIDs).
 
 **404** if device not found.
+
+---
+
+### Services
+
+Requires: **REST API enabled**
+
+| Method | Path | Description | Response |
+|---|---|---|---|
+| `PATCH` | `/services/:serviceId` | Rename a service | `{"success": true}` |
+
+**Request body** (JSON):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string or null | yes | Custom display name. Pass `null` or empty string to reset to the HomeKit default. |
+
+The custom name is persisted in the device registry and reflected in all API responses. When set, the `name` field on the service in device responses uses the custom value instead of the HomeKit-provided name.
 
 ---
 
@@ -426,7 +444,7 @@ The 2024-11-05 transport uses two separate endpoints.
 
 | URI | Name | MIME Type | Description |
 |---|---|---|---|
-| `homekit://devices` | HomeKit Devices | `application/json` | JSON array of all devices with current state (filtered by access config) |
+| `homekit://devices` | HomeKit Devices | `application/json` | JSON array of all devices with current state (filtered by enabled setting) |
 | `homekit://scenes` | HomeKit Scenes | `application/json` | JSON array of all scenes with their actions |
 
 **Reading a resource:**
@@ -726,7 +744,7 @@ Triggers all workflows with a matching webhook trigger. Returns scheduling outco
 
 ## Outgoing Webhooks
 
-When a HomeKit device state changes, the app can send an HTTP POST to a configured webhook URL. Webhooks can only be enabled for characteristics that have `"notify"` permission — only these characteristics receive real-time state change events from HomeKit.
+When a HomeKit device state changes, the app can send an HTTP POST to a configured webhook URL. Webhooks are sent only for characteristics marked as `observed` in the device registry. Only characteristics with `"notify"` permission can be observed — these are the characteristics that receive real-time state change events from HomeKit.
 
 ### Payload
 
@@ -802,7 +820,7 @@ Private IP ranges are blocked by default (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0
 | `value` | any | yes | Current value (bool, int, float, or string) |
 | `format` | string | no | Value format (e.g. "bool", "uint8", "float") |
 | `units` | string | yes | Unit of measurement (e.g. "celsius", "percentage") |
-| `permissions` | string[] | no | Access permissions: `"read"`, `"write"`, `"notify"`. Read = value can be queried; Write = value can be set; Notify = HomeKit pushes state change events (required for webhooks and workflow triggers) |
+| `permissions` | string[] | no | Effective access permissions as determined by the MCP app (not raw HomeKit). `"read"` and `"write"` are passed through from HomeKit for enabled characteristics. `"notify"` is only present when the characteristic is marked as observed in the app — if not observed, `notify` is stripped regardless of HomeKit capability. This allows the MCP app to act as a permission proxy. |
 | `minValue` | number | yes | Minimum allowed value |
 | `maxValue` | number | yes | Maximum allowed value |
 | `stepValue` | number | yes | Step increment |

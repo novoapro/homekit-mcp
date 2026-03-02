@@ -13,9 +13,8 @@ struct BackupBundle: Codable {
     let secrets: BackupSecrets
     let workflows: [Workflow]
     let registry: RegistrySnapshot
-    let deviceConfig: [String: CharacteristicConfiguration]
 
-    static let currentFormatVersion = 2
+    static let currentFormatVersion = 3
 }
 
 // MARK: - Settings Snapshot

@@ -21,6 +21,8 @@ struct ServiceRegistryEntry: Codable {
     var homeKitServiceId: String?
     var serviceType: String
     var serviceIndex: Int
+    /// Optional user-assigned name. When set, overrides the HomeKit name in all output.
+    var customName: String?
     var characteristics: [CharacteristicRegistryEntry]
 }
 
@@ -29,6 +31,8 @@ struct CharacteristicRegistryEntry: Codable {
     let stableCharacteristicId: String
     var homeKitCharacteristicId: String?
     var characteristicType: String
+    var enabled: Bool
+    var observed: Bool
 }
 
 /// A scene (action set) entry in the registry.
@@ -102,6 +106,12 @@ actor DeviceRegistryService {
         var stableCharToType: [String: String] = [:]
         /// "deviceStableId:charType" → stable char ID
         var deviceCharTypeToStableId: [String: String] = [:]
+        /// stable char ID → enabled setting
+        var stableCharEnabled: [String: Bool] = [:]
+        /// stable char ID → observed setting
+        var stableCharObserved: [String: Bool] = [:]
+        /// stable service ID → custom name (only populated when set)
+        var serviceCustomName: [String: String] = [:]
     }
     private nonisolated(unsafe) var _lookups = LookupTables()
 
@@ -425,6 +435,154 @@ actor DeviceRegistryService {
         return _lookups.hkToStableScene[homeKitSceneId]
     }
 
+    /// Reads the `enabled` setting for a characteristic by stable ID. Call from any thread.
+    /// Returns `true` (default) if the characteristic is not found.
+    nonisolated func readEnabled(forStableCharId id: String) -> Bool {
+        syncLock.lock()
+        defer { syncLock.unlock() }
+        return _lookups.stableCharEnabled[id] ?? true
+    }
+
+    /// Reads the `observed` setting for a characteristic by stable ID. Call from any thread.
+    /// Returns `false` (default) if the characteristic is not found.
+    nonisolated func readObserved(forStableCharId id: String) -> Bool {
+        syncLock.lock()
+        defer { syncLock.unlock() }
+        return _lookups.stableCharObserved[id] ?? false
+    }
+
+    /// Reads enabled/observed for a characteristic by its HomeKit UUID. Call from any thread.
+    /// Returns (enabled: true, observed: false) if the characteristic is not found.
+    nonisolated func readCharacteristicSettings(forHomeKitCharId hkCharId: String) -> (enabled: Bool, observed: Bool) {
+        syncLock.lock()
+        defer { syncLock.unlock() }
+        guard let stableId = _lookups.hkToStableChar[hkCharId] else { return (enabled: true, observed: false) }
+        return (
+            enabled: _lookups.stableCharEnabled[stableId] ?? true,
+            observed: _lookups.stableCharObserved[stableId] ?? false
+        )
+    }
+
+    /// Reads the custom name for a service by its stable ID. Returns nil if no custom name is set.
+    nonisolated func readServiceCustomName(forStableServiceId id: String) -> String? {
+        syncLock.lock()
+        defer { syncLock.unlock() }
+        return _lookups.serviceCustomName[id]
+    }
+
+    // MARK: - Characteristic Settings (actor-isolated mutators)
+
+    /// Sets the `enabled` flag for a characteristic. When disabling, also clears `observed`.
+    func setCharacteristicEnabled(stableCharId: String, enabled: Bool) {
+        guard let (deviceId, svcIdx, charIdx) = findCharacteristicLocation(stableCharId: stableCharId) else { return }
+        devices[deviceId]!.services[svcIdx].characteristics[charIdx].enabled = enabled
+        if !enabled {
+            devices[deviceId]!.services[svcIdx].characteristics[charIdx].observed = false
+        }
+        rebuildReverseLookups()
+        debouncedSave()
+        registrySyncSubject.send()
+    }
+
+    /// Sets the `observed` flag for a characteristic. Only allows `true` if `enabled` is also `true`.
+    func setCharacteristicObserved(stableCharId: String, observed: Bool) {
+        guard let (deviceId, svcIdx, charIdx) = findCharacteristicLocation(stableCharId: stableCharId) else { return }
+        let char = devices[deviceId]!.services[svcIdx].characteristics[charIdx]
+        if observed && !char.enabled { return } // Cannot observe a disabled characteristic
+        devices[deviceId]!.services[svcIdx].characteristics[charIdx].observed = observed
+        rebuildReverseLookups()
+        debouncedSave()
+        registrySyncSubject.send()
+    }
+
+    /// Sets `enabled` for all characteristics of a device.
+    func setAllEnabled(deviceStableId: String, enabled: Bool) {
+        guard var entry = devices[deviceStableId] else { return }
+        for i in entry.services.indices {
+            for j in entry.services[i].characteristics.indices {
+                entry.services[i].characteristics[j].enabled = enabled
+                if !enabled {
+                    entry.services[i].characteristics[j].observed = false
+                }
+            }
+        }
+        devices[deviceStableId] = entry
+        rebuildReverseLookups()
+        debouncedSave()
+        registrySyncSubject.send()
+    }
+
+    /// Sets `observed` for all notifiable characteristics of a device.
+    /// Only characteristics whose type is in `notifiableCharTypes` will be affected.
+    func setAllObserved(deviceStableId: String, observed: Bool, notifiableCharTypes: Set<String>) {
+        guard var entry = devices[deviceStableId] else { return }
+        for i in entry.services.indices {
+            for j in entry.services[i].characteristics.indices {
+                let char = entry.services[i].characteristics[j]
+                if notifiableCharTypes.contains(char.characteristicType) && char.enabled {
+                    entry.services[i].characteristics[j].observed = observed
+                }
+            }
+        }
+        devices[deviceStableId] = entry
+        rebuildReverseLookups()
+        debouncedSave()
+        registrySyncSubject.send()
+    }
+
+    /// Returns the settings for a single characteristic.
+    func getCharacteristicSettings(stableCharId: String) -> (enabled: Bool, observed: Bool)? {
+        guard let (deviceId, svcIdx, charIdx) = findCharacteristicLocation(stableCharId: stableCharId) else { return nil }
+        let char = devices[deviceId]!.services[svcIdx].characteristics[charIdx]
+        return (enabled: char.enabled, observed: char.observed)
+    }
+
+    /// Returns all characteristic settings keyed by stable characteristic ID.
+    func getAllCharacteristicSettings() -> [String: (enabled: Bool, observed: Bool)] {
+        var result: [String: (enabled: Bool, observed: Bool)] = [:]
+        for entry in devices.values {
+            for service in entry.services {
+                for char in service.characteristics {
+                    result[char.stableCharacteristicId] = (enabled: char.enabled, observed: char.observed)
+                }
+            }
+        }
+        return result
+    }
+
+    // MARK: - Service Name Customization
+
+    /// Sets or clears the custom name for a service. Pass nil or empty string to clear.
+    func setServiceCustomName(stableServiceId: String, customName: String?) {
+        let trimmed = customName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        for (deviceId, entry) in devices {
+            for (svcIdx, service) in entry.services.enumerated() {
+                if service.stableServiceId == stableServiceId {
+                    devices[deviceId]!.services[svcIdx].customName = name
+                    rebuildReverseLookups()
+                    debouncedSave()
+                    registrySyncSubject.send()
+                    return
+                }
+            }
+        }
+    }
+
+    /// Finds the location (deviceStableId, serviceIndex, characteristicIndex) of a characteristic by its stable ID.
+    private func findCharacteristicLocation(stableCharId: String) -> (String, Int, Int)? {
+        for (deviceId, entry) in devices {
+            for (svcIdx, service) in entry.services.enumerated() {
+                for (charIdx, char) in service.characteristics.enumerated() {
+                    if char.stableCharacteristicId == stableCharId {
+                        return (deviceId, svcIdx, charIdx)
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
     // MARK: - Actor-Isolated Resolution (async)
 
     func resolveDeviceHomeKitId(_ stableId: String) -> String? {
@@ -473,6 +631,45 @@ actor DeviceRegistryService {
 
     // MARK: - Model Transformation (nonisolated, for MCP output)
 
+    /// Filters devices to only include enabled characteristics, transforms to stable IDs,
+    /// and bakes in effective permissions. This is the canonical way to get devices for any
+    /// consumer (REST API, MCP tools, workflow editor, AI service).
+    nonisolated func stableDevices(_ devices: [DeviceModel]) -> [DeviceModel] {
+        var result: [DeviceModel] = []
+        for device in devices {
+            var filteredServices: [ServiceModel] = []
+            for service in device.services {
+                let filteredChars = service.characteristics.filter { char in
+                    let settings = readCharacteristicSettings(forHomeKitCharId: char.id)
+                    return settings.enabled
+                }
+                if !filteredChars.isEmpty {
+                    filteredServices.append(ServiceModel(
+                        id: service.id,
+                        name: service.name,
+                        type: service.type,
+                        characteristics: filteredChars
+                    ))
+                }
+            }
+            if !filteredServices.isEmpty {
+                result.append(DeviceModel(
+                    id: device.id,
+                    name: device.name,
+                    roomName: device.roomName,
+                    categoryType: device.categoryType,
+                    services: filteredServices,
+                    isReachable: device.isReachable,
+                    manufacturer: device.manufacturer,
+                    model: device.model,
+                    serialNumber: device.serialNumber,
+                    firmwareRevision: device.firmwareRevision
+                ))
+            }
+        }
+        return result.map { withStableIds($0) }
+    }
+
     /// Returns a DeviceModel with all IDs replaced by stable registry IDs.
     /// If a mapping is not found, the original ID is preserved.
     nonisolated func withStableIds(_ device: DeviceModel) -> DeviceModel {
@@ -480,20 +677,35 @@ actor DeviceRegistryService {
         let stableServices = device.services.map { service in
             let stableServiceId = readStableServiceId(service.id) ?? service.id
             let stableChars = service.characteristics.map { char in
-                CharacteristicModel(
-                    id: readStableCharacteristicId(char.id) ?? char.id,
+                let stableCharId = readStableCharacteristicId(char.id) ?? char.id
+                // Bake in effective permissions: strip notify, re-add only if observed
+                let isObserved = readObserved(forStableCharId: stableCharId)
+                var effectivePermissions = char.permissions.filter { $0 != "notify" }
+                if isObserved {
+                    effectivePermissions.append("notify")
+                }
+                return CharacteristicModel(
+                    id: stableCharId,
                     type: char.type,
                     value: char.value,
                     format: char.format,
                     units: char.units,
-                    permissions: char.permissions,
+                    permissions: effectivePermissions,
                     minValue: char.minValue,
                     maxValue: char.maxValue,
                     stepValue: char.stepValue,
                     validValues: char.validValues
                 )
             }
-            return ServiceModel(id: stableServiceId, name: service.name, type: service.type, characteristics: stableChars)
+            let effectiveName: String
+            if let customName = readServiceCustomName(forStableServiceId: stableServiceId) {
+                effectiveName = customName
+            } else if UserDefaults.standard.bool(forKey: "useServiceTypeAsName") {
+                effectiveName = ServiceTypes.displayName(for: service.type)
+            } else {
+                effectiveName = service.name
+            }
+            return ServiceModel(id: stableServiceId, name: effectiveName, type: service.type, characteristics: stableChars)
         }
         return DeviceModel(
             id: stableDeviceId,
@@ -507,6 +719,11 @@ actor DeviceRegistryService {
             serialNumber: device.serialNumber,
             firmwareRevision: device.firmwareRevision
         )
+    }
+
+    /// Transforms scenes to use stable registry IDs. Canonical method for any consumer.
+    nonisolated func stableScenes(_ scenes: [SceneModel]) -> [SceneModel] {
+        scenes.map { withStableIds($0) }
     }
 
     /// Returns a SceneModel with its ID replaced by the stable registry ID.
@@ -965,13 +1182,17 @@ actor DeviceRegistryService {
                     return CharacteristicRegistryEntry(
                         stableCharacteristicId: existingChar.stableCharacteristicId,
                         homeKitCharacteristicId: char.id,
-                        characteristicType: char.type
+                        characteristicType: char.type,
+                        enabled: existingChar.enabled,
+                        observed: existingChar.observed
                     )
                 } else {
                     return CharacteristicRegistryEntry(
                         stableCharacteristicId: UUID().uuidString,
                         homeKitCharacteristicId: char.id,
-                        characteristicType: char.type
+                        characteristicType: char.type,
+                        enabled: true,
+                        observed: false
                     )
                 }
             }
@@ -981,6 +1202,7 @@ actor DeviceRegistryService {
                 homeKitServiceId: service.id,
                 serviceType: service.type,
                 serviceIndex: index,
+                customName: existingService?.customName,
                 characteristics: chars
             )
         }
@@ -1079,12 +1301,17 @@ actor DeviceRegistryService {
                 if let hkId = svc.homeKitServiceId {
                     newLookups.stableToHkService[svc.stableServiceId] = hkId
                 }
+                if let name = svc.customName {
+                    newLookups.serviceCustomName[svc.stableServiceId] = name
+                }
                 for char in svc.characteristics {
                     if let hkId = char.homeKitCharacteristicId {
                         newLookups.stableToHkChar[char.stableCharacteristicId] = hkId
                     }
                     newLookups.stableCharToType[char.stableCharacteristicId] = char.characteristicType
                     newLookups.deviceCharTypeToStableId["\(entry.stableId):\(char.characteristicType)"] = char.stableCharacteristicId
+                    newLookups.stableCharEnabled[char.stableCharacteristicId] = char.enabled
+                    newLookups.stableCharObserved[char.stableCharacteristicId] = char.observed
                 }
             }
         }
@@ -1098,6 +1325,47 @@ actor DeviceRegistryService {
         syncLock.lock()
         _lookups = newLookups
         syncLock.unlock()
+    }
+
+    // MARK: - Migration
+
+    /// Migrates per-characteristic settings from the old DeviceConfigurationService format.
+    /// Keys in the input map are composite "deviceHKId:serviceHKId:charHKId" strings.
+    /// Maps: externalAccessEnabled → enabled, webhookEnabled → observed.
+    func migrateFromDeviceConfig(_ configs: [String: (enabled: Bool, observed: Bool)]) {
+        var migrated = 0
+        for (key, config) in configs {
+            let parts = key.split(separator: ":", maxSplits: 2).map(String.init)
+            guard parts.count == 3 else { continue }
+            let charHKId = parts[2]
+            // Find the characteristic in the registry by HomeKit ID
+            guard let stableCharId = hkCharIdToStableId[charHKId],
+                  let (deviceId, svcIdx, charIdx) = findCharacteristicLocation(stableCharId: stableCharId) else { continue }
+            devices[deviceId]!.services[svcIdx].characteristics[charIdx].enabled = config.enabled
+            devices[deviceId]!.services[svcIdx].characteristics[charIdx].observed = config.observed
+            migrated += 1
+        }
+        if migrated > 0 {
+            rebuildReverseLookups()
+            saveNow()
+            AppLogger.registry.info("Migrated \(migrated) characteristic settings from device-config.json into registry")
+        }
+    }
+
+    /// Resets all characteristic settings to defaults (enabled: true, observed: false).
+    func resetAllSettings() {
+        for (deviceId, device) in devices {
+            for svcIdx in device.services.indices {
+                for charIdx in devices[deviceId]!.services[svcIdx].characteristics.indices {
+                    devices[deviceId]!.services[svcIdx].characteristics[charIdx].enabled = true
+                    devices[deviceId]!.services[svcIdx].characteristics[charIdx].observed = false
+                }
+            }
+        }
+        rebuildReverseLookups()
+        saveNow()
+        registrySyncSubject.send()
+        AppLogger.registry.info("Reset all characteristic settings to defaults")
     }
 
     // MARK: - Persistence

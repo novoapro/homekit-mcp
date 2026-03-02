@@ -40,6 +40,8 @@ struct RESTService: Codable {
 }
 
 /// A characteristic representation for the REST API with full metadata.
+/// Permissions are already resolved by the Device Registry before reaching this model —
+/// `notify` is only present when the characteristic is marked as observed.
 struct RESTCharacteristic: Codable {
     let id: String
     let name: String

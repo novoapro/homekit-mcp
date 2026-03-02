@@ -32,7 +32,6 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
     private let loggingService: LoggingService
     private let webhookService: WebhookService
     private let storage: StorageService
-    let configService: DeviceConfigurationService
     var deviceRegistryService: DeviceRegistryService?
     private var cancellables = Set<AnyCancellable>()
 
@@ -40,7 +39,7 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
     /// instead of being directly referenced — eliminates the bidirectional coupling.
     let stateChangePublisher = PassthroughSubject<StateChange, Never>()
 
-    /// Publishes granular characteristic value changes for WebSocket broadcast (gated by webhookEnabled).
+    /// Publishes granular characteristic value changes for WebSocket broadcast (gated by observed setting).
     let characteristicValueChangePublisher = PassthroughSubject<CharacteristicValueChange, Never>()
 
     /// Coalesces rapid objectWillChange signals during bulk reads.
@@ -51,10 +50,9 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
     /// Tracks whether a poll cycle is currently in progress to prevent overlapping polls.
     private var isPolling = false
 
-    init(loggingService: LoggingService, webhookService: WebhookService, configService: DeviceConfigurationService, storage: StorageService) {
+    init(loggingService: LoggingService, webhookService: WebhookService, storage: StorageService) {
         self.loggingService = loggingService
         self.webhookService = webhookService
-        self.configService = configService
         self.storage = storage
         super.init()
         homeManager.delegate = self
@@ -577,14 +575,10 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
         )
 
         let serviceName = ServiceTypes.displayName(for: service.serviceType)
+        let settings = deviceRegistryService?.readCharacteristicSettings(forHomeKitCharId: charId)
+        let isObserved = settings?.observed ?? false
 
         Task {
-            let config = await self.configService.getConfig(
-                deviceId: deviceId,
-                serviceId: serviceId,
-                characteristicId: charId
-            )
-
             let formattedName = DeviceNameFormatter.format(
                 deviceName: accessory.name,
                 roomName: accessory.room?.name,
@@ -619,12 +613,12 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
             )
 
             if self.storage.readDeviceStateLoggingEnabled() {
-                if !self.storage.readLogOnlyWebhookDevices() || config.webhookEnabled {
+                if !self.storage.readLogOnlyWebhookDevices() || isObserved {
                     await self.loggingService.logEntry(logEntry)
                 }
             }
 
-            if config.webhookEnabled {
+            if isObserved {
                 await self.webhookService.sendStateChange(change)
 
                 let stableCharId = self.deviceRegistryService?.readStableCharacteristicId(charId) ?? charId
@@ -730,18 +724,27 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
                     guard ServiceTypes.isSupported(service.serviceType) else { continue }
                     for characteristic in service.characteristics {
                         guard CharacteristicTypes.isSupported(characteristic.characteristicType) else { continue }
+                        guard characteristic.properties.contains(HMCharacteristicPropertySupportsEventNotification) else { continue }
 
-                        if characteristic.properties.contains(HMCharacteristicPropertySupportsEventNotification) {
-                            characteristic.enableNotification(true) { error in
-                                if let error = error {
-                                    AppLogger.homeKit.warning("Failed to enable notification for \(characteristic.characteristicType): \(error)")
-                                }
+                        let charId = characteristic.uniqueIdentifier.uuidString
+                        let settings = deviceRegistryService?.readCharacteristicSettings(forHomeKitCharId: charId)
+                        let shouldObserve = settings?.observed ?? false
+
+                        characteristic.enableNotification(shouldObserve) { error in
+                            if let error = error {
+                                AppLogger.homeKit.warning("Failed to \(shouldObserve ? "enable" : "disable") notification for \(characteristic.characteristicType): \(error)")
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    /// Re-registers HomeKit notifications based on current observed settings.
+    /// Call after changing observed settings to dynamically toggle subscriptions.
+    func refreshNotificationRegistrations() {
+        registerForNotifications()
     }
 
     /// Read current values for all readable characteristics on all accessories.
@@ -949,13 +952,10 @@ extension HomeKitManager: HMAccessoryDelegate {
 
         guard CharacteristicTypes.isSupported(characteristic.characteristicType) else { return }
 
-        Task {
-            let config = await configService.getConfig(
-                deviceId: deviceId,
-                serviceId: serviceId,
-                characteristicId: charId
-            )
+        let settings = deviceRegistryService?.readCharacteristicSettings(forHomeKitCharId: charId)
+        let isObserved = settings?.observed ?? false
 
+        Task {
             let value = characteristic.value
 
             let formattedName = DeviceNameFormatter.format(
@@ -992,12 +992,12 @@ extension HomeKitManager: HMAccessoryDelegate {
             )
 
             if self.storage.readDeviceStateLoggingEnabled() {
-                if !self.storage.readLogOnlyWebhookDevices() || config.webhookEnabled {
+                if !self.storage.readLogOnlyWebhookDevices() || isObserved {
                     await loggingService.logEntry(logEntry)
                 }
             }
 
-            if config.webhookEnabled {
+            if isObserved {
                 await webhookService.sendStateChange(change)
 
                 let stableCharId = self.deviceRegistryService?.readStableCharacteristicId(charId) ?? charId
@@ -1012,10 +1012,6 @@ extension HomeKitManager: HMAccessoryDelegate {
             }
 
             // Publish state change for any subscribers (e.g. WorkflowEngine).
-            // Using a publisher decouples HomeKitManager from WorkflowEngine entirely.
-            // Use targeted cache update — patch only the affected characteristic instead
-            // of rebuilding the entire O(A×S×C) device model graph.
-            // Note: cache update still uses HomeKit UUIDs (internal cache indexing).
             await MainActor.run {
                 self.stateChangePublisher.send(change)
                 self.updateCachedCharacteristic(

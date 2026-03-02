@@ -462,11 +462,11 @@ enum PreviewData {
     static var homeKitViewModel: HomeKitViewModel {
         let storage = StorageService()
         let loggingService = LoggingService(storage: storage)
-        let configService = DeviceConfigurationService()
         let keychainService = KeychainService()
         let webhookService = WebhookService(storage: storage, loggingService: loggingService, keychainService: keychainService)
-        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storage)
-        let vm = HomeKitViewModel(homeKitManager: manager, configService: configService)
+        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, storage: storage)
+        let registryService = DeviceRegistryService()
+        let vm = HomeKitViewModel(homeKitManager: manager, registryService: registryService)
         vm.devicesByRoom = devicesByRoom
         vm.scenes = sampleScenes
         vm.filteredScenes = sampleScenes
@@ -521,26 +521,25 @@ enum PreviewData {
     static var settingsViewModel: SettingsViewModel {
         let storage = StorageService()
         let loggingService = LoggingService(storage: storage)
-        let configService = DeviceConfigurationService()
         let keychainService = KeychainService()
         let webhookService = WebhookService(storage: storage, loggingService: loggingService, keychainService: keychainService)
-        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storage)
+        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, storage: storage)
         let workflowStorage = WorkflowStorageService()
         let workflowLogService = WorkflowExecutionLogService()
         let workflowEngine = WorkflowEngine(storageService: workflowStorage, homeKitManager: manager, loggingService: loggingService, executionLogService: workflowLogService, storage: storage)
         let mcpServer = MCPServer(
-            homeKitManager: manager, loggingService: loggingService, configService: configService, storage: storage,
+            homeKitManager: manager, loggingService: loggingService, storage: storage,
             workflowStorageService: workflowStorage, workflowEngine: workflowEngine, workflowExecutionLogService: workflowLogService,
             keychainService: keychainService
         )
         let aiInteractionLogService = AIInteractionLogService()
         let aiWorkflowService = AIWorkflowService(storage: storage, homeKitManager: manager, keychainService: keychainService, interactionLog: aiInteractionLogService)
         let registryService = DeviceRegistryService()
-        let backupService = BackupService(storage: storage, keychainService: keychainService, configService: configService, workflowStorageService: workflowStorage, homeKitManager: manager, loggingService: loggingService, deviceRegistryService: registryService)
+        let backupService = BackupService(storage: storage, keychainService: keychainService, workflowStorageService: workflowStorage, homeKitManager: manager, loggingService: loggingService, deviceRegistryService: registryService)
         let cloudBackupService = CloudBackupService(backupService: backupService, storage: storage, workflowStorageService: workflowStorage)
         let appleSignInService = AppleSignInService(keychainService: keychainService)
         return SettingsViewModel(
-            storage: storage, webhookService: webhookService, mcpServer: mcpServer, configService: configService,
+            storage: storage, webhookService: webhookService, mcpServer: mcpServer,
             keychainService: keychainService, aiWorkflowService: aiWorkflowService,
             backupService: backupService, cloudBackupService: cloudBackupService, appleSignInService: appleSignInService,
             deviceRegistryService: registryService, homeKitManager: manager,
@@ -551,12 +550,11 @@ enum PreviewData {
     static var workflowViewModel: WorkflowViewModel {
         let storage = StorageService()
         let loggingService = LoggingService(storage: storage)
-        let configService = DeviceConfigurationService()
         let keychainService = KeychainService()
         let workflowStorage = WorkflowStorageService()
         let workflowLogService = WorkflowExecutionLogService()
         let webhookService = WebhookService(storage: storage, loggingService: loggingService, keychainService: keychainService)
-        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storage)
+        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, storage: storage)
         let engine = WorkflowEngine(
             storageService: workflowStorage,
             homeKitManager: manager,
@@ -577,10 +575,9 @@ enum PreviewData {
     static var previewHomeKitManager: HomeKitManager {
         let storage = StorageService()
         let loggingService = LoggingService(storage: storage)
-        let configService = DeviceConfigurationService()
         let keychainService = KeychainService()
         let webhookService = WebhookService(storage: storage, loggingService: loggingService, keychainService: keychainService)
-        return HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storage)
+        return HomeKitManager(loggingService: loggingService, webhookService: webhookService, storage: storage)
     }
 
     static var previewAIWorkflowService: AIWorkflowService {
@@ -594,12 +591,11 @@ enum PreviewData {
     static var previewCloudBackupService: CloudBackupService {
         let storage = StorageService()
         let keychainService = KeychainService()
-        let configService = DeviceConfigurationService()
         let loggingService = LoggingService(storage: storage)
         let webhookService = WebhookService(storage: storage, loggingService: loggingService, keychainService: keychainService)
-        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, configService: configService, storage: storage)
+        let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, storage: storage)
         let workflowStorage = WorkflowStorageService()
-        let backupService = BackupService(storage: storage, keychainService: keychainService, configService: configService, workflowStorageService: workflowStorage, homeKitManager: manager, loggingService: loggingService, deviceRegistryService: DeviceRegistryService())
+        let backupService = BackupService(storage: storage, keychainService: keychainService, workflowStorageService: workflowStorage, homeKitManager: manager, loggingService: loggingService, deviceRegistryService: DeviceRegistryService())
         return CloudBackupService(backupService: backupService, storage: storage, workflowStorageService: workflowStorage)
     }
 

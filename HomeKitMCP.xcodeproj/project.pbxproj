@@ -46,7 +46,6 @@
 		AA11BB22CC33DD44EE55FF66 /* NetworkInterfaceEnumerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660011 /* NetworkInterfaceEnumerator.swift */; };
 		5D5A27F1913660BBC8968F85 /* WebhookService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E00EF2581D4A9B75850FF25 /* WebhookService.swift */; };
 		5E6D895157FC47B4A75A4A28 /* DeviceRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918FA14242FE41FBD8F7DF47 /* DeviceRow.swift */; };
-		604138D8F7B166CDADB33EE9 /* DeviceConfigurationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7760FE5637D902D59F614907 /* DeviceConfigurationService.swift */; };
 		604630A1BF390A991532363A /* AnyCodable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8520B3C8169ADBD675E1136B /* AnyCodable.swift */; };
 		6458BBCA2F491D770012FC37 /* CharacteristicInputConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6458BBC92F491D770012FC37 /* CharacteristicInputConfig.swift */; };
 		6458BBCC2F491D780012FC37 /* CharacteristicValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6458BBCB2F491D780012FC37 /* CharacteristicValidator.swift */; };
@@ -78,7 +77,6 @@
 		B2C3D4E5F6A7B8C9D0E1F2AA /* AboutSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F9 /* AboutSettingsView.swift */; };
 		B66E52999861ABD63207F703 /* BackupServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DE9CC6471BBAF3DFDA71FF6 /* BackupServiceProtocol.swift */; };
 		BAB1C982CD4FB91A8E6E9DA6 /* TriggerEditorSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE5BD70C71A833414ADC790 /* TriggerEditorSection.swift */; };
-		BB01CC02DD03EE04FF05AA06 /* DeviceConfigurationServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF06 /* DeviceConfigurationServiceProtocol.swift */; };
 		BB01CC02DD03EE04FF05AA07 /* HomeKitManaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF07 /* HomeKitManaging.swift */; };
 		BB01CC02DD03EE04FF05AA08 /* LoggingServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF08 /* LoggingServiceProtocol.swift */; };
 		BB01CC02DD03EE04FF05AA09 /* MCPServerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF09 /* MCPServerProtocol.swift */; };
@@ -161,7 +159,6 @@
 		76A1CCA31A2168A2B8D12DD0 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		7743F38F9749DE64A8E45679 /* ComparisonValueRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComparisonValueRow.swift; sourceTree = "<group>"; };
 		A3B4C5D6E7F8091A2B3C4D5E /* CurrentValueBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentValueBadge.swift; sourceTree = "<group>"; };
-		7760FE5637D902D59F614907 /* DeviceConfigurationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConfigurationService.swift; sourceTree = "<group>"; };
 		7764344448C610926DACCBCC /* WorkflowEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorView.swift; sourceTree = "<group>"; };
 		77E7DB8F5E5A2E47859F9BE1 /* PreviewData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewData.swift; sourceTree = "<group>"; };
 		7CEF09F6533382426171A5CC /* ConditionEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConditionEvaluator.swift; sourceTree = "<group>"; };
@@ -190,7 +187,6 @@
 		A5C64834B798F07C71876696 /* WorkflowSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorkflowSyncService.swift; path = HomeKitMCP/Services/WorkflowSyncService.swift; sourceTree = SOURCE_ROOT; };
 		A6B494504436886F8793A98E /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
 		A97C3B391AF017E2778652F7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		AA01BB02CC03DD04EE05FF06 /* DeviceConfigurationServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConfigurationServiceProtocol.swift; sourceTree = "<group>"; };
 		AA01BB02CC03DD04EE05FF07 /* HomeKitManaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeKitManaging.swift; sourceTree = "<group>"; };
 		AA01BB02CC03DD04EE05FF08 /* LoggingServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingServiceProtocol.swift; sourceTree = "<group>"; };
 		AA01BB02CC03DD04EE05FF09 /* MCPServerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPServerProtocol.swift; sourceTree = "<group>"; };
@@ -259,7 +255,6 @@
 			children = (
 				D1A2B3C4E5F6A7B8C9D0E1F3 /* AIInteractionLogService.swift */,
 				7DB96C0E817BA1FAEA56BE62 /* AIWorkflowService.swift */,
-				7760FE5637D902D59F614907 /* DeviceConfigurationService.swift */,
 				E1D643059F3F3CB16E83B75E /* DeviceRegistryService.swift */,
 				CA8BFC87681E42A0EF8D3DAF /* HomeKitManager.swift */,
 				AEBCBB6E23B0771DD6DEFFD0 /* KeychainService.swift */,
@@ -435,7 +430,6 @@
 		CC01DD02EE03FF04AA05BB06 /* Protocols */ = {
 			isa = PBXGroup;
 			children = (
-				AA01BB02CC03DD04EE05FF06 /* DeviceConfigurationServiceProtocol.swift */,
 				AA01BB02CC03DD04EE05FF07 /* HomeKitManaging.swift */,
 				AA01BB02CC03DD04EE05FF08 /* LoggingServiceProtocol.swift */,
 				AA01BB02CC03DD04EE05FF09 /* MCPServerProtocol.swift */,
@@ -600,7 +594,6 @@
 				8B84A6A4579A82D8D658DBFB /* ConditionEditorSection.swift in Sources */,
 				6625A28A385E37F4D0FDF787 /* ConditionEvaluator.swift in Sources */,
 				AB07C4D64420E214C4175EE0 /* DeviceCharacteristicPicker.swift in Sources */,
-				604138D8F7B166CDADB33EE9 /* DeviceConfigurationService.swift in Sources */,
 				DDB9C4F7DAF16E5F1C638A4E /* DeviceListView.swift in Sources */,
 				0AB5E46CEF3A8B68CC454E5E /* DeviceModel.swift in Sources */,
 				CAFE0001BEEF0001DEAD0003 /* FileManager+AppSupport.swift in Sources */,
@@ -656,7 +649,6 @@
 				3ECA87D79B94B3E1B0634843 /* WorkflowStorageService.swift in Sources */,
 				D23ECF3041CF49169983F72E /* WorkflowMigrationService.swift in Sources */,
 				F85B511A3A05E59499338B54 /* WorkflowViewModel.swift in Sources */,
-				BB01CC02DD03EE04FF05AA06 /* DeviceConfigurationServiceProtocol.swift in Sources */,
 				BB01CC02DD03EE04FF05AA07 /* HomeKitManaging.swift in Sources */,
 				BB01CC02DD03EE04FF05AA08 /* LoggingServiceProtocol.swift in Sources */,
 				BB01CC02DD03EE04FF05AA09 /* MCPServerProtocol.swift in Sources */,

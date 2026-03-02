@@ -156,9 +156,3 @@ extension CharacteristicModel {
     }
 }
 
-struct CharacteristicConfiguration: Codable, Equatable {
-    var externalAccessEnabled: Bool
-    var webhookEnabled: Bool
-
-    static let `default` = CharacteristicConfiguration(externalAccessEnabled: true, webhookEnabled: false)
-}

@@ -284,8 +284,8 @@ class WorkflowSyncService: ObservableObject {
                 // differ from local ones. Migration matches by name/room and remaps to local IDs.
                 let rawDevices = homeKitManager.getAllDevices()
                 let rawScenes = homeKitManager.getAllScenes()
-                let stableDevices = rawDevices.map { deviceRegistryService.withStableIds($0) }
-                let stableScenes = rawScenes.map { deviceRegistryService.withStableIds($0) }
+                let stableDevices = deviceRegistryService.stableDevices(rawDevices)
+                let stableScenes = deviceRegistryService.stableScenes(rawScenes)
 
                 if !stableDevices.isEmpty || !stableScenes.isEmpty {
                     let migration = WorkflowMigrationService.migrateAll(allLocal, using: stableDevices, scenes: stableScenes)

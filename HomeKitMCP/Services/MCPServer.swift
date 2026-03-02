@@ -34,7 +34,6 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     init(
         homeKitManager: HomeKitManager,
         loggingService: LoggingService,
-        configService: DeviceConfigurationService,
         storage: StorageService,
         workflowStorageService: WorkflowStorageService,
         workflowEngine: WorkflowEngine,
@@ -58,7 +57,6 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         self.handler = handler ?? MCPRequestHandler(
             homeKitManager: homeKitManager,
             loggingService: loggingService,
-            configService: configService,
             storage: storage,
             workflowStorageService: workflowStorageService,
             workflowEngine: workflowEngine,
@@ -256,7 +254,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                 .store(in: &wsCancellables)
         }
 
-        // Broadcast granular characteristic value changes (webhookEnabled devices only)
+        // Broadcast granular characteristic value changes (observed devices only)
         homeKitManager.characteristicValueChangePublisher
             .receive(on: DispatchQueue.global(qos: .utility))
             .collect(.byTime(DispatchQueue.global(qos: .utility), .milliseconds(100)))
@@ -453,6 +451,12 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             return try await self.handleRestGetDevice(req)
         }
 
+        protected.on(.PATCH, "services", ":serviceId", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            return try await self.handleRestRenameService(req)
+        }
+
         // Scene REST Endpoints
         protected.on(.GET, "scenes") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
@@ -580,7 +584,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
     private func handleRestGetDevices(_ req: Request) async throws -> Response {
         let allDevices = await MainActor.run { homeKitManager.getAllDevices() }
-        let filteredDevices = await handler.filterDevicesByConfig(allDevices)
+        let filteredDevices = handler.stableDevices(allDevices)
         let restDevices = filteredDevices.map { RESTDevice.from($0) }
 
         let data = try JSONEncoder.iso8601.encode(restDevices)
@@ -604,7 +608,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             throw Abort(.notFound, reason: "Device not found")
         }
 
-        let filtered = await handler.filterDevicesByConfig([device])
+        let filtered = handler.stableDevices([device])
 
         guard let filteredDevice = filtered.first else {
             logRESTCall(method: "GET", path: "/devices/\(deviceId)", statusCode: 404, resultSummary: "Not Exposed")
@@ -618,6 +622,23 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                     req: req)
 
         return jsonResponse(data: data)
+    }
+
+    private func handleRestRenameService(_ req: Request) async throws -> Response {
+        guard let serviceId = req.parameters.get("serviceId") else {
+            logRESTCall(method: "PATCH", path: "/services/:id", statusCode: 400, resultSummary: "Bad Request")
+            throw Abort(.badRequest)
+        }
+
+        struct RenameBody: Codable { let name: String? }
+        let body = try req.content.decode(RenameBody.self)
+
+        await registry?.setServiceCustomName(stableServiceId: serviceId, customName: body.name)
+
+        logRESTCall(method: "PATCH", path: "/services/\(serviceId)", statusCode: 200,
+                    resultSummary: body.name ?? "(cleared)",
+                    req: req)
+        return jsonResponse(data: try JSONEncoder().encode(["success": true]))
     }
 
     // MARK: - Log REST Handler
@@ -707,7 +728,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
     private func handleRestGetScenes(_ req: Request) async throws -> Response {
         let rawScenes = await MainActor.run { homeKitManager.getAllScenes() }
-        let scenes = registry.map { reg in rawScenes.map { reg.withStableIds($0) } } ?? rawScenes
+        let scenes = handler.stableScenes(rawScenes)
         let restScenes = scenes.map { RESTScene.from($0) }
 
         let data = try JSONEncoder.iso8601.encode(restScenes)
@@ -731,7 +752,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             throw Abort(.notFound, reason: "Scene not found")
         }
 
-        let scene = registry?.withStableIds(rawScene) ?? rawScene
+        let scene = handler.stableScenes([rawScene]).first ?? rawScene
         let restScene = RESTScene.from(scene)
         let data = try JSONEncoder.iso8601.encode(restScene)
         logRESTCall(method: "GET", path: "/scenes/\(sceneId)", statusCode: 200,

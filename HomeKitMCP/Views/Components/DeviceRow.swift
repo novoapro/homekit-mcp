@@ -4,9 +4,10 @@ struct DeviceRow: View {
     let device: DeviceModel
     @ObservedObject var viewModel: HomeKitViewModel
     @State private var isExpanded = false
-    @State private var configs: [String: CharacteristicConfiguration] = [:]
-    @State private var showGranularControls = false
+    @State private var charSettings: [String: (enabled: Bool, observed: Bool)] = [:]
     @State private var isHovered = false
+    @State private var renamingService: ServiceModel?
+    @State private var renameText = ""
 
     private var displayCharacteristics: [(service: ServiceModel, char: CharacteristicModel)] {
         device.services.flatMap { service in
@@ -20,15 +21,15 @@ struct DeviceRow: View {
         GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 8)
     ]
 
-    private var deviceExternalAccessEnabled: Bool {
-        viewModel.isExternalAccessEnabled(for: device)
+    private var deviceEnabled: Bool {
+        viewModel.isEnabled(for: device)
     }
 
-    private var deviceWebhookEnabled: Bool {
-        viewModel.isWebhookEnabled(for: device)
+    private var deviceObserved: Bool {
+        viewModel.isObserved(for: device)
     }
 
-    /// Whether the device has any characteristic that supports notify (and thus webhooks).
+    /// Whether the device has any characteristic that supports notify.
     private var deviceHasNotifiableCharacteristics: Bool {
         device.services.flatMap(\.characteristics).contains { $0.permissions.contains("notify") }
     }
@@ -85,25 +86,25 @@ struct DeviceRow: View {
                 // Compact Controls
                 VStack(alignment: .trailing, spacing: 12) {
                     MiniToggle(isOn: Binding(
-                        get: { deviceExternalAccessEnabled },
+                        get: { deviceEnabled },
                         set: { result in
-                            updateAllConfigs(externalAccessEnabled: result)
-                            viewModel.setDeviceConfig(device: device, externalAccessEnabled: result)
+                            viewModel.setDeviceEnabled(device: device, enabled: result)
                         }
-                    ), label: "API")
+                    ), label: "Enabled")
 
                     MiniToggle(isOn: Binding(
-                        get: { deviceWebhookEnabled },
+                        get: { deviceObserved },
                         set: { result in
-                            updateAllConfigs(webhookEnabled: result)
-                            viewModel.setDeviceConfig(device: device, webhookEnabled: result)
+                            viewModel.setDeviceObserved(device: device, observed: result)
                         }
-                    ), label: "Webhook")
-                    .disabled(!deviceHasNotifiableCharacteristics)
-                    .opacity(deviceHasNotifiableCharacteristics ? 1 : 0.4)
-                    .help(deviceHasNotifiableCharacteristics
-                          ? "Send webhook notifications on state changes"
-                          : "No characteristics support notifications")
+                    ), label: "Observed")
+                    .disabled(!deviceEnabled || !deviceHasNotifiableCharacteristics)
+                    .opacity(deviceEnabled && deviceHasNotifiableCharacteristics ? 1 : 0.4)
+                    .help(!deviceEnabled
+                          ? "Enable the device first to observe state changes"
+                          : (deviceHasNotifiableCharacteristics
+                             ? "Observe state changes for this device"
+                             : "No characteristics support notifications"))
                 }
                 .padding(.trailing, 8)
 
@@ -138,11 +139,52 @@ struct DeviceRow: View {
                                         Image(systemName: serviceIcon(for: service.type))
                                             .font(.footnote)
                                             .foregroundColor(categoryColor)
-                                        Text(service.effectiveDisplayName)
+                                        Text(serviceDisplayName(for: service))
                                             .font(.footnote)
                                             .fontWeight(.bold)
                                             .foregroundColor(Theme.Text.secondary)
                                             .textCase(.uppercase)
+
+                                        Button {
+                                            renameText = serviceDisplayName(for: service)
+                                            renamingService = service
+                                        } label: {
+                                            Image(systemName: "pencil")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(Theme.Text.tertiary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help("Rename service")
+
+                                        if let stableId = stableServiceId(for: service) {
+                                            let hasCustomName = viewModel.registryService.readServiceCustomName(forStableServiceId: stableId) != nil
+
+                                            // "Use type name" — only when the global setting is off
+                                            if !useServiceTypeAsName && !hasCustomName && serviceDisplayName(for: service) != service.displayName {
+                                                Button {
+                                                    viewModel.renameService(stableServiceId: stableId, customName: service.displayName)
+                                                } label: {
+                                                    Image(systemName: "tag")
+                                                        .font(.system(size: 12))
+                                                        .foregroundColor(Theme.Text.tertiary)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .help("Use type name: \(service.displayName)")
+                                            }
+
+                                            // Reset — only if a custom name is set
+                                            if hasCustomName {
+                                                Button {
+                                                    viewModel.renameService(stableServiceId: stableId, customName: nil)
+                                                } label: {
+                                                    Image(systemName: "arrow.counterclockwise")
+                                                        .font(.system(size: 12))
+                                                        .foregroundColor(Theme.Text.tertiary)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .help("Reset to default name")
+                                            }
+                                        }
                                     }
                                     .padding(.horizontal, Theme.Spacing.medium)
 
@@ -172,25 +214,6 @@ struct DeviceRow: View {
                             }
                         }
 
-                        // Granular controls disclosure
-                        if displayCharacteristics.count > 1 {
-                            Button {
-                                withAnimation(Theme.Animation.expand) {
-                                    showGranularControls.toggle()
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: showGranularControls ? "chevron.down" : "chevron.right")
-                                        .font(.system(size: 12, weight: .bold))
-                                    Text(showGranularControls ? "Hide Granular Controls" : "Show Granular Controls")
-                                        .font(.footnote)
-                                        .fontWeight(.medium)
-                                }
-                                .foregroundColor(Theme.Text.tertiary)
-                                .padding(.horizontal, Theme.Spacing.medium)
-                            }
-                            .buttonStyle(.plain)
-                        }
                     }
                 }
                 .padding(.bottom, 20)
@@ -215,31 +238,61 @@ struct DeviceRow: View {
             Divider()
 
             Button {
-                viewModel.setDeviceConfig(device: device, externalAccessEnabled: !deviceExternalAccessEnabled)
-                updateAllConfigs(externalAccessEnabled: !deviceExternalAccessEnabled)
+                viewModel.setDeviceEnabled(device: device, enabled: !deviceEnabled)
             } label: {
-                Label(deviceExternalAccessEnabled ? "Disable API Access" : "Enable API Access",
-                      systemImage: deviceExternalAccessEnabled ? "xmark.circle" : "checkmark.circle")
+                Label(deviceEnabled ? "Disable" : "Enable",
+                      systemImage: deviceEnabled ? "xmark.circle" : "checkmark.circle")
             }
 
-            if deviceHasNotifiableCharacteristics {
+            if deviceHasNotifiableCharacteristics && deviceEnabled {
                 Button {
-                    viewModel.setDeviceConfig(device: device, webhookEnabled: !deviceWebhookEnabled)
-                    updateAllConfigs(webhookEnabled: !deviceWebhookEnabled)
+                    viewModel.setDeviceObserved(device: device, observed: !deviceObserved)
                 } label: {
-                    Label(deviceWebhookEnabled ? "Disable Webhook" : "Enable Webhook",
-                          systemImage: deviceWebhookEnabled ? "xmark.circle" : "checkmark.circle")
+                    Label(deviceObserved ? "Stop Observing" : "Start Observing",
+                          systemImage: deviceObserved ? "eye.slash" : "eye")
                 }
+            }
+
+        }
+        .alert("Rename Service", isPresented: Binding(
+            get: { renamingService != nil },
+            set: { if !$0 { renamingService = nil } }
+        )) {
+            TextField("Service name", text: $renameText)
+            Button("Cancel", role: .cancel) { renamingService = nil }
+            Button("Save") {
+                guard let service = renamingService,
+                      let stableId = stableServiceId(for: service) else {
+                    renamingService = nil
+                    return
+                }
+                let trimmed = renameText.trimmingCharacters(in: .whitespaces)
+                viewModel.renameService(
+                    stableServiceId: stableId,
+                    customName: trimmed.isEmpty ? nil : trimmed
+                )
+                renamingService = nil
+            }
+        } message: {
+            if let service = renamingService {
+                Text("Enter a custom name for \"\(serviceDisplayName(for: service))\"")
             }
         }
         .task {
-            await loadConfigs()
+            await loadSettings()
+        }
+        .onChange(of: viewModel.deviceConfigCache[device.id]?.enabled) { _ in
+            Task { await loadSettings() }
+        }
+        .onChange(of: viewModel.deviceConfigCache[device.id]?.observed) { _ in
+            Task { await loadSettings() }
         }
     }
 
     private func characteristicTile(service: ServiceModel, char: CharacteristicModel) -> some View {
-        let key = configKey(deviceId: device.id, serviceId: service.id, charId: char.id)
-        let config = configs[key] ?? .default
+        let stableCharId = viewModel.registryService.readStableCharacteristicId(char.id)
+        let settings = stableCharId.flatMap { charSettings[$0] } ?? (enabled: true, observed: false)
+        let canObserve = settings.enabled && char.permissions.contains("notify")
 
         return VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .top) {
@@ -263,33 +316,33 @@ struct DeviceRow: View {
                 Spacer()
             }
 
-            // Granular controls — hidden by default to reduce density
-            if showGranularControls {
-                Divider()
+            Divider()
 
-                HStack(spacing: 4) {
+            HStack(spacing: 4) {
                     MiniToggle(isOn: Binding(
-                        get: { config.externalAccessEnabled },
+                        get: { settings.enabled },
                         set: { val in
-                            var updated = config
-                            updated.externalAccessEnabled = val
-                            configs[key] = updated
-                            viewModel.setConfig(deviceId: device.id, serviceId: service.id, characteristicId: char.id, config: updated)
+                            if let id = stableCharId {
+                                charSettings[id] = (enabled: val, observed: val ? settings.observed : false)
+                                viewModel.setCharacteristicEnabled(stableCharId: id, enabled: val)
+                            }
                         }
-                    ), label: "API")
+                    ), label: "Enabled")
 
                     Spacer()
 
                     if char.permissions.contains("notify") {
                         MiniToggle(isOn: Binding(
-                            get: { config.webhookEnabled },
+                            get: { settings.observed },
                             set: { val in
-                                var updated = config
-                                updated.webhookEnabled = val
-                                configs[key] = updated
-                                viewModel.setConfig(deviceId: device.id, serviceId: service.id, characteristicId: char.id, config: updated)
+                                if let id = stableCharId {
+                                    charSettings[id] = (enabled: settings.enabled, observed: val)
+                                    viewModel.setCharacteristicObserved(stableCharId: id, observed: val)
+                                }
                             }
-                        ), label: "Webhook")
+                        ), label: "Observed")
+                        .disabled(!canObserve)
+                        .opacity(canObserve ? 1 : 0.4)
                     } else {
                         Text("No notify")
                             .font(.system(size: 11))
@@ -297,42 +350,44 @@ struct DeviceRow: View {
                     }
                 }
             }
-        }
         .padding(10)
         .background(Theme.surfaceOverlay)
         .cornerRadius(Theme.CornerRadius.small)
     }
 
-    private func configKey(deviceId: String, serviceId: String, charId: String) -> String {
-        "\(deviceId):\(serviceId):\(charId)"
-    }
-
-    private func updateAllConfigs(externalAccessEnabled: Bool? = nil, webhookEnabled: Bool? = nil) {
+    /// Loads settings for this device's characteristics from the registry.
+    private func loadSettings() async {
+        let allSettings = await viewModel.getAllCharacteristicSettings()
+        var deviceSettings: [String: (enabled: Bool, observed: Bool)] = [:]
         for service in device.services {
             for char in service.characteristics {
-                let key = configKey(deviceId: device.id, serviceId: service.id, charId: char.id)
-                var config = configs[key] ?? .default
-                if let ext = externalAccessEnabled { config.externalAccessEnabled = ext }
-                // Only set webhook for characteristics that support notify
-                if let webhook = webhookEnabled, char.permissions.contains("notify") {
-                    config.webhookEnabled = webhook
+                if let stableCharId = viewModel.registryService.readStableCharacteristicId(char.id) {
+                    deviceSettings[stableCharId] = allSettings[stableCharId] ?? (enabled: true, observed: false)
                 }
-                configs[key] = config
             }
         }
+        charSettings = deviceSettings
     }
 
-    /// Loads configs for this device in a single batch actor call.
-    private func loadConfigs() async {
-        let allConfigs = await viewModel.getAllConfigs()
-        var deviceConfigs: [String: CharacteristicConfiguration] = [:]
-        for service in device.services {
-            for char in service.characteristics {
-                let key = configKey(deviceId: device.id, serviceId: service.id, charId: char.id)
-                deviceConfigs[key] = allConfigs[key] ?? .default
-            }
+    private func stableServiceId(for service: ServiceModel) -> String? {
+        viewModel.registryService.readStableServiceId(service.id)
+    }
+
+    /// Returns the custom name from the registry if set, then the service type name if that setting
+    /// is enabled, otherwise the HomeKit effective name.
+    private func serviceDisplayName(for service: ServiceModel) -> String {
+        if let stableId = stableServiceId(for: service),
+           let customName = viewModel.registryService.readServiceCustomName(forStableServiceId: stableId) {
+            return customName
         }
-        configs = deviceConfigs
+        if useServiceTypeAsName {
+            return service.displayName
+        }
+        return service.effectiveDisplayName
+    }
+
+    private var useServiceTypeAsName: Bool {
+        UserDefaults.standard.bool(forKey: "useServiceTypeAsName")
     }
 
     private func shouldDisplay(_ char: CharacteristicModel) -> Bool {
@@ -418,7 +473,6 @@ struct MiniToggle: View {
         .buttonStyle(.plain)
         .accessibilityLabel("\(label): \(isOn ? "enabled" : "disabled")")
         .accessibilityHint("Double tap to toggle \(label.lowercased())")
-        .help(label == "API" ? "Include in MCP and REST API responses" : "Send webhook notifications on state changes")
     }
 }
 

@@ -5,19 +5,17 @@ import Foundation
 final class MCPRequestHandler: Sendable {
     private let homeKitManager: HomeKitManager
     private let loggingService: LoggingService
-    private let configService: DeviceConfigurationService
     private let storage: StorageService
     private let workflowStorageService: WorkflowStorageService
     private let workflowEngine: WorkflowEngine
     private let workflowExecutionLogService: WorkflowExecutionLogService
     private let registry: DeviceRegistryService?
 
-    init(homeKitManager: HomeKitManager, loggingService: LoggingService, configService: DeviceConfigurationService, storage: StorageService,
+    init(homeKitManager: HomeKitManager, loggingService: LoggingService, storage: StorageService,
          workflowStorageService: WorkflowStorageService, workflowEngine: WorkflowEngine, workflowExecutionLogService: WorkflowExecutionLogService,
          registry: DeviceRegistryService? = nil) {
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
-        self.configService = configService
         self.storage = storage
         self.workflowStorageService = workflowStorageService
         self.workflowEngine = workflowEngine
@@ -64,63 +62,21 @@ final class MCPRequestHandler: Sendable {
         return response
     }
 
-    // MARK: - MCP Filtering
-    
-    /// Filters devices to only include characteristics with external access enabled.
-    /// Uses a single actor call to fetch all configs at once instead of N individual calls.
-    func filterDevicesByConfig(_ devices: [DeviceModel]) async -> [DeviceModel] {
-        let allConfigs = await configService.getAllConfigs()
-        var result: [DeviceModel] = []
-        for device in devices {
-            var filteredServices: [ServiceModel] = []
-            for service in device.services {
-                let filteredChars = service.characteristics.filter { char in
-                    // Config keys use HomeKit UUIDs (filtering happens before stable ID transformation)
-                    let key = "\(device.id):\(service.id):\(char.id)"
-                    return (allConfigs[key] ?? .default).externalAccessEnabled
-                }
-                if !filteredChars.isEmpty {
-                    filteredServices.append(ServiceModel(
-                        id: service.id,
-                        name: service.name,
-                        type: service.type,
-                        characteristics: filteredChars
-                    ))
-                }
-            }
-            if !filteredServices.isEmpty {
-                result.append(DeviceModel(
-                    id: device.id,
-                    name: device.name,
-                    roomName: device.roomName,
-                    categoryType: device.categoryType,
-                    services: filteredServices,
-                    isReachable: device.isReachable,
-                    manufacturer: device.manufacturer,
-                    model: device.model,
-                    serialNumber: device.serialNumber,
-                    firmwareRevision: device.firmwareRevision
-                ))
-            }
-        }
-        // Transform to stable registry IDs for external consumers
-        return toStableIds(result)
-    }
+    // MARK: - Registry Helpers
 
-    /// Transforms device models to use stable registry IDs for external consumers.
-    /// Config filtering must be done BEFORE this transformation (config keys use HomeKit UUIDs).
-    private func toStableIds(_ devices: [DeviceModel]) -> [DeviceModel] {
+    /// Returns enabled devices with stable IDs and effective permissions.
+    func stableDevices(_ devices: [DeviceModel]) -> [DeviceModel] {
         guard let registry else { return devices }
-        return devices.map { registry.withStableIds($0) }
+        return registry.stableDevices(devices)
     }
 
-    /// Transforms scene models to use stable registry IDs for external consumers.
-    private func toStableIds(_ scenes: [SceneModel]) -> [SceneModel] {
+    /// Returns scenes with stable IDs.
+    func stableScenes(_ scenes: [SceneModel]) -> [SceneModel] {
         guard let registry else { return scenes }
-        return scenes.map { registry.withStableIds($0) }
+        return registry.stableScenes(scenes)
     }
 
-    /// Checks whether a specific device + characteristic is exposed for external access.
+    /// Checks whether a specific device + characteristic is exposed (enabled) for external access.
     private func isCharacteristicExposed(deviceId: String, characteristicType: String, serviceId: String?) async -> Bool {
         let resolvedType = CharacteristicTypes.characteristicType(forName: characteristicType) ?? characteristicType
 
@@ -128,8 +84,6 @@ final class MCPRequestHandler: Sendable {
         guard let device else {
             return false
         }
-
-        let allConfigs = await configService.getAllConfigs()
 
         let targetServices: [ServiceModel]
         if let serviceId {
@@ -140,8 +94,8 @@ final class MCPRequestHandler: Sendable {
 
         for service in targetServices {
             for characteristic in service.characteristics where characteristic.type == resolvedType {
-                let key = "\(device.id):\(service.id):\(characteristic.id)"
-                if (allConfigs[key] ?? .default).externalAccessEnabled {
+                let settings = registry?.readCharacteristicSettings(forHomeKitCharId: characteristic.id)
+                if settings?.enabled ?? true {
                     return true
                 }
             }
@@ -232,7 +186,7 @@ final class MCPRequestHandler: Sendable {
         switch uri {
         case "homekit://devices":
             let allDevices = await MainActor.run { homeKitManager.getAllDevices() }
-            let devices = await filterDevicesByConfig(allDevices)
+            let devices = stableDevices(allDevices)
             let restDevices = devices.map { RESTDevice.from($0) }
 
             guard let jsonData = try? JSONEncoder.iso8601.encode(restDevices),
@@ -255,7 +209,7 @@ final class MCPRequestHandler: Sendable {
             return JSONRPCResponse.success(id: id, result: AnyCodable(result))
 
         case "homekit://scenes":
-            let scenes = toStableIds(await MainActor.run { homeKitManager.getAllScenes() })
+            let scenes = stableScenes(await MainActor.run { homeKitManager.getAllScenes() })
             let restScenes = scenes.map { RESTScene.from($0) }
 
             guard let jsonData = try? JSONEncoder.iso8601.encode(restScenes),
@@ -453,7 +407,7 @@ final class MCPRequestHandler: Sendable {
 
         var lines: [String] = []
         for group in groups {
-            let filteredDevices = await filterDevicesByConfig(group.devices)
+            let filteredDevices = stableDevices(group.devices)
             if filteredDevices.isEmpty { continue }
             lines.append("## \(group.roomName)")
             for device in filteredDevices {
@@ -514,7 +468,7 @@ final class MCPRequestHandler: Sendable {
             return toolResult(text: "Room not found: \(roomName). Use list_rooms to see available rooms.", isError: true, id: id)
         }
 
-        let filteredDevices = await filterDevicesByConfig(group.devices)
+        let filteredDevices = stableDevices(group.devices)
         let restDevices = filteredDevices.map { RESTDevice.from($0) }
         return toolResult(encoding: restDevices, id: id)
     }
@@ -540,7 +494,7 @@ final class MCPRequestHandler: Sendable {
             }
         }
 
-        let filteredDevices = await filterDevicesByConfig(resultDevices)
+        let filteredDevices = stableDevices(resultDevices)
         let restDevices = filteredDevices.map { RESTDevice.from($0) }
 
         guard let jsonData = try? JSONEncoder.iso8601.encode(restDevices),
@@ -577,7 +531,7 @@ final class MCPRequestHandler: Sendable {
             }
         }
 
-        let filteredDevices = await filterDevicesByConfig(matchingDevices)
+        let filteredDevices = stableDevices(matchingDevices)
         let restDevices = filteredDevices.map { RESTDevice.from($0) }
         return toolResult(encoding: restDevices, id: id)
     }
@@ -683,7 +637,7 @@ final class MCPRequestHandler: Sendable {
             return toolResult(text: "Device not found: \(deviceId)", isError: true, id: id)
         }
 
-        let filtered = await filterDevicesByConfig([device])
+        let filtered = stableDevices([device])
 
         guard let filteredDevice = filtered.first else {
             return toolResult(text: "Device not found: \(deviceId)", isError: true, id: id)
@@ -696,7 +650,7 @@ final class MCPRequestHandler: Sendable {
     // MARK: - Scene Tool Handlers
 
     private func handleListScenes(id: JSONRPCId?) async -> JSONRPCResponse {
-        let scenes = toStableIds(await MainActor.run { homeKitManager.getAllScenes() })
+        let scenes = stableScenes(await MainActor.run { homeKitManager.getAllScenes() })
 
         var lines: [String] = []
         for scene in scenes {
@@ -1068,9 +1022,10 @@ final class MCPRequestHandler: Sendable {
     /// - controlDevice actions require "write" permission
     /// Returns nil if valid, or an error message string if invalid.
     func validateWorkflowPermissions(_ workflow: Workflow) async -> String? {
-        // Collect all devices once
+        // Use registry-proxied devices: stable IDs and effective permissions baked in
         let allDevices = await MainActor.run { homeKitManager.getAllDevices() }
-        let deviceMap = Dictionary(uniqueKeysWithValues: allDevices.map { ($0.id, $0) })
+        let registryDevices = stableDevices(allDevices)
+        let deviceMap = Dictionary(uniqueKeysWithValues: registryDevices.map { ($0.id, $0) })
 
         // Validate triggers
         for (index, trigger) in workflow.triggers.enumerated() {
@@ -1134,8 +1089,7 @@ final class MCPRequestHandler: Sendable {
         deviceMap: [String: DeviceModel]
     ) -> String? {
         guard let device = deviceMap[deviceId] else {
-            // Device not found — skip validation (may be a stable ID not yet resolved)
-            return nil
+            return "\(context): device '\(deviceId)' not found or not enabled."
         }
         for service in device.services {
             if let char = service.characteristics.first(where: { $0.id == characteristicId }) {
@@ -1143,14 +1097,13 @@ final class MCPRequestHandler: Sendable {
                     let charName = CharacteristicTypes.displayName(for: char.type)
                     return "\(context): characteristic '\(charName)' on device '\(device.name)' does not have '\(requiredPermission)' permission (has: \(char.permissions.joined(separator: ", "))). " +
                         (requiredPermission == "notify"
-                         ? "Device state change triggers require characteristics that support notifications."
+                         ? "Device state change triggers require characteristics that are observed."
                          : "Control device actions require writable characteristics.")
                 }
                 return nil // Found and has permission
             }
         }
-        // Characteristic not found on device — skip validation
-        return nil
+        return "\(context): characteristic '\(characteristicId)' not found on device '\(device.name)'."
     }
 
     // MARK: - Metadata Hints

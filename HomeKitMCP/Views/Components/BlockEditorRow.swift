@@ -331,6 +331,7 @@ private struct ControlDeviceEditor: View {
             selectedDeviceId: draft.deviceId,
             selectedServiceId: draft.serviceId,
             selectedCharacteristicType: draft.characteristicId,
+            requiredPermission: "write",
             onCharacteristicSelected: { char in
                 draft.wrappedValue.characteristicFormat = char?.format
                 draft.wrappedValue.characteristicMinValue = char?.minValue

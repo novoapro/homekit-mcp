@@ -26,6 +26,11 @@ class SettingsViewModel: ObservableObject {
             storage.hideRoomNameInTheApp = hideRoomNameInTheApp
         }
     }
+    @Published var useServiceTypeAsName: Bool {
+        didSet {
+            storage.useServiceTypeAsName = useServiceTypeAsName
+        }
+    }
     @Published var detailedLogsEnabled: Bool {
         didSet {
             storage.detailedLogsEnabled = detailedLogsEnabled
@@ -112,7 +117,6 @@ class SettingsViewModel: ObservableObject {
     let storage: StorageService
     private let webhookService: WebhookService
     private let mcpServer: MCPServer
-    let configService: DeviceConfigurationService
     let keychainService: KeychainService
     let aiWorkflowService: AIWorkflowService
     let backupService: BackupService
@@ -127,7 +131,6 @@ class SettingsViewModel: ObservableObject {
         storage: StorageService,
         webhookService: WebhookService,
         mcpServer: MCPServer,
-        configService: DeviceConfigurationService,
         keychainService: KeychainService,
         aiWorkflowService: AIWorkflowService,
         backupService: BackupService,
@@ -140,7 +143,6 @@ class SettingsViewModel: ObservableObject {
         self.storage = storage
         self.webhookService = webhookService
         self.mcpServer = mcpServer
-        self.configService = configService
         self.keychainService = keychainService
         self.aiWorkflowService = aiWorkflowService
         self.backupService = backupService
@@ -151,6 +153,7 @@ class SettingsViewModel: ObservableObject {
         self.workflowStorageService = workflowStorageService
         self.webhookEnabled = storage.webhookEnabled
         self.hideRoomNameInTheApp = storage.hideRoomNameInTheApp
+        self.useServiceTypeAsName = storage.useServiceTypeAsName
         self.detailedLogsEnabled = storage.detailedLogsEnabled
         self.pollingEnabled = storage.pollingEnabled
         self.pollingInterval = storage.pollingInterval
@@ -221,12 +224,6 @@ class SettingsViewModel: ObservableObject {
             }
         } else {
             mcpServer.stop()
-        }
-    }
-
-    func resetDeviceConfiguration() {
-        Task {
-            await configService.resetAll()
         }
     }
 

@@ -5,6 +5,8 @@ struct DeviceCharacteristicPicker: View {
     @Binding var selectedDeviceId: String
     @Binding var selectedServiceId: String?
     @Binding var selectedCharacteristicType: String
+    /// When set, only characteristics with this permission are shown (e.g. "write", "notify").
+    var requiredPermission: String? = nil
     var onCharacteristicSelected: ((CharacteristicModel?) -> Void)? = nil
 
     @State private var showDevicePicker = false
@@ -42,7 +44,8 @@ struct DeviceCharacteristicPicker: View {
                     selectedDeviceId: $selectedDeviceId,
                     selectedServiceId: $selectedServiceId,
                     selectedCharacteristicType: $selectedCharacteristicType,
-                    categoryIcon: categoryIcon
+                    categoryIcon: categoryIcon,
+                    requiredPermission: requiredPermission
                 )
             }
 
@@ -51,11 +54,6 @@ struct DeviceCharacteristicPicker: View {
                 let characteristics = flattenedCharacteristics(for: device)
                 let showServicePrefix = device.services.count > 1
                 Menu {
-                    Button("None") {
-                        selectedCharacteristicType = ""
-                        selectedServiceId = nil
-                        onCharacteristicSelected?(nil)
-                    }
                     ForEach(characteristics) { item in
                         Button {
                             selectedCharacteristicType = item.characteristic.id
@@ -180,6 +178,7 @@ struct DeviceCharacteristicPicker: View {
         device.services.flatMap { service in
             service.characteristics.compactMap { characteristic in
                 guard characteristic.isUserFacing else { return nil }
+                if let perm = requiredPermission, !characteristic.permissions.contains(perm) { return nil }
                 return CharacteristicItem(
                     serviceId: service.id,
                     serviceName: service.effectiveDisplayName,
@@ -198,6 +197,7 @@ private struct DevicePickerSheet: View {
     @Binding var selectedServiceId: String?
     @Binding var selectedCharacteristicType: String
     let categoryIcon: (String) -> String
+    var requiredPermission: String? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -210,11 +210,20 @@ private struct DevicePickerSheet: View {
 
     private var filteredDevicesByRoom: [DeviceGroup] {
         let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        var candidates = devices
+
+        // Only show devices that have at least one characteristic with the required permission
+        if let perm = requiredPermission {
+            candidates = candidates.filter { device in
+                device.services.flatMap(\.characteristics).contains { $0.isUserFacing && $0.permissions.contains(perm) }
+            }
+        }
+
         let filtered: [DeviceModel]
         if query.isEmpty {
-            filtered = devices
+            filtered = candidates
         } else {
-            filtered = devices.filter {
+            filtered = candidates.filter {
                 $0.name.lowercased().contains(query) ||
                 ($0.roomName ?? "").lowercased().contains(query)
             }
@@ -228,16 +237,6 @@ private struct DevicePickerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Button {
-                    selectedDeviceId = ""
-                    selectedCharacteristicType = ""
-                    selectedServiceId = nil
-                    dismiss()
-                } label: {
-                    Label("None", systemImage: "minus.circle")
-                        .foregroundColor(Theme.Text.secondary)
-                }
-
                 ForEach(filteredDevicesByRoom) { group in
                     Section(group.roomName) {
                         ForEach(group.devices) { device in

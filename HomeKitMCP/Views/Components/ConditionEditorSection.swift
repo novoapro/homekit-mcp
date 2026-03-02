@@ -437,6 +437,7 @@ private struct ConditionLeafEditSheet: View {
                 selectedDeviceId: $condition.deviceId,
                 selectedServiceId: $condition.serviceId,
                 selectedCharacteristicType: $condition.characteristicId,
+                requiredPermission: "read",
                 onCharacteristicSelected: { char in
                     condition.characteristicFormat = char?.format
                     condition.characteristicMinValue = char?.minValue

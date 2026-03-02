@@ -20,15 +20,15 @@ class HomeKitViewModel: ObservableObject {
     @Published var searchText = ""
     @Published var selectedRooms: Set<String> = []
     @Published var selectedServiceTypes: Set<String> = []
-    @Published var mcpFilter: TriStateFilter = .all
-    @Published var webhookFilter: TriStateFilter = .all
+    @Published var enabledFilter: TriStateFilter = .all
+    @Published var observedFilter: TriStateFilter = .all
 
     @Published var isUpdating = false
-    /// Device-level config cache: deviceId -> (externalAccessEnabled: Bool, webhookEnabled: Bool)
-    @Published private(set) var deviceConfigCache: [String: (externalAccessEnabled: Bool, webhookEnabled: Bool)] = [:]
+    /// Device-level settings cache: deviceId -> (enabled: Bool, observed: Bool)
+    @Published private(set) var deviceConfigCache: [String: (enabled: Bool, observed: Bool)] = [:]
 
     private let homeKitManager: HomeKitManager
-    let configService: DeviceConfigurationService
+    let registryService: DeviceRegistryService
     private var cancellables = Set<AnyCancellable>()
 
     /// Debounces rapid refresh triggers to avoid redundant UI rebuilds.
@@ -46,7 +46,7 @@ class HomeKitViewModel: ObservableObject {
     @Published private(set) var availableServiceTypes: [String] = []
 
     var hasActiveFilters: Bool {
-        !selectedRooms.isEmpty || !selectedServiceTypes.isEmpty || mcpFilter != .all || webhookFilter != .all
+        !selectedRooms.isEmpty || !selectedServiceTypes.isEmpty || enabledFilter != .all || observedFilter != .all
     }
 
     @Published var filteredDevicesByRoom: [(roomName: String, devices: [DeviceModel])] = []
@@ -56,9 +56,9 @@ class HomeKitViewModel: ObservableObject {
     @Published var filteredScenes: [SceneModel] = []
     @Published var sceneSearchText = ""
 
-    init(homeKitManager: HomeKitManager, configService: DeviceConfigurationService) {
+    init(homeKitManager: HomeKitManager, registryService: DeviceRegistryService) {
         self.homeKitManager = homeKitManager
-        self.configService = configService
+        self.registryService = registryService
 
         // Setup background filtering pipeline
         Publishers.CombineLatest4(
@@ -67,13 +67,13 @@ class HomeKitViewModel: ObservableObject {
             $selectedRooms,
             $selectedServiceTypes
         )
-        .combineLatest($mcpFilter, $webhookFilter, $deviceConfigCache)
+        .combineLatest($enabledFilter, $observedFilter, $deviceConfigCache)
         .handleEvents(receiveOutput: { [weak self] _ in
             self?.isUpdating = true
         })
         .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main) // Debounce UI updates
         .receive(on: DispatchQueue.global(qos: .userInitiated)) // Process on background thread
-        .map { inputs, mcpFilter, webhookFilter, configCache -> [(roomName: String, devices: [DeviceModel])] in
+        .map { inputs, enabledFilter, observedFilter, configCache -> [(roomName: String, devices: [DeviceModel])] in
             let (devicesByRoom, searchText, selectedRooms, selectedServiceTypes) = inputs
 
             var groups = devicesByRoom
@@ -83,7 +83,7 @@ class HomeKitViewModel: ObservableObject {
                 groups = groups.filter { selectedRooms.contains($0.roomName) }
             }
 
-            // Apply search + MCP/Webhook/ServiceType filters to devices within groups
+            // Apply search + Enabled/Observed/ServiceType filters to devices within groups
             return groups.compactMap { group in
                 let filteredDevices = group.devices.filter { device in
                     // Search filter
@@ -99,20 +99,20 @@ class HomeKitViewModel: ObservableObject {
                         if !hasServiceType { return false }
                     }
 
-                    // MCP filter
-                    if mcpFilter != .all {
+                    // Enabled filter
+                    if enabledFilter != .all {
                         let cache = configCache[device.id]
-                        let hasExternal = cache?.externalAccessEnabled ?? true // default is enabled
-                        if mcpFilter == .enabled, !hasExternal { return false }
-                        if mcpFilter == .disabled, hasExternal { return false }
+                        let hasEnabled = cache?.enabled ?? true
+                        if enabledFilter == .enabled, !hasEnabled { return false }
+                        if enabledFilter == .disabled, hasEnabled { return false }
                     }
 
-                    // Webhook filter
-                    if webhookFilter != .all {
+                    // Observed filter
+                    if observedFilter != .all {
                         let cache = configCache[device.id]
-                        let hasWebhook = cache?.webhookEnabled ?? false // default is webhook disabled
-                        if webhookFilter == .enabled, !hasWebhook { return false }
-                        if webhookFilter == .disabled, hasWebhook { return false }
+                        let hasObserved = cache?.observed ?? false
+                        if observedFilter == .enabled, !hasObserved { return false }
+                        if observedFilter == .disabled, hasObserved { return false }
                     }
 
                     return true
@@ -166,6 +166,14 @@ class HomeKitViewModel: ObservableObject {
                 self?.debouncedRefresh()
             }
             .store(in: &cancellables)
+
+        // Subscribe to registry sync events to refresh cache when settings change
+        registryService.registrySyncSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshConfigCacheSync()
+            }
+            .store(in: &cancellables)
     }
 
     func refresh() {
@@ -182,7 +190,7 @@ class HomeKitViewModel: ObservableObject {
         }
         availableServiceTypes = Array(Set(allTypes)).sorted()
 
-        Task { await refreshConfigCache() }
+        refreshConfigCacheSync()
     }
 
     func executeScene(id: String) async {
@@ -196,8 +204,8 @@ class HomeKitViewModel: ObservableObject {
     func clearFilters() {
         selectedRooms.removeAll()
         selectedServiceTypes.removeAll()
-        mcpFilter = .all
-        webhookFilter = .all
+        enabledFilter = .all
+        observedFilter = .all
     }
 
     /// Debounced version of refresh — coalesces multiple rapid triggers into one.
@@ -210,114 +218,108 @@ class HomeKitViewModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
     }
 
-    /// Builds a device-level config cache from the per-characteristic configs.
-    /// Uses a single actor call to fetch all configs at once instead of N individual calls.
-    private func refreshConfigCache() async {
-        let allConfigs = await configService.getAllConfigs()
-        var cache: [String: (externalAccessEnabled: Bool, webhookEnabled: Bool)] = [:]
+    /// Builds a device-level settings cache from the registry using nonisolated lookups.
+    private func refreshConfigCacheSync() {
+        var cache: [String: (enabled: Bool, observed: Bool)] = [:]
 
         for group in devicesByRoom {
             for device in group.devices {
-                var anyExternal = false
-                var anyWebhook = false
+                var anyEnabled = false
+                var anyObserved = false
 
                 for service in device.services {
                     for char in service.characteristics {
-                        let key = "\(device.id):\(service.id):\(char.id)"
-                        let config = allConfigs[key] ?? .default
-                        if config.externalAccessEnabled { anyExternal = true }
-                        // Only consider notifiable characteristics for webhook state
-                        if config.webhookEnabled && char.permissions.contains("notify") { anyWebhook = true }
+                        let settings = registryService.readCharacteristicSettings(forHomeKitCharId: char.id)
+                        if settings.enabled { anyEnabled = true }
+                        if settings.observed && char.permissions.contains("notify") { anyObserved = true }
                     }
                 }
 
-                cache[device.id] = (externalAccessEnabled: anyExternal, webhookEnabled: anyWebhook)
+                cache[device.id] = (enabled: anyEnabled, observed: anyObserved)
             }
         }
 
-        let snapshot = cache
-        await MainActor.run {
-            self.deviceConfigCache = snapshot
-        }
+        deviceConfigCache = cache
     }
 
-    /// Returns all configs in a single batch actor call. Used by DeviceRow to preload configs.
-    func getAllConfigs() async -> [String: CharacteristicConfiguration] {
-        await configService.getAllConfigs()
+    /// Returns all characteristic settings from the registry. Used by DeviceRow to preload settings.
+    func getAllCharacteristicSettings() async -> [String: (enabled: Bool, observed: Bool)] {
+        await registryService.getAllCharacteristicSettings()
     }
 
-    func setConfig(deviceId: String, serviceId: String, characteristicId: String, config: CharacteristicConfiguration) {
+    func setCharacteristicEnabled(stableCharId: String, enabled: Bool) {
         Task {
-            await configService.setConfig(deviceId: deviceId, serviceId: serviceId, characteristicId: characteristicId, config: config)
-            await refreshConfigCache()
-            await MainActor.run {
-                objectWillChange.send()
+            await registryService.setCharacteristicEnabled(stableCharId: stableCharId, enabled: enabled)
+            if !enabled {
+                homeKitManager.refreshNotificationRegistrations()
             }
         }
     }
 
-    func setDeviceConfig(device: DeviceModel, externalAccessEnabled: Bool? = nil, webhookEnabled: Bool? = nil) {
-        // When setting webhookEnabled, only include characteristics that support notify
-        let services: [(serviceId: String, characteristicIds: [String])]
-        if webhookEnabled != nil {
-            services = device.services.map { service in
-                let charIds = service.characteristics
-                    .filter { webhookEnabled == nil || $0.permissions.contains("notify") }
-                    .map(\.id)
-                return (serviceId: service.id, characteristicIds: charIds)
-            }
-        } else {
-            services = device.services.map { service in
-                (serviceId: service.id, characteristicIds: service.characteristics.map(\.id))
-            }
-        }
+    func setCharacteristicObserved(stableCharId: String, observed: Bool) {
         Task {
-            await configService.setAllForDevice(deviceId: device.id, services: services, externalAccessEnabled: externalAccessEnabled, webhookEnabled: webhookEnabled)
-            await refreshConfigCache()
-            await MainActor.run {
-                objectWillChange.send()
+            await registryService.setCharacteristicObserved(stableCharId: stableCharId, observed: observed)
+            homeKitManager.refreshNotificationRegistrations()
+        }
+    }
+
+    func setDeviceEnabled(device: DeviceModel, enabled: Bool) {
+        guard let stableDeviceId = registryService.readStableDeviceId(device.id) else { return }
+        Task {
+            await registryService.setAllEnabled(deviceStableId: stableDeviceId, enabled: enabled)
+            if !enabled {
+                homeKitManager.refreshNotificationRegistrations()
             }
         }
     }
 
-    func setBulkConfig(externalAccessEnabled: Bool? = nil, webhookEnabled: Bool? = nil) {
+    func setDeviceObserved(device: DeviceModel, observed: Bool) {
+        guard let stableDeviceId = registryService.readStableDeviceId(device.id) else { return }
+        let notifiableCharTypes = Set(
+            device.services.flatMap(\.characteristics)
+                .filter { $0.permissions.contains("notify") }
+                .map(\.type)
+        )
+        Task {
+            await registryService.setAllObserved(deviceStableId: stableDeviceId, observed: observed, notifiableCharTypes: notifiableCharTypes)
+            homeKitManager.refreshNotificationRegistrations()
+        }
+    }
+
+    func renameService(stableServiceId: String, customName: String?) {
+        Task {
+            await registryService.setServiceCustomName(stableServiceId: stableServiceId, customName: customName)
+        }
+    }
+
+    func setBulkEnabled(_ enabled: Bool) {
         let devices = filteredDevicesByRoom.flatMap(\.devices)
         Task {
             for device in devices {
-                let services: [(serviceId: String, characteristicIds: [String])]
-                if webhookEnabled != nil {
-                    services = device.services.map { service in
-                        let charIds = service.characteristics
-                            .filter { webhookEnabled == nil || $0.permissions.contains("notify") }
-                            .map(\.id)
-                        return (serviceId: service.id, characteristicIds: charIds)
-                    }
-                } else {
-                    services = device.services.map { service in
-                        (serviceId: service.id, characteristicIds: service.characteristics.map(\.id))
-                    }
+                if let stableDeviceId = registryService.readStableDeviceId(device.id) {
+                    await registryService.setAllEnabled(deviceStableId: stableDeviceId, enabled: enabled)
                 }
-                await configService.setAllForDevice(
-                    deviceId: device.id,
-                    services: services,
-                    externalAccessEnabled: externalAccessEnabled,
-                    webhookEnabled: webhookEnabled
-                )
             }
-            await refreshConfigCache()
-            await MainActor.run {
-                objectWillChange.send()
+            if !enabled {
+                homeKitManager.refreshNotificationRegistrations()
             }
         }
     }
 
-    func resetConfiguration() {
+    func setBulkObserved(_ observed: Bool) {
+        let devices = filteredDevicesByRoom.flatMap(\.devices)
         Task {
-            await configService.resetAll()
-            await refreshConfigCache()
-            await MainActor.run {
-                objectWillChange.send()
+            for device in devices {
+                if let stableDeviceId = registryService.readStableDeviceId(device.id) {
+                    let notifiableCharTypes = Set(
+                        device.services.flatMap(\.characteristics)
+                            .filter { $0.permissions.contains("notify") }
+                            .map(\.type)
+                    )
+                    await registryService.setAllObserved(deviceStableId: stableDeviceId, observed: observed, notifiableCharTypes: notifiableCharTypes)
+                }
             }
+            homeKitManager.refreshNotificationRegistrations()
         }
     }
 
@@ -330,12 +332,12 @@ class HomeKitViewModel: ObservableObject {
         return nil
     }
 
-    func isExternalAccessEnabled(for device: DeviceModel) -> Bool {
-        deviceConfigCache[device.id]?.externalAccessEnabled ?? true
+    func isEnabled(for device: DeviceModel) -> Bool {
+        deviceConfigCache[device.id]?.enabled ?? true
     }
 
-    func isWebhookEnabled(for device: DeviceModel) -> Bool {
-        deviceConfigCache[device.id]?.webhookEnabled ?? false
+    func isObserved(for device: DeviceModel) -> Bool {
+        deviceConfigCache[device.id]?.observed ?? false
     }
 
     private func updateErrorForStatus(_ status: HMHomeManagerAuthorizationStatus) {

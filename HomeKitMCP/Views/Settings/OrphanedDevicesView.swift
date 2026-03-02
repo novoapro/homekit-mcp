@@ -22,6 +22,22 @@ struct OrphanedDevicesView: View {
         Form {
             if let vm = viewModel {
                 Section {
+                    Toggle("Hide Room Name in Device Names", isOn: Binding(
+                        get: { vm.hideRoomNameInTheApp },
+                        set: { vm.hideRoomNameInTheApp = $0 }
+                    ))
+
+                    Toggle("Use Service Type as Service Name", isOn: Binding(
+                        get: { vm.useServiceTypeAsName },
+                        set: { vm.useServiceTypeAsName = $0 }
+                    ))
+                } header: {
+                    Label("Display", systemImage: "paintbrush")
+                } footer: {
+                    Text("\"Hide Room Name\" strips the room prefix from device names (e.g. \"Bedroom Light\" becomes \"Light\"). \"Use Service Type as Name\" replaces each service's default name with its generic type (e.g. \"Lightbulb\", \"Switch\"). Per-service custom names take precedence over both settings.")
+                }
+
+                Section {
                     Toggle("Enable State Polling", isOn: Binding(
                         get: { vm.pollingEnabled },
                         set: { vm.pollingEnabled = $0 }
@@ -47,13 +63,13 @@ struct OrphanedDevicesView: View {
                 }
 
                 Section {
-                    Button("Reset Device Configuration", role: .destructive) {
+                    Button("Reset Device Settings", role: .destructive) {
                         showingResetConfirmation = true
                     }
                 } header: {
                     Label("Data", systemImage: "externaldrive")
                 } footer: {
-                    Text("Resets all per-device MCP visibility and webhook notification toggles to defaults.")
+                    Text("Resets all per-characteristic enabled/observed toggles to defaults (enabled: on, observed: off).")
                 }
             }
 
@@ -222,13 +238,15 @@ struct OrphanedDevicesView: View {
                 Text("Remove \"\(entry.name)\"? The following workflows reference this scene and will need to be updated:\n\n\(affectedWorkflowNames.joined(separator: "\n"))")
             }
         }
-        .alert("Reset Device Configuration?", isPresented: $showingResetConfirmation) {
+        .alert("Reset Device Settings?", isPresented: $showingResetConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
-                viewModel?.resetDeviceConfiguration()
+                Task {
+                    await registryService.resetAllSettings()
+                }
             }
         } message: {
-            Text("This will reset all MCP and webhook toggles to their defaults (MCP: on, Webhook: off).")
+            Text("This will reset all enabled/observed toggles to their defaults (enabled: on, observed: off).")
         }
     }
 

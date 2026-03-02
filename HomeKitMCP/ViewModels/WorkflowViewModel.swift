@@ -15,18 +15,19 @@ class WorkflowViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var clonedToastTask: Task<Void, Never>?
 
-    /// Returns devices with stable registry IDs so picker tags match workflow stable IDs.
+    /// Returns enabled devices with stable registry IDs and effective permissions baked in.
+    /// Only characteristics marked as enabled in the registry are included.
     var devices: [DeviceModel] {
         let raw = homeKitManager.cachedDevices
         guard let registry = homeKitManager.deviceRegistryService else { return raw }
-        return raw.map { registry.withStableIds($0) }
+        return registry.stableDevices(raw)
     }
 
     /// Returns scenes with stable registry IDs so picker tags match workflow stable IDs.
     var scenes: [SceneModel] {
         let raw = homeKitManager.getAllScenes()
         guard let registry = homeKitManager.deviceRegistryService else { return raw }
-        return raw.map { registry.withStableIds($0) }
+        return registry.stableScenes(raw)
     }
 
     var filteredWorkflows: [Workflow] {

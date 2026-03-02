@@ -117,47 +117,47 @@ struct DeviceListView: View {
             if filteredDeviceCount > 0 {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        let allApiEnabled = viewModel.filteredDevicesByRoom.flatMap(\.devices).allSatisfy { viewModel.isExternalAccessEnabled(for: $0) }
-                        let allWebhookEnabled = viewModel.filteredDevicesByRoom.flatMap(\.devices).allSatisfy { viewModel.isWebhookEnabled(for: $0) }
+                        let allEnabled = viewModel.filteredDevicesByRoom.flatMap(\.devices).allSatisfy { viewModel.isEnabled(for: $0) }
+                        let allObserved = viewModel.filteredDevicesByRoom.flatMap(\.devices).allSatisfy { viewModel.isObserved(for: $0) }
 
-                        Section("API Access") {
+                        Section("Enabled") {
                             Button {
-                                confirmBulkAction(message: "Enable API for \(filteredDeviceCount) devices?") {
-                                    viewModel.setBulkConfig(externalAccessEnabled: true)
+                                confirmBulkAction(message: "Enable \(filteredDeviceCount) devices?") {
+                                    viewModel.setBulkEnabled(true)
                                 }
                             } label: {
-                                Label("Enable All", systemImage: allApiEnabled ? "checkmark.circle.fill" : "circle")
+                                Label("Enable All", systemImage: allEnabled ? "checkmark.circle.fill" : "circle")
                             }
-                            .disabled(allApiEnabled)
+                            .disabled(allEnabled)
 
                             Button {
-                                confirmBulkAction(message: "Disable API for \(filteredDeviceCount) devices?") {
-                                    viewModel.setBulkConfig(externalAccessEnabled: false)
+                                confirmBulkAction(message: "Disable \(filteredDeviceCount) devices?") {
+                                    viewModel.setBulkEnabled(false)
                                 }
                             } label: {
-                                Label("Disable All", systemImage: !allApiEnabled ? "xmark.circle" : "circle")
+                                Label("Disable All", systemImage: !allEnabled ? "xmark.circle" : "circle")
                             }
-                            .disabled(!allApiEnabled)
+                            .disabled(!allEnabled)
                         }
 
-                        Section("Webhooks") {
+                        Section("Observed") {
                             Button {
-                                confirmBulkAction(message: "Enable Webhooks for \(filteredDeviceCount) devices?") {
-                                    viewModel.setBulkConfig(webhookEnabled: true)
+                                confirmBulkAction(message: "Observe \(filteredDeviceCount) devices?") {
+                                    viewModel.setBulkObserved(true)
                                 }
                             } label: {
-                                Label("Enable All", systemImage: allWebhookEnabled ? "checkmark.circle.fill" : "circle")
+                                Label("Observe All", systemImage: allObserved ? "checkmark.circle.fill" : "circle")
                             }
-                            .disabled(allWebhookEnabled)
+                            .disabled(allObserved)
 
                             Button {
-                                confirmBulkAction(message: "Disable Webhooks for \(filteredDeviceCount) devices?") {
-                                    viewModel.setBulkConfig(webhookEnabled: false)
+                                confirmBulkAction(message: "Stop observing \(filteredDeviceCount) devices?") {
+                                    viewModel.setBulkObserved(false)
                                 }
                             } label: {
-                                Label("Disable All", systemImage: !allWebhookEnabled ? "xmark.circle" : "circle")
+                                Label("Stop All", systemImage: !allObserved ? "xmark.circle" : "circle")
                             }
-                            .disabled(!allWebhookEnabled)
+                            .disabled(!allObserved)
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -227,11 +227,11 @@ struct DeviceListView: View {
                 // Service type filter
                 serviceTypeFilterChip
 
-                // API filter
-                apiFilterChip
+                // Enabled filter
+                enabledFilterChip
 
-                // Webhook filter
-                webhookFilterChip
+                // Observed filter
+                observedFilterChip
 
                 // Clear button
                 if viewModel.hasActiveFilters {
@@ -369,13 +369,13 @@ struct DeviceListView: View {
         }
     }
 
-    private var apiFilterChip: some View {
+    private var enabledFilterChip: some View {
         FilterDropdown {
-            let isActive = viewModel.mcpFilter != .all
+            let isActive = viewModel.enabledFilter != .all
             HStack(spacing: 4) {
-                Image(systemName: "server.rack")
+                Image(systemName: "checkmark.circle")
                     .font(.caption2)
-                Text(isActive ? "API: \(viewModel.mcpFilter.rawValue)" : "API")
+                Text(isActive ? "Enabled: \(viewModel.enabledFilter.rawValue)" : "Enabled")
                     .font(.footnote)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
@@ -395,8 +395,8 @@ struct DeviceListView: View {
         } content: {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(TriStateFilter.allCases, id: \.self) { option in
-                    menuRow(title: option.rawValue, isSelected: viewModel.mcpFilter == option) {
-                        viewModel.mcpFilter = option
+                    menuRow(title: option.rawValue, isSelected: viewModel.enabledFilter == option) {
+                        viewModel.enabledFilter = option
                     }
                 }
             }
@@ -405,13 +405,13 @@ struct DeviceListView: View {
         }
     }
 
-    private var webhookFilterChip: some View {
+    private var observedFilterChip: some View {
         FilterDropdown {
-            let isActive = viewModel.webhookFilter != .all
+            let isActive = viewModel.observedFilter != .all
             HStack(spacing: 4) {
-                Image(systemName: "bell.badge")
+                Image(systemName: "eye")
                     .font(.caption2)
-                Text(isActive ? "Webhook: \(viewModel.webhookFilter.rawValue)" : "Webhook")
+                Text(isActive ? "Observed: \(viewModel.observedFilter.rawValue)" : "Observed")
                     .font(.footnote)
                     .fontWeight(.medium)
                 Image(systemName: "chevron.down")
@@ -431,8 +431,8 @@ struct DeviceListView: View {
         } content: {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(TriStateFilter.allCases, id: \.self) { option in
-                    menuRow(title: option.rawValue, isSelected: viewModel.webhookFilter == option) {
-                        viewModel.webhookFilter = option
+                    menuRow(title: option.rawValue, isSelected: viewModel.observedFilter == option) {
+                        viewModel.observedFilter = option
                     }
                 }
             }

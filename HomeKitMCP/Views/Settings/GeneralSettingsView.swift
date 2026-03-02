@@ -6,12 +6,6 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Hide Room Name in App", isOn: $viewModel.hideRoomNameInTheApp)
-            } header: {
-                Label("Display", systemImage: "paintbrush")
-            }
-
-            Section {
                 Toggle("Log Device State Changes", isOn: $viewModel.deviceStateLoggingEnabled)
                 if viewModel.deviceStateLoggingEnabled {
                     Toggle("Log Only Webhook-Enabled Devices", isOn: $viewModel.logOnlyWebhookDevices)

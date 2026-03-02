@@ -668,15 +668,15 @@ actor AIWorkflowService {
         return custom.isEmpty ? Self.defaultSystemPrompt : custom
     }
 
-    /// Transforms devices and scenes to use stable registry IDs for AI context,
-    /// so AI-generated workflows reference stable IDs (consistent with MCP-created workflows).
+    /// Returns enabled devices and scenes with stable registry IDs and effective permissions,
+    /// so AI-generated workflows only reference enabled characteristics.
     private func stableContext() async -> (devices: [DeviceModel], scenes: [SceneModel]) {
         let (rawDevices, rawScenes) = await MainActor.run {
             (homeKitManager.cachedDevices, homeKitManager.cachedScenes)
         }
         if let registry {
-            return (rawDevices.map { registry.withStableIds($0) },
-                    rawScenes.map { registry.withStableIds($0) })
+            return (registry.stableDevices(rawDevices),
+                    registry.stableScenes(rawScenes))
         }
         return (rawDevices, rawScenes)
     }

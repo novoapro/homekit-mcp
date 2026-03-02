@@ -60,6 +60,9 @@ class StorageService: ObservableObject, StorageServiceProtocol {
     @Published var hideRoomNameInTheApp: Bool {
         didSet { defaults.set(hideRoomNameInTheApp, forKey: Keys.hideRoomNameInTheApp) }
     }
+    @Published var useServiceTypeAsName: Bool {
+        didSet { defaults.set(useServiceTypeAsName, forKey: Keys.useServiceTypeAsName) }
+    }
     @Published var detailedLogsEnabled: Bool {
         didSet { defaults.set(detailedLogsEnabled, forKey: Keys.detailedLogsEnabled) }
     }
@@ -155,6 +158,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             Keys.mcpProtocolEnabled: true,
             Keys.restApiEnabled: true,
             Keys.hideRoomNameInTheApp: true,
+            Keys.useServiceTypeAsName: false,
             Keys.detailedLogsEnabled: false,
             Keys.aiEnabled: false,
             Keys.aiProvider: AIProvider.claude.rawValue,
@@ -191,6 +195,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         self.mcpProtocolEnabled = defaults.bool(forKey: Keys.mcpProtocolEnabled)
         self.restApiEnabled = defaults.bool(forKey: Keys.restApiEnabled)
         self.hideRoomNameInTheApp = defaults.bool(forKey: Keys.hideRoomNameInTheApp)
+        self.useServiceTypeAsName = defaults.bool(forKey: Keys.useServiceTypeAsName)
         self.detailedLogsEnabled = defaults.bool(forKey: Keys.detailedLogsEnabled)
         self.aiEnabled = defaults.bool(forKey: Keys.aiEnabled)
         self.aiProvider = AIProvider(rawValue: defaults.string(forKey: Keys.aiProvider) ?? "") ?? .claude
@@ -242,6 +247,10 @@ class StorageService: ObservableObject, StorageServiceProtocol {
 
     nonisolated func readHideRoomName() -> Bool {
         UserDefaults.standard.bool(forKey: Keys.hideRoomNameInTheApp)
+    }
+
+    nonisolated func readUseServiceTypeAsName() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.useServiceTypeAsName)
     }
 
     nonisolated func readWebhookURL() -> String? {
@@ -365,6 +374,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         static let mcpProtocolEnabled = "mcpProtocolEnabled"
         static let restApiEnabled = "restApiEnabled"
         static let hideRoomNameInTheApp = "hideRoomNameInTheApp"
+        static let useServiceTypeAsName = "useServiceTypeAsName"
         static let detailedLogsEnabled = "detailedLogsEnabled"
         static let aiEnabled = "aiEnabled"
         static let aiProvider = "aiProvider"

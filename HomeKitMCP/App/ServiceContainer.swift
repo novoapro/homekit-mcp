@@ -16,7 +16,6 @@ final class ServiceContainer {
     // MARK: - Core Services
 
     lazy var loggingService: LoggingService = LoggingService(storage: storageService)
-    let configService: DeviceConfigurationService = DeviceConfigurationService()
     let deviceRegistryService: DeviceRegistryService = DeviceRegistryService()
     let workflowStorageService: WorkflowStorageService = WorkflowStorageService()
     let workflowExecutionLogService: WorkflowExecutionLogService = WorkflowExecutionLogService()
@@ -32,7 +31,6 @@ final class ServiceContainer {
     lazy var homeKitManager: HomeKitManager = HomeKitManager(
         loggingService: loggingService,
         webhookService: webhookService,
-        configService: configService,
         storage: storageService
     )
 
@@ -56,7 +54,6 @@ final class ServiceContainer {
     lazy var mcpServer: MCPServer = MCPServer(
         homeKitManager: homeKitManager,
         loggingService: loggingService,
-        configService: configService,
         storage: storageService,
         workflowStorageService: workflowStorageService,
         workflowEngine: workflowEngine,
@@ -76,7 +73,6 @@ final class ServiceContainer {
     lazy var backupService: BackupService = BackupService(
         storage: storageService,
         keychainService: keychainService,
-        configService: configService,
         workflowStorageService: workflowStorageService,
         homeKitManager: homeKitManager,
         loggingService: loggingService,
@@ -100,7 +96,7 @@ final class ServiceContainer {
 
     lazy var homeKitViewModel: HomeKitViewModel = HomeKitViewModel(
         homeKitManager: homeKitManager,
-        configService: configService
+        registryService: deviceRegistryService
     )
 
     lazy var logViewModel: LogViewModel = LogViewModel(
@@ -113,7 +109,6 @@ final class ServiceContainer {
         storage: storageService,
         webhookService: webhookService,
         mcpServer: mcpServer,
-        configService: configService,
         keychainService: keychainService,
         aiWorkflowService: aiWorkflowService,
         backupService: backupService,
@@ -144,5 +139,28 @@ final class ServiceContainer {
         workflowEngine.subscribeToStateChanges(from: homeKitManager.stateChangePublisher)
         // Touch workflowSyncService to initialize it (sets up Combine subscriptions)
         _ = workflowSyncService
+
+        // One-time migration: merge device-config.json settings into registry
+        let configFileURL = FileManager.appSupportDirectory.appendingPathComponent("device-config.json")
+        if FileManager.default.fileExists(atPath: configFileURL.path) {
+            Task {
+                // Read the old config file directly
+                if let data = try? Data(contentsOf: configFileURL),
+                   let oldConfigs = try? JSONDecoder.iso8601.decode([String: LegacyCharacteristicConfiguration].self, from: data),
+                   !oldConfigs.isEmpty {
+                    let mapped = oldConfigs.mapValues { (enabled: $0.externalAccessEnabled, observed: $0.webhookEnabled) }
+                    await deviceRegistryService.migrateFromDeviceConfig(mapped)
+                }
+                // Delete the old config file
+                try? FileManager.default.removeItem(at: configFileURL)
+                AppLogger.registry.info("Migration: removed device-config.json after merging into registry")
+            }
+        }
     }
+}
+
+/// Legacy model used only for migration from device-config.json.
+private struct LegacyCharacteristicConfiguration: Codable {
+    var externalAccessEnabled: Bool
+    var webhookEnabled: Bool
 }
