@@ -49,7 +49,7 @@ describe('createApiClient', () => {
       const client = createApiClient(baseUrl, token);
       await client.getDevices();
 
-      const [, options] = mockFetch.mock.calls[0];
+      const [, options] = mockFetch.mock.calls[0]!;
       expect(options.headers['Authorization']).toBe(`Bearer ${token}`);
     });
 
