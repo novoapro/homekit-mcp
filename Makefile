@@ -49,6 +49,13 @@ web-prod: web-build ## Build and run web app via Docker
 web-install: ## Install web app dependencies
 	cd log-viewer-web && npm ci
 
+deploy: kill ## Pull latest, build & launch production MCP app + web app
+	git pull origin main
+	$(XCODEBUILD) -configuration 'Prod Debug' build
+	@echo "Launching HomeKitMCP (Prod)..."
+	@open "$(PRODUCTS)/Prod Debug-maccatalyst/HomeKitMCP.app"
+	cd log-viewer-web && docker compose up -d --build
+
 clean: ## Clean build artifacts
 	rm -rf $(DERIVED_DATA)
 	rm -rf log-viewer-web/dist log-viewer-web/node_modules/.vite
