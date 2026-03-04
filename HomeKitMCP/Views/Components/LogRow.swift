@@ -7,7 +7,7 @@ struct LogRow: View {
     @State private var isExpanded = false
 
     private var hasDetailedData: Bool {
-        log.detailedRequestBody != nil || (log.workflowExecution?.blockResults.isEmpty == false)
+        log.detailedRequestBody != nil || log.detailedResponseBody != nil || (log.workflowExecution?.blockResults.isEmpty == false)
     }
 
     private func executionStatusColor(_ status: ExecutionStatus) -> Color {
@@ -397,26 +397,49 @@ struct LogRow: View {
                 // Workflow execution: show inline block tree
                 if let execLog = log.workflowExecution {
                     workflowBlockTree(execLog)
-                } else if let detailedReq = log.detailedRequestBody {
-                    HStack {
-                        Text("Request:")
-                            .font(.footnote)
-                            .fontWeight(.semibold)
-                            .foregroundColor(Theme.Text.secondary)
-                        Spacer()
-                        Button {
-                            UIPasteboard.general.string = detailedReq
-                        } label: {
-                            Label("Copy", systemImage: "doc.on.doc")
+                } else {
+                    if let detailedReq = log.detailedRequestBody {
+                        HStack {
+                            Text("Request:")
                                 .font(.footnote)
+                                .fontWeight(.semibold)
+                                .foregroundColor(Theme.Text.secondary)
+                            Spacer()
+                            Button {
+                                UIPasteboard.general.string = detailedReq
+                            } label: {
+                                Label("Copy", systemImage: "doc.on.doc")
+                                    .font(.footnote)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundColor(Theme.Tint.main)
                         }
-                        .buttonStyle(.plain)
-                        .foregroundColor(Theme.Tint.main)
+                        Text(Self.formatJSON(detailedReq))
+                            .font(.system(.footnote, design: .monospaced))
+                            .foregroundColor(Theme.Text.secondary)
+                            .textSelection(.enabled)
                     }
-                    Text(Self.formatJSON(detailedReq))
-                        .font(.system(.footnote, design: .monospaced))
-                        .foregroundColor(Theme.Text.secondary)
-                        .textSelection(.enabled)
+                    if let detailedResp = log.detailedResponseBody {
+                        HStack {
+                            Text("Response:")
+                                .font(.footnote)
+                                .fontWeight(.semibold)
+                                .foregroundColor(Theme.Text.secondary)
+                            Spacer()
+                            Button {
+                                UIPasteboard.general.string = detailedResp
+                            } label: {
+                                Label("Copy", systemImage: "doc.on.doc")
+                                    .font(.footnote)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundColor(Theme.Tint.main)
+                        }
+                        Text(Self.formatJSON(detailedResp))
+                            .font(.system(.footnote, design: .monospaced))
+                            .foregroundColor(Theme.Text.secondary)
+                            .textSelection(.enabled)
+                    }
                 }
             }
             .padding(8)

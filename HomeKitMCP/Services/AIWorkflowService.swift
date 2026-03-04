@@ -201,6 +201,7 @@ actor AIWorkflowService {
     }
 
     /// Generate a Workflow from a natural language description.
+    /// Uses a two-stage pipeline: (1) select relevant devices, (2) generate workflow with focused context.
     func generateWorkflow(from description: String) async throws -> Workflow {
         let (client, apiKey, model) = try getClientConfig()
         let provider = storage.readAIProvider()
@@ -208,8 +209,33 @@ actor AIWorkflowService {
         // Validate the prompt references known devices, scenes, or HomeKit concepts
         try await validatePrompt(description)
 
+        // Stage 1: Select relevant devices/scenes
+        let (allDevices, allScenes) = await stableContext()
+        let (selectedDevices, selectedScenes) = try await selectRelevantContext(
+            description: description,
+            devices: allDevices, scenes: allScenes,
+            client: client, apiKey: apiKey, model: model,
+            provider: provider.rawValue
+        )
+
+        // Stage 2: Generate workflow with focused device context
         let systemPrompt = buildSystemPrompt()
-        let userMessage = await buildUserMessage(description: "Create a HomeKit automation workflow for the following:\n\n\(description)")
+        let deviceContext = buildDeviceContext(selectedDevices)
+        let sceneContext = buildSceneContext(selectedScenes)
+        let userMessage = """
+            Create a HomeKit automation workflow for the following:
+
+            \(description)
+
+            ## Available Devices
+
+            \(deviceContext)
+
+            ## Available Scenes
+
+            \(sceneContext)
+            """
+
         let startTime = CFAbsoluteTimeGetCurrent()
 
         let response: String
@@ -253,6 +279,8 @@ actor AIWorkflowService {
     }
 
     /// Refine an existing workflow based on user feedback.
+    /// Uses two-stage pipeline: extracts device IDs from existing workflow + Stage 1 on feedback,
+    /// then unions the sets to ensure both current and newly-referenced devices are available.
     func refineWorkflow(_ workflow: Workflow, feedback: String) async throws -> Workflow {
         let (client, apiKey, model) = try getClientConfig()
         let provider = storage.readAIProvider()
@@ -260,7 +288,53 @@ actor AIWorkflowService {
 
         let workflowJSON = String(data: try JSONEncoder.iso8601Pretty.encode(workflow), encoding: .utf8) ?? "{}"
 
-        let userMessage = await buildRefinementMessage(workflowJSON: workflowJSON, feedback: feedback)
+        // Gather all device/scene IDs already used in the workflow
+        let existingDeviceIds = extractDeviceIds(from: workflow)
+        let existingSceneIds = extractSceneIds(from: workflow)
+
+        // Stage 1: Select devices/scenes relevant to the feedback
+        let (allDevices, allScenes) = await stableContext()
+        let (feedbackDevices, feedbackScenes) = try await selectRelevantContext(
+            description: feedback,
+            devices: allDevices, scenes: allScenes,
+            client: client, apiKey: apiKey, model: model,
+            provider: provider.rawValue
+        )
+
+        // Union: devices from existing workflow + devices selected for feedback
+        let feedbackDeviceIds = Set(feedbackDevices.map { $0.id })
+        let feedbackSceneIds = Set(feedbackScenes.map { $0.id })
+        let allNeededDeviceIds = existingDeviceIds.union(feedbackDeviceIds)
+        let allNeededSceneIds = existingSceneIds.union(feedbackSceneIds)
+
+        let selectedDevices = allDevices.filter { allNeededDeviceIds.contains($0.id) }
+        let selectedScenes = allScenes.filter { allNeededSceneIds.contains($0.id) }
+
+        // Stage 2: Refine with focused context
+        let deviceContext = buildDeviceContext(selectedDevices)
+        let sceneContext = buildSceneContext(selectedScenes)
+
+        let userMessage = """
+            Here is the current workflow JSON:
+
+            ```json
+            \(workflowJSON)
+            ```
+
+            Please modify this workflow based on the following feedback:
+
+            \(feedback)
+
+            Return the complete updated workflow JSON.
+
+            ## Available Devices
+
+            \(deviceContext)
+
+            ## Available Scenes
+
+            \(sceneContext)
+            """
 
         let startTime = CFAbsoluteTimeGetCurrent()
 
@@ -657,7 +731,18 @@ actor AIWorkflowService {
 
     private func buildSystemPrompt() -> String {
         let custom = storage.readAISystemPrompt()
-        return custom.isEmpty ? Self.defaultSystemPrompt : custom
+        if custom.isEmpty {
+            return Self.defaultSystemPrompt
+        }
+        // Append custom instructions after the default prompt so the schema
+        // (with correct field names like characteristicId) is always included.
+        return """
+            \(Self.defaultSystemPrompt)
+
+            ## Additional Instructions
+
+            \(custom)
+            """
     }
 
     /// Returns enabled devices and scenes with stable registry IDs and effective permissions,
@@ -781,6 +866,253 @@ actor AIWorkflowService {
             lines.append("")
         }
         return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Workflow ID Extraction (for refinement)
+
+    /// Extract all device IDs referenced in a workflow (triggers, conditions, blocks).
+    private func extractDeviceIds(from workflow: Workflow) -> Set<String> {
+        var ids = Set<String>()
+
+        for trigger in workflow.triggers {
+            if case .deviceStateChange(let t) = trigger {
+                ids.insert(t.deviceId)
+            }
+        }
+
+        func extractFromConditions(_ conditions: [WorkflowCondition]) {
+            for condition in conditions {
+                switch condition {
+                case .deviceState(let c):
+                    ids.insert(c.deviceId)
+                case .and(let subs):
+                    extractFromConditions(subs)
+                case .or(let subs):
+                    extractFromConditions(subs)
+                case .not(let sub):
+                    extractFromConditions([sub])
+                default:
+                    break
+                }
+            }
+        }
+        extractFromConditions(workflow.conditions ?? [])
+
+        func extractFromBlocks(_ blocks: [WorkflowBlock]) {
+            for block in blocks {
+                switch block {
+                case .action(let a, _):
+                    if case .controlDevice(let c) = a {
+                        ids.insert(c.deviceId)
+                    }
+                case .flowControl(let fc, _):
+                    switch fc {
+                    case .conditional(let c):
+                        extractFromBlocks(c.thenBlocks)
+                        if let elseBlocks = c.elseBlocks {
+                            extractFromBlocks(elseBlocks)
+                        }
+                    case .`repeat`(let r):
+                        extractFromBlocks(r.blocks)
+                    case .repeatWhile(let r):
+                        extractFromBlocks(r.blocks)
+                    case .group(let g):
+                        extractFromBlocks(g.blocks)
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+        extractFromBlocks(workflow.blocks)
+
+        return ids
+    }
+
+    /// Extract all scene IDs referenced in a workflow (blocks and conditions).
+    private func extractSceneIds(from workflow: Workflow) -> Set<String> {
+        var ids = Set<String>()
+
+        func extractFromConditions(_ conditions: [WorkflowCondition]) {
+            for condition in conditions {
+                switch condition {
+                case .sceneActive(let c):
+                    ids.insert(c.sceneId)
+                case .and(let subs):
+                    extractFromConditions(subs)
+                case .or(let subs):
+                    extractFromConditions(subs)
+                case .not(let sub):
+                    extractFromConditions([sub])
+                default:
+                    break
+                }
+            }
+        }
+        extractFromConditions(workflow.conditions ?? [])
+
+        func extractFromBlocks(_ blocks: [WorkflowBlock]) {
+            for block in blocks {
+                switch block {
+                case .action(let a, _):
+                    if case .runScene(let s) = a {
+                        ids.insert(s.sceneId)
+                    }
+                case .flowControl(let fc, _):
+                    switch fc {
+                    case .conditional(let c):
+                        extractFromBlocks(c.thenBlocks)
+                        if let elseBlocks = c.elseBlocks {
+                            extractFromBlocks(elseBlocks)
+                        }
+                    case .`repeat`(let r):
+                        extractFromBlocks(r.blocks)
+                    case .repeatWhile(let r):
+                        extractFromBlocks(r.blocks)
+                    case .group(let g):
+                        extractFromBlocks(g.blocks)
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+        extractFromBlocks(workflow.blocks)
+
+        return ids
+    }
+
+    // MARK: - Two-Stage Pipeline: Device Selection
+
+    private static let deviceSelectionSystemPrompt: String = """
+        You are a device selector for a HomeKit automation system. Given a user's automation \
+        description and a list of available devices and scenes, return ONLY a JSON code block \
+        listing the IDs of devices and scenes that are relevant to the automation.
+
+        Return ONLY a JSON code block:
+        ```json
+        { "deviceIds": ["id1", "id2"], "sceneIds": ["id3"] }
+        ```
+
+        Rules:
+        - Include devices that would be used as triggers, conditions, or actions in the automation
+        - Include scenes the user references or that match the described actions
+        - If unsure whether a device is needed, include it (err on the side of inclusion)
+        - Return empty arrays if nothing matches
+        - Do NOT include any explanation, only the JSON code block
+        """
+
+    private func buildCompactDeviceSummary(_ devices: [DeviceModel]) -> String {
+        if devices.isEmpty { return "No devices available." }
+        return devices.map { device in
+            let room = device.roomName ?? "No Room"
+            let serviceNames = device.services.map { $0.effectiveDisplayName }.joined(separator: ", ")
+            return "- \(device.name) (id: \(device.id)) — Room: \(room) — Services: \(serviceNames)"
+        }.joined(separator: "\n")
+    }
+
+    private func buildCompactSceneSummary(_ scenes: [SceneModel]) -> String {
+        if scenes.isEmpty { return "No scenes available." }
+        return scenes.map { "- \($0.name) (id: \($0.id))" }.joined(separator: "\n")
+    }
+
+    /// Stage 1: Ask the LLM to select only the devices/scenes relevant to the user's description.
+    private func selectRelevantContext(
+        description: String,
+        devices: [DeviceModel],
+        scenes: [SceneModel],
+        client: LLMClient,
+        apiKey: String,
+        model: String,
+        provider: String
+    ) async throws -> (devices: [DeviceModel], scenes: [SceneModel]) {
+        let systemPrompt = Self.deviceSelectionSystemPrompt
+        let userMessage = """
+            Automation: \(description)
+
+            ## Devices
+            \(buildCompactDeviceSummary(devices))
+
+            ## Scenes
+            \(buildCompactSceneSummary(scenes))
+            """
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let response: String
+        do {
+            response = try await client.complete(
+                systemPrompt: systemPrompt, userMessage: userMessage,
+                apiKey: apiKey, model: model
+            )
+        } catch {
+            let duration = CFAbsoluteTimeGetCurrent() - startTime
+            await loggingService.logEntry(.aiInteraction(
+                provider: provider, model: model,
+                operation: "device_selection",
+                systemPrompt: systemPrompt, userMessage: userMessage,
+                rawResponse: nil, parsedSuccessfully: false,
+                errorMessage: error.localizedDescription, durationSeconds: duration
+            ))
+            // On Stage 1 failure, fall back to all devices (graceful degradation)
+            return (devices, scenes)
+        }
+
+        let duration = CFAbsoluteTimeGetCurrent() - startTime
+
+        // Parse the response to extract selected IDs
+        let selectedIds = parseDeviceSelectionResponse(response)
+
+        await loggingService.logEntry(.aiInteraction(
+            provider: provider, model: model,
+            operation: "device_selection",
+            systemPrompt: systemPrompt, userMessage: userMessage,
+            rawResponse: response, parsedSuccessfully: selectedIds != nil,
+            errorMessage: selectedIds == nil ? "Failed to parse device selection response" : nil,
+            durationSeconds: duration
+        ))
+
+        guard let ids = selectedIds else {
+            // Parse failure — fall back to all devices
+            return (devices, scenes)
+        }
+
+        let deviceIdSet = Set(ids.deviceIds)
+        let sceneIdSet = Set(ids.sceneIds)
+
+        let filteredDevices = devices.filter { deviceIdSet.contains($0.id) }
+        let filteredScenes = scenes.filter { sceneIdSet.contains($0.id) }
+
+        // If selection returned nothing but the description references devices, use all
+        if filteredDevices.isEmpty && filteredScenes.isEmpty {
+            return (devices, scenes)
+        }
+
+        return (filteredDevices, filteredScenes)
+    }
+
+    private func parseDeviceSelectionResponse(_ response: String) -> (deviceIds: [String], sceneIds: [String])? {
+        // Extract JSON from markdown code block
+        let jsonString: String
+        if let range = response.range(of: "```json"),
+           let endRange = response.range(of: "```", range: range.upperBound..<response.endIndex) {
+            jsonString = String(response[range.upperBound..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if let range = response.range(of: "```"),
+                  let endRange = response.range(of: "```", range: range.upperBound..<response.endIndex) {
+            jsonString = String(response[range.upperBound..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if response.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{") {
+            jsonString = response.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            return nil
+        }
+
+        guard let data = jsonString.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        let deviceIds = (dict["deviceIds"] as? [String]) ?? []
+        let sceneIds = (dict["sceneIds"] as? [String]) ?? []
+        return (deviceIds, sceneIds)
     }
 
     private func parseWorkflowFromResponse(_ response: String) throws -> Workflow {

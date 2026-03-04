@@ -193,7 +193,7 @@ enum WorkflowAction: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case type, name
-        case deviceId, deviceName, roomName, serviceId, characteristicId, characteristicType, value
+        case deviceId, deviceName, roomName, serviceId, characteristicId, value
         case url, method, headers, body
         case message
         case sceneId, sceneName
@@ -205,8 +205,7 @@ enum WorkflowAction: Codable {
         let name = try container.decodeIfPresent(String.self, forKey: .name)
         switch type {
         case .controlDevice:
-            let charId = try container.decodeIfPresent(String.self, forKey: .characteristicId)
-                ?? container.decode(String.self, forKey: .characteristicType)
+            let charId = try container.decode(String.self, forKey: .characteristicId)
             self = try .controlDevice(ControlDeviceAction(
                 deviceId: container.decode(String.self, forKey: .deviceId),
                 deviceName: container.decodeIfPresent(String.self, forKey: .deviceName),
@@ -379,7 +378,7 @@ enum FlowControlBlock: Codable {
     private enum CodingKeys: String, CodingKey {
         case type, name
         case seconds
-        case deviceId, serviceId, characteristicId, characteristicType, condition, timeoutSeconds
+        case deviceId, serviceId, characteristicId, condition, timeoutSeconds
         case thenBlocks, elseBlocks
         case count, blocks, delayBetweenSeconds
         case maxIterations
@@ -399,13 +398,10 @@ enum FlowControlBlock: Codable {
                 name: name
             ))
         case .waitForState:
-            // New format: condition is a WorkflowCondition (AND/OR/NOT groups)
-            // Old format: flat deviceId + characteristicId + ComparisonOperator → migrate to WorkflowCondition
             let condition: WorkflowCondition
             if let deviceId = try container.decodeIfPresent(String.self, forKey: .deviceId) {
-                // Old flat format — convert to WorkflowCondition.deviceState
-                let charId = try container.decodeIfPresent(String.self, forKey: .characteristicId)
-                    ?? container.decode(String.self, forKey: .characteristicType)
+                // Legacy flat format — convert to WorkflowCondition.deviceState
+                let charId = try container.decode(String.self, forKey: .characteristicId)
                 let comparison = try container.decode(ComparisonOperator.self, forKey: .condition)
                 let serviceId = try container.decodeIfPresent(String.self, forKey: .serviceId)
                 condition = .deviceState(DeviceStateCondition(
@@ -689,7 +685,7 @@ enum WorkflowTrigger: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case type, name
-        case deviceId, deviceName, roomName, serviceId, characteristicId, characteristicType, condition
+        case deviceId, deviceName, roomName, serviceId, characteristicId, condition
         case scheduleType, token
         case event, offsetMinutes
         case retriggerPolicy
@@ -702,8 +698,7 @@ enum WorkflowTrigger: Codable {
         let policy = try container.decodeIfPresent(ConcurrentExecutionPolicy.self, forKey: .retriggerPolicy)
         switch type {
         case .deviceStateChange:
-            let charId = try container.decodeIfPresent(String.self, forKey: .characteristicId)
-                ?? container.decode(String.self, forKey: .characteristicType)
+            let charId = try container.decode(String.self, forKey: .characteristicId)
             self = try .deviceStateChange(DeviceStateTrigger(
                 deviceId: container.decode(String.self, forKey: .deviceId),
                 deviceName: container.decodeIfPresent(String.self, forKey: .deviceName),
@@ -1158,7 +1153,7 @@ indirect enum WorkflowCondition: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case type, conditions, condition
-        case deviceId, deviceName, roomName, serviceId, characteristicId, characteristicType, comparison
+        case deviceId, deviceName, roomName, serviceId, characteristicId, comparison
         // timeCondition fields
         case mode, startTime, endTime
         // legacy sunEvent fields (decode only)
@@ -1173,8 +1168,7 @@ indirect enum WorkflowCondition: Codable {
         let type = try container.decode(ConditionType.self, forKey: .type)
         switch type {
         case .deviceState:
-            let charId = try container.decodeIfPresent(String.self, forKey: .characteristicId)
-                ?? container.decode(String.self, forKey: .characteristicType)
+            let charId = try container.decode(String.self, forKey: .characteristicId)
             self = try .deviceState(DeviceStateCondition(
                 deviceId: container.decode(String.self, forKey: .deviceId),
                 deviceName: container.decodeIfPresent(String.self, forKey: .deviceName),

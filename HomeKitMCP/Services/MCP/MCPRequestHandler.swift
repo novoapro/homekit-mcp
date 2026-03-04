@@ -55,7 +55,7 @@ final class MCPRequestHandler: Sendable {
         if !isGetLogs {
             let responseSummary = summarizeResponse(response)
             await logMCPCall(method: request.method, request: requestSummary, response: responseSummary,
-                             fullRequest: request)
+                             fullRequest: request, fullResponse: response)
         }
 
         return response
@@ -621,8 +621,8 @@ final class MCPRequestHandler: Sendable {
                         "deviceName": ["type": "string", "required": true, "description": "Device name (for migration)"],
                         "roomName": ["type": "string", "required": true, "description": "Room name (for migration)"],
                         "serviceId": ["type": "string", "required": false, "description": "Service ID (for multi-service devices)"],
-                        "characteristicType": ["type": "string", "required": true,
-                            "description": "Characteristic friendly name (e.g. 'Power', 'Brightness'). Use list_characteristic_types to see all."],
+                        "characteristicId": ["type": "string", "required": true,
+                            "description": "Stable characteristic ID from list_devices."],
                         "condition": ["type": "object", "required": true, "description": "Trigger condition (see triggerConditions)"],
                         "name": ["type": "string", "required": false],
                         "retriggerPolicy": ["type": "string", "required": false]
@@ -697,8 +697,8 @@ final class MCPRequestHandler: Sendable {
                             "deviceName": ["type": "string", "required": true],
                             "roomName": ["type": "string", "required": true],
                             "serviceId": ["type": "string", "required": false],
-                            "characteristicType": ["type": "string", "required": true,
-                                "description": "Friendly name (e.g. 'Power', 'Brightness')"],
+                            "characteristicId": ["type": "string", "required": true,
+                                "description": "Stable characteristic ID from list_devices."],
                             "value": ["type": "any", "required": true,
                                 "description": "Value to set. Use list_characteristic_types for valid values."],
                             "name": ["type": "string", "required": false]
@@ -814,8 +814,8 @@ final class MCPRequestHandler: Sendable {
                             "deviceName": ["type": "string", "required": true],
                             "roomName": ["type": "string", "required": true],
                             "serviceId": ["type": "string", "required": false],
-                            "characteristicType": ["type": "string", "required": true,
-                                "description": "Friendly name (e.g. 'Power', 'Brightness')"],
+                            "characteristicId": ["type": "string", "required": true,
+                                "description": "Stable characteristic ID from list_devices."],
                             "comparison": ["type": "object", "required": true, "description": "See comparisonOperators"]
                         ] as [String: Any]
                     ],
@@ -882,8 +882,8 @@ final class MCPRequestHandler: Sendable {
                 "Guard-level conditions only support: deviceState, timeCondition, sceneActive, and/or/not.",
                 "repeatWhile conditions only support: deviceState, timeCondition, sceneActive, and/or/not (no blockResult).",
                 "Set continueOnError=true on the workflow when using blockResult conditions.",
-                "Use list_characteristic_types to discover valid characteristic names and their accepted values.",
-                "Use list_devices to discover device IDs, service IDs, and characteristic IDs."
+                "Use list_devices to discover device IDs, service IDs, and characteristic IDs.",
+                "Use characteristic IDs (not types) in triggers, conditions, and controlDevice actions."
             ]
         ]
 
@@ -1613,12 +1613,17 @@ final class MCPRequestHandler: Sendable {
     // MARK: - MCP Logging Helpers
 
     private func logMCPCall(method: String, request: String, response: String,
-                            fullRequest: JSONRPCRequest? = nil) async {
+                            fullRequest: JSONRPCRequest? = nil,
+                            fullResponse: JSONRPCResponse? = nil) async {
         var detailedReq: String?
+        var detailedResp: String?
 
         if storage.readDetailedLogsEnabled() {
             if let fullRequest, let data = try? JSONEncoder.iso8601.encode(fullRequest) {
                 detailedReq = String(data: data, encoding: .utf8)
+            }
+            if let fullResponse, let data = try? JSONEncoder.iso8601.encode(fullResponse) {
+                detailedResp = String(data: data, encoding: .utf8)
             }
         }
 
@@ -1626,7 +1631,8 @@ final class MCPRequestHandler: Sendable {
             method: method,
             summary: request,
             result: response,
-            detailedRequest: detailedReq
+            detailedRequest: detailedReq,
+            detailedResponse: detailedResp
         )
         await loggingService.logEntry(entry)
     }

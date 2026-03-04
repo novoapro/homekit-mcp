@@ -72,7 +72,7 @@ export function LogRow({ log, index }: LogRowProps) {
 
   const isExpandable = useMemo(() => {
     if (log.workflowExecution) return true;
-    return !!(log.detailedRequestBody || log.requestBody || log.responseBody);
+    return !!(log.detailedRequestBody || log.detailedResponseBody || log.requestBody || log.responseBody);
   }, [log]);
 
   const isError = useMemo(() => {
@@ -447,7 +447,7 @@ export function LogRow({ log, index }: LogRowProps) {
           ) : (
             <LogDetailPanel
               requestBody={log.detailedRequestBody || log.requestBody || ''}
-              responseBody={log.responseBody || ''}
+              responseBody={log.detailedResponseBody || log.responseBody || ''}
             />
           )}
         </div>

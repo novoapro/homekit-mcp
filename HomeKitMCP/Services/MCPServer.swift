@@ -616,7 +616,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let data = try JSONEncoder.iso8601.encode(restDevices)
         logRESTCall(method: "GET", path: "/devices", statusCode: 200,
                     resultSummary: "\(restDevices.count) devices",
-                    req: req)
+                    req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data)
     }
@@ -645,7 +645,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let data = try JSONEncoder.iso8601.encode(restDevice)
         logRESTCall(method: "GET", path: "/devices/\(deviceId)", statusCode: 200,
                     resultSummary: restDevice.name,
-                    req: req)
+                    req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data)
     }
@@ -661,10 +661,11 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
         await registry?.setServiceCustomName(stableServiceId: serviceId, customName: body.name)
 
+        let responseData = try JSONEncoder().encode(["success": true])
         logRESTCall(method: "PATCH", path: "/services/\(serviceId)", statusCode: 200,
                     resultSummary: body.name ?? "(cleared)",
-                    req: req)
-        return jsonResponse(data: try JSONEncoder().encode(["success": true]))
+                    req: req, responseBody: String(data: responseData, encoding: .utf8))
+        return jsonResponse(data: responseData)
     }
 
     // MARK: - Log REST Handler
@@ -751,7 +752,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let data = try JSONEncoder.iso8601.encode(restScenes)
         logRESTCall(method: "GET", path: "/scenes", statusCode: 200,
                     resultSummary: "\(restScenes.count) scenes",
-                    req: req)
+                    req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data)
     }
@@ -774,7 +775,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let data = try JSONEncoder.iso8601.encode(restScene)
         logRESTCall(method: "GET", path: "/scenes/\(sceneId)", statusCode: 200,
                     resultSummary: restScene.name,
-                    req: req)
+                    req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data)
     }
@@ -790,11 +791,11 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             let scene = await MainActor.run { homeKitManager.getScene(id: sceneId) }
             let sceneName = scene?.name ?? sceneId
 
-            logRESTCall(method: "POST", path: "/scenes/\(sceneId)/execute", statusCode: 200,
-                        resultSummary: "Executed: \(sceneName)")
-
             let result: [String: Any] = ["success": true, "scene": sceneName]
             let data = try JSONSerialization.data(withJSONObject: result)
+            logRESTCall(method: "POST", path: "/scenes/\(sceneId)/execute", statusCode: 200,
+                        resultSummary: "Executed: \(sceneName)",
+                        req: req, responseBody: String(data: data, encoding: .utf8))
             return jsonResponse(data: data)
         } catch {
             logRESTCall(method: "POST", path: "/scenes/\(sceneId)/execute", statusCode: 500,
@@ -811,7 +812,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let data = try JSONEncoder.iso8601.encode(workflows)
         logRESTCall(method: "GET", path: "/workflows", statusCode: 200,
                     resultSummary: "\(workflows.count) workflows",
-                    req: req)
+                    req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data)
     }
@@ -832,7 +833,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let data = try JSONEncoder.iso8601.encode(workflow)
         logRESTCall(method: "GET", path: "/workflows/\(idStr)", statusCode: 200,
                     resultSummary: workflow.name,
-                    req: req)
+                    req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data)
     }
@@ -891,7 +892,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let data = try JSONEncoder.iso8601.encode(created)
         logRESTCall(method: "POST", path: "/workflows", statusCode: 201,
                     resultSummary: "Created: \(created.name)",
-                    req: req)
+                    req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data, status: .created)
     }
@@ -973,7 +974,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             let data = try JSONEncoder.iso8601.encode(updated)
             logRESTCall(method: "PUT", path: "/workflows/\(idStr)", statusCode: 200,
                         resultSummary: "Updated: \(updated.name)",
-                        req: req)
+                        req: req, responseBody: String(data: data, encoding: .utf8))
 
             return jsonResponse(data: data)
         } catch let error as Abort {
@@ -1017,7 +1018,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let data = try JSONEncoder.iso8601.encode(result)
         logRESTCall(method: "POST", path: "/workflows/\(idStr)/trigger", statusCode: UInt(httpStatus.code),
                     resultSummary: result.message,
-                    req: req)
+                    req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data, status: httpStatus)
     }
@@ -1037,7 +1038,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let data = try JSONEncoder.iso8601.encode(logs)
         logRESTCall(method: "GET", path: "/workflows/\(idStr)/logs", statusCode: 200,
                     resultSummary: "\(logs.count) logs",
-                    req: req)
+                    req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data)
     }
@@ -1082,7 +1083,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let data = try JSONEncoder.iso8601.encode(results)
         logRESTCall(method: "POST", path: "/workflows/webhook/\(token.prefix(8))...", statusCode: 202,
                     resultSummary: "\(results.filter(\.isAccepted).count)/\(results.count) workflows scheduled",
-                    req: req)
+                    req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data, status: .accepted)
     }
@@ -1149,16 +1150,16 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
         let created = await workflowStorageService.createWorkflow(workflow)
 
-        let responseBody = try JSONSerialization.data(withJSONObject: [
+        let generateResponseBody = try JSONSerialization.data(withJSONObject: [
             "id": created.id.uuidString,
             "name": created.name,
             "description": created.description ?? ""
         ])
         logRESTCall(method: "POST", path: "/workflows/generate", statusCode: 201,
                     resultSummary: "Generated: \(created.name)",
-                    req: req)
+                    req: req, responseBody: String(data: generateResponseBody, encoding: .utf8))
 
-        return jsonResponse(data: responseBody, status: .created)
+        return jsonResponse(data: generateResponseBody, status: .created)
     }
 
     // MARK: - Streamable HTTP Transport
@@ -1385,26 +1386,39 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     }
 
     private func logRESTCall(method: String, path: String, statusCode: UInt,
-                             resultSummary: String, req: Request? = nil) {
+                             resultSummary: String, req: Request? = nil,
+                             responseBody: String? = nil) {
         Task {
             var detailedReq: String?
-            if storage.readDetailedLogsEnabled(), let req {
-                let clientIP = req.headers.first(name: "X-Forwarded-For") ?? req.remoteAddress?.ipAddress ?? "unknown"
-                let userAgent = req.headers.first(name: .userAgent) ?? "unknown"
-                let contentType = req.headers.first(name: .contentType) ?? "-"
-                let query = req.url.query.map { "?\($0)" } ?? ""
-                detailedReq = """
-                Client: \(clientIP)
-                User-Agent: \(userAgent)
-                Content-Type: \(contentType)
-                URL: \(method) \(path)\(query)
-                """
+            var detailedResp: String?
+            if storage.readDetailedLogsEnabled() {
+                if let req {
+                    let clientIP = req.headers.first(name: "X-Forwarded-For") ?? req.remoteAddress?.ipAddress ?? "unknown"
+                    let userAgent = req.headers.first(name: .userAgent) ?? "unknown"
+                    let contentType = req.headers.first(name: .contentType) ?? "-"
+                    let query = req.url.query.map { "?\($0)" } ?? ""
+                    var parts = """
+                    Client: \(clientIP)
+                    User-Agent: \(userAgent)
+                    Content-Type: \(contentType)
+                    URL: \(method) \(path)\(query)
+                    """
+                    if let body = req.body.data,
+                       let bodyData = body.getData(at: body.readerIndex, length: body.readableBytes),
+                       !bodyData.isEmpty,
+                       let bodyStr = String(data: bodyData, encoding: .utf8) {
+                        parts += "\n\nBody:\n\(bodyStr)"
+                    }
+                    detailedReq = parts
+                }
+                detailedResp = responseBody
             }
             let entry = StateChangeLog.restCall(
                 method: "\(method) \(path)",
                 summary: "\(method) \(path)",
                 result: "\(statusCode) \(resultSummary)",
-                detailedRequest: detailedReq
+                detailedRequest: detailedReq,
+                detailedResponse: detailedResp
             )
             await loggingService.logEntry(entry)
         }

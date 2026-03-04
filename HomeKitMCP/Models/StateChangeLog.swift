@@ -51,6 +51,7 @@ struct APICallPayload: Codable {
     let summary: String
     let result: String
     let detailedRequest: String?
+    let detailedResponse: String?
 }
 
 struct ServerErrorPayload: Codable {
@@ -195,13 +196,15 @@ extension StateChangeLog {
         method: String,
         summary: String,
         result: String,
-        detailedRequest: String? = nil
+        detailedRequest: String? = nil,
+        detailedResponse: String? = nil
     ) -> StateChangeLog {
         StateChangeLog(
             id: UUID(), timestamp: Date(), category: .mcpCall,
             payload: .mcpCall(APICallPayload(
                 method: method, summary: summary,
-                result: result, detailedRequest: detailedRequest
+                result: result, detailedRequest: detailedRequest,
+                detailedResponse: detailedResponse
             ))
         )
     }
@@ -210,13 +213,15 @@ extension StateChangeLog {
         method: String,
         summary: String,
         result: String,
-        detailedRequest: String? = nil
+        detailedRequest: String? = nil,
+        detailedResponse: String? = nil
     ) -> StateChangeLog {
         StateChangeLog(
             id: UUID(), timestamp: Date(), category: .restCall,
             payload: .restCall(APICallPayload(
                 method: method, summary: summary,
-                result: result, detailedRequest: detailedRequest
+                result: result, detailedRequest: detailedRequest,
+                detailedResponse: detailedResponse
             ))
         )
     }
@@ -454,6 +459,14 @@ extension StateChangeLog {
         }
     }
 
+    var detailedResponseBody: String? {
+        switch payload {
+        case .mcpCall(let p): return p.detailedResponse
+        case .restCall(let p): return p.detailedResponse
+        default: return nil
+        }
+    }
+
     /// The full workflow execution log; non-nil for `.workflowExecution` and `.workflowError` entries.
     var workflowExecution: WorkflowExecutionLog? {
         switch payload {
@@ -510,12 +523,14 @@ extension StateChangeLog {
         case .mcpCall(let p):
             truncatedPayload = .mcpCall(APICallPayload(
                 method: p.method, summary: p.summary, result: p.result,
-                detailedRequest: p.detailedRequest.map { Self.truncate($0) }
+                detailedRequest: p.detailedRequest.map { Self.truncate($0) },
+                detailedResponse: p.detailedResponse.map { Self.truncate($0) }
             ))
         case .restCall(let p):
             truncatedPayload = .restCall(APICallPayload(
                 method: p.method, summary: p.summary, result: p.result,
-                detailedRequest: p.detailedRequest.map { Self.truncate($0) }
+                detailedRequest: p.detailedRequest.map { Self.truncate($0) },
+                detailedResponse: p.detailedResponse.map { Self.truncate($0) }
             ))
         case .serverError(let p):
             truncatedPayload = .serverError(ServerErrorPayload(
@@ -574,7 +589,7 @@ extension StateChangeLog: Codable {
         case id, timestamp, category
         case deviceId, deviceName, roomName, serviceId, serviceName
         case characteristicType, oldValue, newValue
-        case errorDetails, requestBody, responseBody, detailedRequestBody
+        case errorDetails, requestBody, responseBody, detailedRequestBody, detailedResponseBody
         case workflowExecution
         case aiInteractionPayload
     }
@@ -596,6 +611,7 @@ extension StateChangeLog: Codable {
         try container.encodeIfPresent(requestBody, forKey: .requestBody)
         try container.encodeIfPresent(responseBody, forKey: .responseBody)
         try container.encodeIfPresent(detailedRequestBody, forKey: .detailedRequestBody)
+        try container.encodeIfPresent(detailedResponseBody, forKey: .detailedResponseBody)
         // Workflow entries: encode the full execution log for rich API consumers.
         if let execLog = workflowExecution {
             try container.encode(execLog, forKey: .workflowExecution)
@@ -624,6 +640,7 @@ extension StateChangeLog: Codable {
         let requestBody = try container.decodeIfPresent(String.self, forKey: .requestBody)
         let responseBody = try container.decodeIfPresent(String.self, forKey: .responseBody)
         let detailedRequestBody = try container.decodeIfPresent(String.self, forKey: .detailedRequestBody)
+        let detailedResponseBody = try container.decodeIfPresent(String.self, forKey: .detailedResponseBody)
 
         switch category {
         case .stateChange:
@@ -658,13 +675,15 @@ extension StateChangeLog: Codable {
             payload = .mcpCall(APICallPayload(
                 method: characteristicType,
                 summary: requestBody ?? "", result: responseBody ?? "",
-                detailedRequest: detailedRequestBody
+                detailedRequest: detailedRequestBody,
+                detailedResponse: detailedResponseBody
             ))
         case .restCall:
             payload = .restCall(APICallPayload(
                 method: characteristicType,
                 summary: requestBody ?? "", result: responseBody ?? "",
-                detailedRequest: detailedRequestBody
+                detailedRequest: detailedRequestBody,
+                detailedResponse: detailedResponseBody
             ))
         case .serverError:
             payload = .serverError(ServerErrorPayload(

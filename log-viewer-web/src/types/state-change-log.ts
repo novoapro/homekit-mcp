@@ -33,6 +33,7 @@ export interface StateChangeLog {
   requestBody?: string;
   responseBody?: string;
   detailedRequestBody?: string;
+  detailedResponseBody?: string;
   workflowExecution?: WorkflowExecutionLog;
 }
 

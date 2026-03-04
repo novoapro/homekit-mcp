@@ -253,7 +253,7 @@ enum MCPToolDefinitions {
                 • deviceStateChange — { "type":"deviceStateChange", "name":"optional", "retriggerPolicy":"ignoreNew", \
                 "deviceId":"uuid", \
                 "deviceName":"Room Light", "roomName":"Living Room", "serviceId":"optional-uuid", \
-                "characteristicType":"Power", "condition":{"type":"equals","value":true} } \
+                "characteristicId":"char-uuid", "condition":{"type":"equals","value":true} } \
                 Trigger condition types: "changed" (no value), "equals"/"notEquals"/"greaterThan"/"lessThan"/ \
                 "greaterThanOrEqual"/"lessThanOrEqual" (with "value"), \
                 "transitioned" (optional "from", optional "to"; at least one required).
@@ -271,7 +271,7 @@ enum MCPToolDefinitions {
 
                 BLOCK TYPES (blocks array, use "block" discriminator):
                 Action blocks: { "block":"action", "type":"controlDevice"|"runScene"|"webhook"|"log", ... }
-                • controlDevice: + deviceId, deviceName, roomName, serviceId?, characteristicType, value
+                • controlDevice: + deviceId, deviceName, roomName, serviceId?, characteristicId, value
                 • runScene: + sceneId, sceneName (optional, cached display name)
                 • webhook: + url, method, headers?, body?
                 • log: + message
@@ -290,7 +290,7 @@ enum MCPToolDefinitions {
 
                 CONDITION TYPES (WorkflowCondition). All support nesting to any depth via and/or/not:
                 • { "type":"deviceState", "deviceId":"uuid", "deviceName":"Room Light", "roomName":"Living Room", \
-                "serviceId":"optional", "characteristicType":"Power", \
+                "serviceId":"optional", "characteristicId":"char-uuid", \
                 "comparison":{"type":"equals","value":true} }
                   comparison types: equals/notEquals/greaterThan/lessThan/greaterThanOrEqual/lessThanOrEqual (with "value")
                 • { "type":"timeCondition", "mode":"beforeSunrise"|"afterSunrise"|"beforeSunset"|"afterSunset"|"daytime"|"nighttime"|"timeRange", \
