@@ -9,7 +9,8 @@ import Foundation
 enum MCPToolDefinitions {
 
     /// The complete list of tool definitions returned by the `tools/list` method.
-    static let all: [[String: Any]] = deviceTools + sceneTools + workflowTools
+    /// Note: `workflowTools` are conditionally added in `handleToolsList`.
+    static let all: [[String: Any]] = deviceTools + sceneTools + metadataTools
 
     /// Device, room, and log tools — always available.
     static let deviceTools: [[String: Any]] = [
@@ -18,10 +19,28 @@ enum MCPToolDefinitions {
 
         [
             "name": "list_devices",
-            "description": "List all HomeKit devices with their current states, grouped by room.",
+            "description": "List HomeKit devices with their current states, grouped by room. Optionally filter by room(s), service type, characteristic type, and/or device category. All filters are AND-ed. Use list_service_types, list_characteristic_types, and list_device_categories to discover valid filter values.",
             "inputSchema": [
                 "type": "object",
-                "properties": [:] as [String: Any]
+                "properties": [
+                    "rooms": [
+                        "type": "array",
+                        "items": ["type": "string"],
+                        "description": "Filter by room name(s). Case-insensitive."
+                    ],
+                    "service_type": [
+                        "type": "string",
+                        "description": "Filter to devices that have a service of this type (e.g. 'Lightbulb', 'Fan'). Case-insensitive."
+                    ],
+                    "characteristic_type": [
+                        "type": "string",
+                        "description": "Filter to devices that have a characteristic of this type (e.g. 'Power', 'Brightness'). Case-insensitive."
+                    ],
+                    "device_category": [
+                        "type": "string",
+                        "description": "Filter by device category (e.g. 'Lightbulb', 'Thermostat', 'Sensor'). Case-insensitive."
+                    ]
+                ] as [String: Any]
             ] as [String: Any]
         ],
         [
@@ -237,7 +256,7 @@ enum MCPToolDefinitions {
                 "characteristicType":"Power", "condition":{"type":"equals","value":true} } \
                 Trigger condition types: "changed" (no value), "equals"/"notEquals"/"greaterThan"/"lessThan"/ \
                 "greaterThanOrEqual"/"lessThanOrEqual" (with "value"), \
-                "transitioned" (required "to", optional "from").
+                "transitioned" (optional "from", optional "to"; at least one required).
                 • schedule — { "type":"schedule", "name":"optional", "retriggerPolicy":"ignoreNew", "scheduleType":{ ... } } \
                 scheduleType formats: {"type":"once","date":"ISO8601"}, \
                 {"type":"daily","time":{"hour":7,"minute":30}}, \
@@ -426,5 +445,43 @@ enum MCPToolDefinitions {
                 "required": ["token"]
             ] as [String: Any]
         ]
+    ]
+
+    // MARK: - Metadata Tools
+
+    /// Metadata tools for AI agent efficiency — always available.
+    static let metadataTools: [[String: Any]] = [
+        [
+            "name": "list_service_types",
+            "description": "List all known HomeKit service types. Returns the friendly names that can be used as filter values in list_devices and get_devices_by_type.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [:] as [String: Any]
+            ] as [String: Any]
+        ],
+        [
+            "name": "list_characteristic_types",
+            "description": "List all known HomeKit characteristic types with their value types, valid values, and accepted aliases. Use these names in control_device, workflow triggers, conditions, and actions.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [:] as [String: Any]
+            ] as [String: Any]
+        ],
+        [
+            "name": "list_device_categories",
+            "description": "List all known HomeKit device categories (e.g. Lightbulb, Thermostat, Sensor). Use these names as filter values in list_devices.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [:] as [String: Any]
+            ] as [String: Any]
+        ],
+        [
+            "name": "get_workflow_schema",
+            "description": "Get a structured JSON schema describing the workflow definition format. Includes all trigger types, block types, condition types, their fields, and valid enum values. Use this to reliably generate workflows for create_workflow and update_workflow.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [:] as [String: Any]
+            ] as [String: Any]
+        ],
     ]
 }

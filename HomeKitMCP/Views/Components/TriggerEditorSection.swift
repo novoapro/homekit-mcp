@@ -190,9 +190,9 @@ private struct TriggerRow: View {
                         .textFieldStyle(.roundedBorder)
                 }
                 HStack {
-                    Text("To")
+                    Text("To (optional)")
                     Spacer()
-                    TextField("Value", text: $trigger.conditionValue)
+                    TextField("Any", text: $trigger.conditionValue)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 80)
                         .textFieldStyle(.roundedBorder)

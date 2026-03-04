@@ -35,6 +35,16 @@ The HomeKit MCP server exposes Apple HomeKit devices, scenes, logs, and automati
 | Port | `3000` (configurable) |
 | Bind address | All interfaces (configurable) |
 | Max request body | 1 MB |
+| Temperature unit | `celsius` (configurable: `celsius` or `fahrenheit`) |
+
+### Temperature Unit
+
+A global temperature unit preference controls how temperature values are exposed across all surfaces. When set to `fahrenheit`, all temperature characteristics (Current Temperature, Target Temperature) have their `value`, `minValue`, `maxValue`, and `stepValue` converted from Celsius to Fahrenheit, and the `units` field reads `"fahrenheit"` instead of `"celsius"`. This applies to REST API responses, MCP tool results, WebSocket broadcasts, and the native app UI.
+
+- **Outgoing values** (device state, logs, WebSocket events): Converted from Celsius to the configured unit at the point of creation/output.
+- **Incoming values** (`control_device`, workflow actions): Accepted in the configured unit and converted back to Celsius before sending to HomeKit.
+- **Logs**: Persisted in the unit active at the time of creation. Changing the unit does not retroactively convert existing log entries.
+- **Workflows**: When the unit preference changes, all workflow definitions are automatically migrated — temperature thresholds in triggers, conditions, and actions are converted to the new unit.
 
 ### Feature Flags
 
@@ -294,6 +304,23 @@ See [Workflow](#workflow) in Data Models for the full schema.
 
 ---
 
+### Settings
+
+| Method | Path | Description | Response |
+|---|---|---|---|
+| `GET` | `/settings/temperature-unit` | Get current temperature unit | `{"unit": "celsius"}` or `{"unit": "fahrenheit"}` |
+| `PATCH` | `/settings/temperature-unit` | Set temperature unit | `{"unit": "fahrenheit"}` |
+
+**PATCH request body:**
+
+```json
+{ "unit": "fahrenheit" }
+```
+
+Valid values: `"celsius"`, `"fahrenheit"`. Returns **400** for invalid values.
+
+---
+
 ### Webhook Trigger
 
 Requires: **REST API enabled** + **Workflows enabled**
@@ -479,13 +506,18 @@ For tools that return structured data, the `text` field contains a JSON string.
 
 ##### list_devices
 
-List all HomeKit devices grouped by room.
+List HomeKit devices grouped by room, with optional filters. All filters are AND-ed.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| *(none)* | | | |
+| `rooms` | string[] | no | Filter by room name(s). Case-insensitive. |
+| `service_type` | string | no | Filter to devices with a service of this type (e.g. "Lightbulb"). Case-insensitive. |
+| `characteristic_type` | string | no | Filter to devices with a characteristic of this type (e.g. "Power"). Case-insensitive. |
+| `device_category` | string | no | Filter by device category (e.g. "Lightbulb", "Sensor"). Case-insensitive. |
 
 Returns markdown-formatted text with devices grouped by room. Each device shows its name, online/offline status, and stable device ID. For multi-service devices, each service shows its display name and service ID. Each characteristic includes its stable characteristic ID, current value, compact permissions (`[r/w/n]` where r=read, w=write, n=notify), and metadata (format, range, units, or enum labels).
+
+Use `list_service_types`, `list_characteristic_types`, and `list_device_categories` to discover valid filter values.
 
 Example output:
 ```
@@ -537,6 +569,8 @@ Set a characteristic value on a device.
 | `rotation_speed` | int | 0–100 |
 
 All 45+ HomeKit characteristic types are supported. The full display name (e.g., `Target Humidity`, `Door State`, `Active`) can also be used as the `characteristic_type` value. Values are validated against the characteristic's metadata (format, min/max, valid values).
+
+**Temperature values**: When the temperature unit preference is set to Fahrenheit, provide temperature values in Fahrenheit. The server automatically converts to Celsius before sending to HomeKit.
 
 **Permission requirement:** The target characteristic must have `"write"` permission. Attempting to set a value on a read-only characteristic (e.g., `current_temperature`, `Motion Detected`) will return an error.
 
@@ -633,6 +667,71 @@ Execute a scene.
 | `scene_id` | string | yes | Stable scene identifier |
 
 Returns success message with scene name, or error with reason.
+
+---
+
+#### Metadata Tools
+
+Always available. These tools help AI agents discover valid type names and workflow schema before making requests.
+
+##### list_service_types
+
+List all known HomeKit service types.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| *(none)* | | | |
+
+Returns a text list of all service type friendly names (e.g. "Lightbulb", "Fan", "Thermostat"). These names can be used as filter values in `list_devices` and `get_devices_by_type`.
+
+---
+
+##### list_characteristic_types
+
+List all known HomeKit characteristic types with value type information.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| *(none)* | | | |
+
+Returns a rich text list of all characteristic types. Each entry includes:
+- Friendly name (e.g. "Power", "Brightness")
+- Accepted aliases (e.g. "power", "temperature")
+- Value type and range (bool, percentage 0-100%, enum values, etc.)
+
+These names can be used in `control_device`, workflow triggers, conditions, actions, and as filter values in `list_devices`.
+
+---
+
+##### list_device_categories
+
+List all known HomeKit device categories.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| *(none)* | | | |
+
+Returns a text list of all device category friendly names (e.g. "Lightbulb", "Thermostat", "Sensor"). These names can be used as filter values in `list_devices`.
+
+---
+
+##### get_workflow_schema
+
+Get a structured JSON schema for workflow creation and updates.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| *(none)* | | | |
+
+Returns a JSON object describing the full workflow definition format including:
+- Top-level workflow fields
+- All trigger types with their fields and valid values
+- All block types (action and flow control) with fields
+- All condition types with comparison operators
+- Valid enum values for policies, execution modes, etc.
+- Important rules and restrictions
+
+Use this schema to reliably generate workflows for `create_workflow` and `update_workflow`.
 
 ---
 
@@ -828,7 +927,7 @@ Private IP ranges are blocked by default (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0
 | `name` | string | no | Display name (e.g. "Brightness", "Power State") |
 | `value` | any | yes | Current value (bool, int, float, or string) |
 | `format` | string | no | Value format (e.g. "bool", "uint8", "float") |
-| `units` | string | yes | Unit of measurement (e.g. "celsius", "percentage") |
+| `units` | string | yes | Unit of measurement (e.g. "celsius", "fahrenheit", "percentage"). For temperature characteristics, reflects the configured temperature unit preference. |
 | `permissions` | string[] | no | Effective access permissions as determined by the MCP app (not raw HomeKit). `"read"` and `"write"` are passed through from HomeKit for enabled characteristics. `"notify"` is only present when the characteristic is marked as observed in the app — if not observed, `notify` is stripped regardless of HomeKit capability. This allows the MCP app to act as a permission proxy. |
 | `minValue` | number | yes | Minimum allowed value |
 | `maxValue` | number | yes | Maximum allowed value |
@@ -932,7 +1031,7 @@ Fires when a device characteristic changes. **The referenced characteristic must
 | `lessThan` | `value` | New value less than |
 | `greaterThanOrEqual` | `value` | New value >= |
 | `lessThanOrEqual` | `value` | New value <= |
-| `transitioned` | `to` (required), `from` (optional) | Value transitioned from/to |
+| `transitioned` | `from` (optional), `to` (optional); at least one required | Value transitioned from/to |
 
 #### schedule
 

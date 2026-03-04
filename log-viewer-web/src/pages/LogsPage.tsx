@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useSetTopBar } from '@/contexts/TopBarContext';
+import { useRegisterRefresh } from '@/contexts/RefreshContext';
 import { usePolling } from '@/hooks/usePolling';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -111,6 +112,10 @@ export function LogsPage() {
   const fetchWithFilters = useCallback(() => {
     loadFresh(buildQueryParams());
   }, [loadFresh, buildQueryParams]);
+
+  useRegisterRefresh(useCallback(async () => {
+    fetchWithFilters();
+  }, [fetchWithFilters]));
 
   // Initial load (runs once)
   const hasLoadedRef = useRef(false);

@@ -149,6 +149,9 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             }
         }
     }
+    @Published var temperatureUnit: String {
+        didSet { defaults.set(temperatureUnit, forKey: Keys.temperatureUnit) }
+    }
 
     init(keychainService: KeychainService = KeychainService()) {
         self.keychainService = keychainService
@@ -181,7 +184,8 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             Keys.logAccessEnabled: true,
             Keys.logCacheSize: 500,
             Keys.websocketEnabled: true,
-            Keys.logSkippedWorkflows: true
+            Keys.logSkippedWorkflows: true,
+            Keys.temperatureUnit: "celsius"
         ])
 
         // Migrate webhook URL from UserDefaults to Keychain (one-time)
@@ -245,6 +249,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         } else {
             self.webhookPrivateIPAllowlist = []
         }
+        self.temperatureUnit = defaults.string(forKey: Keys.temperatureUnit) ?? "celsius"
     }
 
     func isWebhookConfigured() -> Bool {
@@ -382,6 +387,10 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         return val > 0 ? val : 500
     }
 
+    nonisolated func readTemperatureUnit() -> String {
+        UserDefaults.standard.string(forKey: Keys.temperatureUnit) ?? "celsius"
+    }
+
     private enum Keys {
         static let webhookURL = "webhookURL"
         static let mcpServerPort = "mcpServerPort"
@@ -418,5 +427,6 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         static let websocketEnabled = "websocketEnabled"
         static let hideSkippedWorkflowLogs = "hideSkippedWorkflowLogs" // legacy, for migration
         static let logSkippedWorkflows = "logSkippedWorkflows"
+        static let temperatureUnit = "temperatureUnit"
     }
 }

@@ -7,6 +7,7 @@ import { ConfigProvider } from '@/contexts/ConfigContext';
 import { WebSocketProvider } from '@/contexts/WebSocketContext';
 import { DeviceRegistryProvider } from '@/contexts/DeviceRegistryContext';
 import { TopBarProvider } from '@/contexts/TopBarContext';
+import { RefreshProvider } from '@/contexts/RefreshContext';
 import { App } from '@/App';
 import './index.css';
 
@@ -19,7 +20,9 @@ createRoot(document.getElementById('root')!).render(
             <WebSocketProvider>
               <DeviceRegistryProvider>
                 <TopBarProvider>
-                  <App />
+                  <RefreshProvider>
+                    <App />
+                  </RefreshProvider>
                 </TopBarProvider>
               </DeviceRegistryProvider>
             </WebSocketProvider>

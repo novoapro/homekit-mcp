@@ -1,0 +1,49 @@
+.refresh-bar {
+  height: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: height 0.2s ease, opacity 0.3s ease;
+  position: relative;
+  background: color-mix(in srgb, var(--tint-main) 15%, transparent);
+}
+
+.refresh-bar.active {
+  height: 3px;
+  opacity: 1;
+}
+
+.refresh-bar.completing {
+  height: 3px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+/* Bouncing progress bar segment */
+.refresh-bar-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  border-radius: 2px;
+  background: var(--tint-main);
+  animation: refreshBounce 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* On completion, fill the full bar briefly */
+.refresh-bar.completing .refresh-bar-inner {
+  width: 100%;
+  animation: none;
+}
+
+@keyframes refreshBounce {
+  0% {
+    left: -40%;
+  }
+  50% {
+    left: 100%;
+  }
+  100% {
+    left: -40%;
+  }
+}

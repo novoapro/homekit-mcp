@@ -20,7 +20,7 @@ interface DeviceRegistryContextValue {
   lookupDevice: (deviceId: string) => RESTDevice | undefined;
   lookupCharacteristic: (deviceId: string, charId: string) => RESTCharacteristic | undefined;
   lookupScene: (sceneId: string) => RESTScene | undefined;
-  refresh: () => void;
+  refresh: () => Promise<void>;
 }
 
 const DeviceRegistryContext = createContext<DeviceRegistryContextValue | null>(null);

@@ -100,7 +100,7 @@ public struct CharacteristicInputConfig {
 
     /// Known enum label maps keyed by characteristic type UUID.
     /// Used to convert raw integer valid values into human-readable labels.
-    private static let enumLabelMaps: [String: [Int: String]] = {
+    static let enumLabelMaps: [String: [Int: String]] = {
         var maps: [String: [Int: String]] = [:]
 
         let doorStates: [Int: String] = [0: "Open", 1: "Closed", 2: "Opening", 3: "Closing", 4: "Stopped"]
@@ -204,7 +204,7 @@ public struct CharacteristicInputConfig {
         // Temperature characteristics
         case HMCharacteristicTypeCurrentTemperature,
              HMCharacteristicTypeTargetTemperature:
-            return "°C"
+            return TemperatureConversion.unitSuffix
 
         // Color characteristics
         case HMCharacteristicTypeHue:

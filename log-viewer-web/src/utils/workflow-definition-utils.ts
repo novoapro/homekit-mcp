@@ -14,7 +14,8 @@ export function formatTriggerCondition(c: TriggerCondition): string {
     case 'notEquals': return `not equal to ${formatValue(c.value)}`;
     case 'transitioned': {
       const from = c.from !== undefined ? formatValue(c.from) : 'any';
-      return `transitions from ${from} to ${formatValue(c.to)}`;
+      const to = c.to !== undefined ? formatValue(c.to) : 'any';
+      return `transitions from ${from} to ${to}`;
     }
     case 'greaterThan': return `> ${c.value}`;
     case 'lessThan': return `< ${c.value}`;

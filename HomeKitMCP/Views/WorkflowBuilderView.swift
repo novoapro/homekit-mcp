@@ -450,8 +450,9 @@ private struct WorkflowBuilderTriggerRow: View {
         case .equals(let v): return "== \(v.value)"
         case .notEquals(let v): return "!= \(v.value)"
         case .transitioned(let from, let to):
-            if let from { return "\(from.value) -> \(to.value)" }
-            return "-> \(to.value)"
+            let fromStr = from.map { "\($0.value)" } ?? "any"
+            let toStr = to.map { "\($0.value)" } ?? "any"
+            return "\(fromStr) -> \(toStr)"
         case .greaterThan(let v): return "> \(v)"
         case .lessThan(let v): return "< \(v)"
         case .greaterThanOrEqual(let v): return ">= \(v)"

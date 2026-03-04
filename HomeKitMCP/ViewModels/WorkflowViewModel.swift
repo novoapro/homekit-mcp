@@ -7,6 +7,7 @@ class WorkflowViewModel: ObservableObject {
     @Published var executionLogs: [WorkflowExecutionLog] = []
     @Published var searchText = ""
     @Published var showClonedToast = false
+    @Published var isRefreshing = false
 
     private let storageService: WorkflowStorageService
     private let executionLogService: LoggingService
@@ -76,6 +77,16 @@ class WorkflowViewModel: ObservableObject {
                 self.executionLogs = wfLogs
             }
         }
+    }
+
+    func refresh() async {
+        isRefreshing = true
+        let freshWorkflows = await storageService.getAllWorkflows()
+        let allLogs = await executionLogService.getLogs()
+        let wfLogs = allLogs.compactMap(\.workflowExecution)
+        workflows = freshWorkflows
+        executionLogs = wfLogs
+        isRefreshing = false
     }
 
     func toggleEnabled(id: UUID) {

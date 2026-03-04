@@ -31,7 +31,11 @@ struct SceneListView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Theme.mainBackground)
+            .refreshable {
+                await viewModel.refreshAsync()
+            }
         }
+        .refreshBar(isRefreshing: viewModel.isRefreshing)
         .background(Theme.mainBackground)
         .searchable(text: $viewModel.sceneSearchText, placement: .navigationBarDrawer, prompt: "Search scenes")
         .navigationTitle("Scenes (\(viewModel.scenes.count))")

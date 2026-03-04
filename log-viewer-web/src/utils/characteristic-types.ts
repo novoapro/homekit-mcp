@@ -80,7 +80,13 @@ export function characteristicDisplayName(type: string): string {
   return type;
 }
 
-export function formatCharacteristicValue(value: unknown, characteristicType: string): string {
+/**
+ * Format a characteristic value for display.
+ * @param units - Optional unit string from the characteristic metadata (e.g., "celsius", "fahrenheit").
+ *   When provided for temperature characteristics, the correct unit symbol is used.
+ *   Values are already converted server-side based on the user's temperature unit preference.
+ */
+export function formatCharacteristicValue(value: unknown, characteristicType: string, units?: string): string {
   if (value === undefined || value === null) return '--';
 
   const name = characteristicDisplayName(characteristicType);
@@ -95,7 +101,10 @@ export function formatCharacteristicValue(value: unknown, characteristicType: st
   }
 
   if (TEMPERATURE_TYPES.has(name)) {
-    if (typeof value === 'number') return `${value.toFixed(1)}\u00B0C`;
+    if (typeof value === 'number') {
+      const suffix = units === 'fahrenheit' ? '\u00B0F' : '\u00B0C';
+      return `${value.toFixed(1)}${suffix}`;
+    }
   }
 
   if (name === 'Hue') return `${value}\u00B0`;

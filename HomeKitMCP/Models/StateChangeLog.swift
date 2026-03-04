@@ -566,6 +566,7 @@ extension StateChangeLog {
     }
 }
 
+
 // MARK: - Codable (flat JSON; workflow entries include full WorkflowExecutionLog)
 
 extension StateChangeLog: Codable {

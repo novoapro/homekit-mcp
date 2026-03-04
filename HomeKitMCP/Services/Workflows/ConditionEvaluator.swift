@@ -150,7 +150,12 @@ struct ConditionEvaluator {
             return (false, "\(displayName): device not found — orphaned reference")
         }
 
-        let currentValue = findCharacteristicValue(in: device, characteristicType: resolvedType, serviceId: condition.serviceId)
+        var currentValue = findCharacteristicValue(in: device, characteristicType: resolvedType, serviceId: condition.serviceId)
+        // Convert temperature to user's preferred unit before comparing against user-defined thresholds
+        if TemperatureConversion.isFahrenheit && TemperatureConversion.isTemperatureCharacteristic(resolvedType) {
+            if let v = currentValue as? Double { currentValue = TemperatureConversion.celsiusToFahrenheit(v) }
+            else if let v = currentValue as? Int { currentValue = TemperatureConversion.celsiusToFahrenheit(Double(v)) }
+        }
         let passed = Self.compare(currentValue as Any, using: condition.comparison)
         let compDesc = Self.comparisonDescription(condition.comparison)
 

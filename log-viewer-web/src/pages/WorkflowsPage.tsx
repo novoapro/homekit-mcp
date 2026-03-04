@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useSetTopBar } from '@/contexts/TopBarContext';
+import { useRegisterRefresh } from '@/contexts/RefreshContext';
 import { Icon } from '@/components/Icon';
 import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -40,6 +41,8 @@ export function WorkflowsPage() {
       setIsLoading(false);
     }
   }, [api]);
+
+  useRegisterRefresh(loadWorkflows);
 
   useEffect(() => {
     loadWorkflows();

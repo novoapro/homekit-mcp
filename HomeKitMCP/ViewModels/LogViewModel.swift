@@ -57,6 +57,7 @@ class LogViewModel: ObservableObject {
     @Published var groupedLogs: [(date: String, label: String, logs: [StateChangeLog])] = []
     @Published var searchText = ""
     @Published var filteredLogCount = 0
+    @Published var isRefreshing = false
 
     // Filters
     @Published var selectedCategories: Set<LogCategoryFilter> = []
@@ -140,6 +141,14 @@ class LogViewModel: ObservableObject {
                 self.updateView()
             }
         }
+    }
+
+    func refresh() async {
+        isRefreshing = true
+        let freshLogs = await loggingService.getLogs()
+        rawLogs = freshLogs
+        updateView()
+        isRefreshing = false
     }
 
     private func updateView() {

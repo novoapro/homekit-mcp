@@ -47,7 +47,7 @@ export function CharacteristicsTable({ characteristics, serviceId }: Characteris
             </span>
             <span className="char-col-value">
               <span className="char-value-text">
-                {charType ? formatCharacteristicValue(char.value, charType) : String(char.value ?? '--')}
+                {charType ? formatCharacteristicValue(char.value, charType, char.units) : String(char.value ?? '--')}
               </span>
               {char.units && (
                 <span className="char-units">{char.units}</span>

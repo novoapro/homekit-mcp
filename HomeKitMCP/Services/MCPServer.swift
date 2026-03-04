@@ -267,8 +267,14 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                     for change in changes {
                         let valueJson: Any
                         if let v = change.value {
-                            let encoded = try? JSONEncoder.iso8601.encode(AnyCodable(v))
-                            valueJson = encoded.flatMap({ try? JSONSerialization.jsonObject(with: $0) }) ?? v
+                            // Convert temperature values to user's preferred unit
+                            var effectiveValue: Any = v
+                            if TemperatureConversion.isFahrenheit && TemperatureConversion.isTemperatureCharacteristic(change.characteristicType) {
+                                if let d = v as? Double { effectiveValue = TemperatureConversion.celsiusToFahrenheit(d) }
+                                else if let i = v as? Int { effectiveValue = TemperatureConversion.celsiusToFahrenheit(Double(i)) }
+                            }
+                            let encoded = try? JSONEncoder.iso8601.encode(AnyCodable(effectiveValue))
+                            valueJson = encoded.flatMap({ try? JSONSerialization.jsonObject(with: $0) }) ?? effectiveValue
                         } else {
                             valueJson = NSNull()
                         }
@@ -543,6 +549,28 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             await self.loggingService.clearLogs()
             let body = try JSONSerialization.data(withJSONObject: ["cleared": true])
             return Response(status: .ok, headers: ["Content-Type": "application/json"], body: .init(data: body))
+        }
+
+        // Temperature unit preference
+        protected.on(.GET, "settings", "temperature-unit") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            let unit = self.storage.readTemperatureUnit()
+            let body = try JSONSerialization.data(withJSONObject: ["unit": unit])
+            return Response(status: .ok, headers: ["Content-Type": "application/json"], body: .init(data: body))
+        }
+
+        protected.on(.PATCH, "settings", "temperature-unit", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            struct Body: Codable { let unit: String }
+            let body = try req.content.decode(Body.self)
+            guard body.unit == "celsius" || body.unit == "fahrenheit" else {
+                throw Abort(.badRequest, reason: "unit must be 'celsius' or 'fahrenheit'")
+            }
+            await MainActor.run { self.storage.temperatureUnit = body.unit }
+            let responseBody = try JSONSerialization.data(withJSONObject: ["unit": body.unit])
+            return Response(status: .ok, headers: ["Content-Type": "application/json"], body: .init(data: responseBody))
         }
     }
     

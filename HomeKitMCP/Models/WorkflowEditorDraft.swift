@@ -1371,7 +1371,7 @@ extension WorkflowDraft {
         case let .notEquals(v):
             return (.notEquals, stringFromAny(v.value), "")
         case let .transitioned(from, to):
-            return (.transitioned, stringFromAny(to.value), from.map { stringFromAny($0.value) } ?? "")
+            return (.transitioned, to.map { stringFromAny($0.value) } ?? "", from.map { stringFromAny($0.value) } ?? "")
         case let .greaterThan(v):
             return (.greaterThan, String(v), "")
         case let .lessThan(v):
@@ -1700,7 +1700,8 @@ extension TriggerDraft {
         case .notEquals: return .notEquals(parseValue(conditionValue))
         case .transitioned:
             let from = conditionFromValue.isEmpty ? nil : parseValue(conditionFromValue)
-            return .transitioned(from: from, to: parseValue(conditionValue))
+            let to = conditionValue.isEmpty ? nil : parseValue(conditionValue)
+            return .transitioned(from: from, to: to)
         case .greaterThan: return .greaterThan(Double(conditionValue) ?? 0)
         case .lessThan: return .lessThan(Double(conditionValue) ?? 0)
         case .greaterThanOrEqual: return .greaterThanOrEqual(Double(conditionValue) ?? 0)

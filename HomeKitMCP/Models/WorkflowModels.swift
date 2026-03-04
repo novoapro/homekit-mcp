@@ -1004,7 +1004,7 @@ enum TriggerCondition: Codable {
     case changed
     case equals(AnyCodable)
     case notEquals(AnyCodable)
-    case transitioned(from: AnyCodable?, to: AnyCodable)
+    case transitioned(from: AnyCodable?, to: AnyCodable?)
     case greaterThan(Double)
     case lessThan(Double)
     case greaterThanOrEqual(Double)
@@ -1038,7 +1038,7 @@ enum TriggerCondition: Codable {
         case .transitioned:
             self = try .transitioned(
                 from: container.decodeIfPresent(AnyCodable.self, forKey: .from),
-                to: container.decode(AnyCodable.self, forKey: .to)
+                to: container.decodeIfPresent(AnyCodable.self, forKey: .to)
             )
         case .greaterThan:
             self = try .greaterThan(container.decode(Double.self, forKey: .value))
@@ -1065,7 +1065,7 @@ enum TriggerCondition: Codable {
         case let .transitioned(from, to):
             try container.encode(ConditionType.transitioned, forKey: .type)
             try container.encodeIfPresent(from, forKey: .from)
-            try container.encode(to, forKey: .to)
+            try container.encodeIfPresent(to, forKey: .to)
         case let .greaterThan(value):
             try container.encode(ConditionType.greaterThan, forKey: .type)
             try container.encode(value, forKey: .value)

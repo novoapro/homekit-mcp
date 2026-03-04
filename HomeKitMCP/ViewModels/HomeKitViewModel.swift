@@ -24,6 +24,7 @@ class HomeKitViewModel: ObservableObject {
     @Published var enabledFilter: TriStateFilter = .all
     @Published var observedFilter: TriStateFilter = .all
 
+    @Published var isRefreshing = false
     @Published var isUpdating = false
     /// Device-level settings cache: deviceId -> (enabled: Bool, observed: Bool)
     @Published private(set) var deviceConfigCache: [String: (enabled: Bool, observed: Bool)] = [:]
@@ -187,6 +188,12 @@ class HomeKitViewModel: ObservableObject {
                 self?.refreshConfigCacheSync()
             }
             .store(in: &cancellables)
+    }
+
+    func refreshAsync() async {
+        isRefreshing = true
+        refresh()
+        isRefreshing = false
     }
 
     func refresh() {

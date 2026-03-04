@@ -2,7 +2,7 @@
 export interface TriggerConditionChanged { type: 'changed'; }
 export interface TriggerConditionEquals { type: 'equals'; value: unknown; }
 export interface TriggerConditionNotEquals { type: 'notEquals'; value: unknown; }
-export interface TriggerConditionTransitioned { type: 'transitioned'; from?: unknown; to: unknown; }
+export interface TriggerConditionTransitioned { type: 'transitioned'; from?: unknown; to?: unknown; }
 export interface TriggerConditionGT { type: 'greaterThan'; value: number; }
 export interface TriggerConditionLT { type: 'lessThan'; value: number; }
 export interface TriggerConditionGTE { type: 'greaterThanOrEqual'; value: number; }

@@ -1,11 +1,14 @@
 import { useState, useCallback } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { TopBar } from '@/components/TopBar';
+import { RefreshBar } from '@/components/RefreshBar';
 import { PageTransition } from '@/components/PageTransition';
 import { AppRoutes } from '@/router';
 import { useConfig } from '@/contexts/ConfigContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useTopBar } from '@/contexts/TopBarContext';
+import { useRefresh } from '@/contexts/RefreshContext';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import '@/components/Sidebar.css';
 import '@/components/TopBar.css';
 
@@ -13,6 +16,11 @@ export function App() {
   const { config } = useConfig();
   const ws = useWebSocket();
   const topBar = useTopBar();
+  const refresh = useRefresh();
+  const { bindToElement } = usePullToRefresh({
+    onRefresh: refresh.triggerRefresh,
+    disabled: refresh.isRefreshing,
+  });
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
@@ -49,8 +57,9 @@ export function App() {
           lastPollTime={null}
           onMenuClick={() => setSidebarOpen(true)}
         />
+        <RefreshBar isRefreshing={refresh.isRefreshing} />
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <main ref={bindToElement} className="flex-1 overflow-y-auto overflow-x-hidden">
           <PageTransition>
             <AppRoutes />
           </PageTransition>

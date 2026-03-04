@@ -530,7 +530,8 @@ export function triggerAutoName(t: WorkflowTriggerDraft, registry: RegistryLike)
           parts.push('Changed');
         } else if (cond.type === 'transitioned') {
           const from = cond.from !== undefined ? formatAutoVal(cond.from) : 'any';
-          parts.push(`${from} \u2192 ${formatAutoVal(cond.to)}`);
+          const to = cond.to !== undefined ? formatAutoVal(cond.to) : 'any';
+          parts.push(`${from} \u2192 ${to}`);
         } else {
           const sym = COMPARISON_SYMBOLS[cond.type] || cond.type;
           parts.push(`${sym} ${formatAutoVal(cond.value)}`);

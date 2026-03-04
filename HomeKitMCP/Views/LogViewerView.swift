@@ -68,10 +68,14 @@ struct LogViewerView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Theme.mainBackground)
+            .refreshable {
+                await viewModel.refresh()
+            }
             .safeAreaInset(edge: .bottom) {
                 Color.clear.frame(height: 20)
             }
         }
+        .refreshBar(isRefreshing: viewModel.isRefreshing)
         .background(Theme.mainBackground)
         .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer, prompt: "Search by device, service or characteristic")
         .navigationTitle("Logs (\(viewModel.filteredLogCount))")

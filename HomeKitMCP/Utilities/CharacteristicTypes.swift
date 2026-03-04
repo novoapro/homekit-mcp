@@ -54,6 +54,23 @@ enum CharacteristicTypes {
         return mapping[characteristicType] ?? characteristicType
     }
     
+    /// All known characteristic type friendly names, sorted alphabetically.
+    static var allDisplayNames: [String] {
+        Array(Set(mapping.values)).sorted()
+    }
+
+    /// Returns the full mapping from HomeKit UUID to friendly name (for metadata tools).
+    static var allMappings: [(uuid: String, displayName: String)] {
+        mapping.map { (uuid: $0.key, displayName: $0.value) }.sorted { $0.displayName < $1.displayName }
+    }
+
+    /// Returns all aliases for a given HomeKit characteristic type UUID.
+    static func aliases(for characteristicType: String) -> [String] {
+        reverseMapping.compactMap { key, value in
+            value == characteristicType ? key : nil
+        }.sorted()
+    }
+
     static func isSupported(_ type: String) -> Bool {
         // Strict allowlist: only characteristics with a mapped friendly name are supported.
         // This filters out vendor-specific (UUIDs) and other unsupported characteristics.
@@ -113,7 +130,7 @@ enum CharacteristicTypes {
         case HMCharacteristicTypeCurrentTemperature,
              HMCharacteristicTypeTargetTemperature:
             if let doubleVal = value as? Double {
-                return String(format: "%.1f°C", doubleVal)
+                return String(format: "%.1f%@", doubleVal, TemperatureConversion.unitSuffix)
             }
 
         case HMCharacteristicTypeHue:

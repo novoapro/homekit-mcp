@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import { useSetTopBar } from '@/contexts/TopBarContext';
+import { useRegisterRefresh } from '@/contexts/RefreshContext';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Icon } from '@/components/Icon';
 import { EmptyState } from '@/components/EmptyState';
@@ -13,8 +14,13 @@ type Tab = 'devices' | 'scenes';
 type ReachabilityFilter = 'all' | 'reachable' | 'unreachable';
 
 export function DevicesPage() {
-  const { devices, scenes, isLoading } = useDeviceRegistry();
+  const registry = useDeviceRegistry();
+  const { devices, scenes, isLoading } = registry;
   useSetTopBar('Devices', devices.length > 0 ? devices.length : null, isLoading);
+
+  useRegisterRefresh(useCallback(async () => {
+    registry.refresh();
+  }, [registry]));
 
   const [activeTab, setActiveTab] = useState<Tab>('devices');
   const [searchText, setSearchText] = useState('');

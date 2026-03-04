@@ -61,6 +61,11 @@ enum ServiceTypes {
         return reverseMapping[name.lowercased()]
     }
 
+    /// All known service type friendly names, sorted alphabetically.
+    static var allDisplayNames: [String] {
+        Array(Set(mapping.values)).sorted()
+    }
+
     static func isSupported(_ type: String) -> Bool {
         // Strict allowlist: only services with a mapped friendly name are supported.
         return mapping[type] != nil

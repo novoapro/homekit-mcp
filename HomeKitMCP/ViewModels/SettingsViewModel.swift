@@ -66,6 +66,23 @@ class SettingsViewModel: ObservableObject {
     @Published var webhookPrivateIPAllowlist: [String] {
         didSet { storage.webhookPrivateIPAllowlist = webhookPrivateIPAllowlist }
     }
+    @Published var temperatureUnit: String {
+        willSet {
+            if newValue != temperatureUnit {
+                let convert: (Double) -> Double = newValue == "fahrenheit"
+                    ? TemperatureConversion.celsiusToFahrenheit
+                    : TemperatureConversion.fahrenheitToCelsius
+                Task {
+                    await TemperatureConversion.migrateWorkflows(
+                        workflowStorage: workflowStorageService,
+                        registry: deviceRegistryService,
+                        convert: convert
+                    )
+                }
+            }
+        }
+        didSet { storage.temperatureUnit = temperatureUnit }
+    }
 
     // MARK: - Location Properties
 
@@ -168,6 +185,7 @@ class SettingsViewModel: ObservableObject {
         self.logCacheSize = storage.logCacheSize
         self.logSkippedWorkflows = storage.logSkippedWorkflows
         self.webhookPrivateIPAllowlist = storage.webhookPrivateIPAllowlist
+        self.temperatureUnit = storage.temperatureUnit
         self.sunEventLatitude = storage.sunEventLatitude
         self.sunEventLongitude = storage.sunEventLongitude
         self.sunEventZipCode = storage.sunEventZipCode

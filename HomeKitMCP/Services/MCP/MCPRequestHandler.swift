@@ -1,4 +1,5 @@
 import Foundation
+import HomeKit
 
 /// Handles MCP JSON-RPC method dispatch and builds responses.
 /// All stored properties are immutable (`let`), making this class safe to share across isolation domains.
@@ -243,6 +244,7 @@ final class MCPRequestHandler: Sendable {
     private func handleToolsList(id: JSONRPCId?) -> JSONRPCResponse {
         var tools = MCPToolDefinitions.deviceTools
         tools += MCPToolDefinitions.sceneTools
+        tools += MCPToolDefinitions.metadataTools
         if storage.readWorkflowsEnabled() {
             tools += MCPToolDefinitions.workflowTools
         }
@@ -282,7 +284,7 @@ final class MCPRequestHandler: Sendable {
 
         switch toolName {
         case "list_devices":
-            return await handleListDevices(id: id)
+            return await handleListDevices(id: id, arguments: arguments)
         case "get_device":
             return await handleGetDevice(id: id, arguments: arguments)
         case "control_device":
@@ -301,6 +303,14 @@ final class MCPRequestHandler: Sendable {
             return await handleListScenes(id: id)
         case "execute_scene":
             return await handleExecuteScene(id: id, arguments: arguments)
+        case "list_service_types":
+            return handleListServiceTypes(id: id)
+        case "list_characteristic_types":
+            return handleListCharacteristicTypes(id: id)
+        case "list_device_categories":
+            return handleListDeviceCategories(id: id)
+        case "get_workflow_schema":
+            return handleGetWorkflowSchema(id: id)
         case "list_workflows":
             return await handleListWorkflows(id: id)
         case "get_workflow":
@@ -364,6 +374,17 @@ final class MCPRequestHandler: Sendable {
 
         // Validate value against characteristic metadata and check write permission
         let resolvedType = CharacteristicTypes.characteristicType(forName: characteristicType) ?? characteristicType
+
+        // Convert temperature from user's preferred unit back to Celsius for HomeKit
+        var effectiveValue = value
+        if TemperatureConversion.isFahrenheit && TemperatureConversion.isTemperatureCharacteristic(resolvedType) {
+            if let doubleVal = value as? Double {
+                effectiveValue = TemperatureConversion.fahrenheitToCelsius(doubleVal)
+            } else if let intVal = value as? Int {
+                effectiveValue = TemperatureConversion.fahrenheitToCelsius(Double(intVal))
+            }
+        }
+
         let device: DeviceModel? = await MainActor.run { homeKitManager.getDeviceState(id: deviceId) }
         if let device {
             let targetServices = serviceId != nil ? device.services.filter({ $0.id == serviceId }) : device.services
@@ -377,7 +398,7 @@ final class MCPRequestHandler: Sendable {
                     )
                 }
                 do {
-                    try CharacteristicValidator.validate(value: value, against: characteristic)
+                    try CharacteristicValidator.validate(value: effectiveValue, against: characteristic)
                 } catch let error as CharacteristicValidator.ValidationError {
                     return toolResult(text: error.message, isError: true, id: id)
                 } catch {}
@@ -385,7 +406,7 @@ final class MCPRequestHandler: Sendable {
         }
 
         do {
-            try await homeKitManager.updateDevice(id: deviceId, characteristicType: characteristicType, value: value, serviceId: serviceId)
+            try await homeKitManager.updateDevice(id: deviceId, characteristicType: characteristicType, value: effectiveValue, serviceId: serviceId)
 
             let displayName = CharacteristicTypes.displayName(for: resolvedType)
 
@@ -400,12 +421,66 @@ final class MCPRequestHandler: Sendable {
         }
     }
 
-    private func handleListDevices(id: JSONRPCId?) async -> JSONRPCResponse {
+    private func handleListDevices(id: JSONRPCId?, arguments: [String: Any] = [:]) async -> JSONRPCResponse {
         let groups = await MainActor.run { homeKitManager.getDevicesGroupedByRoom() }
+
+        // Parse optional filters
+        let roomFilter = arguments["rooms"] as? [String]
+        let serviceTypeFilter = arguments["service_type"] as? String
+        let charTypeFilter = arguments["characteristic_type"] as? String
+        let categoryFilter = arguments["device_category"] as? String
 
         var lines: [String] = []
         for group in groups {
-            let filteredDevices = stableDevices(group.devices)
+            // Room filter: case-insensitive match
+            if let roomFilter, !roomFilter.isEmpty {
+                let matches = roomFilter.contains { $0.localizedCaseInsensitiveCompare(group.roomName) == .orderedSame }
+                if !matches { continue }
+            }
+
+            var filteredDevices = stableDevices(group.devices)
+
+            // Device category filter
+            if let categoryFilter {
+                let resolvedCategory = DeviceCategories.categoryType(forName: categoryFilter)
+                filteredDevices = filteredDevices.filter { device in
+                    if let resolved = resolvedCategory {
+                        return device.categoryType == resolved
+                    }
+                    return device.categoryType.localizedCaseInsensitiveContains(categoryFilter)
+                }
+            }
+
+            // Service type filter
+            if let serviceTypeFilter {
+                let resolvedServiceType = ServiceTypes.serviceType(forName: serviceTypeFilter)
+                filteredDevices = filteredDevices.filter { device in
+                    device.services.contains { service in
+                        if let resolved = resolvedServiceType {
+                            return service.type == resolved
+                        }
+                        return service.type.localizedCaseInsensitiveContains(serviceTypeFilter) ||
+                               service.displayName.localizedCaseInsensitiveContains(serviceTypeFilter)
+                    }
+                }
+            }
+
+            // Characteristic type filter
+            if let charTypeFilter {
+                let resolvedCharType = CharacteristicTypes.characteristicType(forName: charTypeFilter)
+                filteredDevices = filteredDevices.filter { device in
+                    device.services.contains { service in
+                        service.characteristics.contains { char in
+                            if let resolved = resolvedCharType {
+                                return char.type == resolved
+                            }
+                            let charName = CharacteristicTypes.displayName(for: char.type)
+                            return charName.localizedCaseInsensitiveContains(charTypeFilter)
+                        }
+                    }
+                }
+            }
+
             if filteredDevices.isEmpty { continue }
             lines.append("## \(group.roomName)")
             for device in filteredDevices {
@@ -434,6 +509,390 @@ final class MCPRequestHandler: Sendable {
         }
 
         return toolResult(text: lines.joined(separator: "\n"), id: id)
+    }
+
+    // MARK: - Metadata Tools
+
+    private func handleListServiceTypes(id: JSONRPCId?) -> JSONRPCResponse {
+        let types = ServiceTypes.allDisplayNames
+        let text = "Known service types (\(types.count)):\n" + types.map { "- \($0)" }.joined(separator: "\n")
+        return toolResult(text: text, id: id)
+    }
+
+    private func handleListCharacteristicTypes(id: JSONRPCId?) -> JSONRPCResponse {
+        let allMappings = CharacteristicTypes.allMappings
+
+        var lines: [String] = ["Known characteristic types (\(allMappings.count)):"]
+        for entry in allMappings {
+            let name = entry.displayName
+            let uuid = entry.uuid
+
+            // Build value description
+            var valueDesc = ""
+
+            // Check for enum values
+            if let enumMap = CharacteristicInputConfig.enumLabelMaps[uuid] {
+                let sorted = enumMap.sorted { $0.key < $1.key }
+                let vals = sorted.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
+                valueDesc = "enum: \(vals)"
+            } else {
+                // Determine value type from characteristic behavior
+                valueDesc = Self.characteristicValueDescription(for: uuid)
+            }
+
+            // Get aliases (names that differ from the canonical lowercase display name)
+            let aliases = CharacteristicTypes.aliases(for: uuid)
+                .filter { $0 != name.lowercased() }
+
+            var line = "- \(name)"
+            if !aliases.isEmpty {
+                line += " (aliases: \(aliases.joined(separator: ", ")))"
+            }
+            line += " — \(valueDesc)"
+            lines.append(line)
+        }
+
+        return toolResult(text: lines.joined(separator: "\n"), id: id)
+    }
+
+    /// Returns a human-readable value description for a characteristic type.
+    private static func characteristicValueDescription(for uuid: String) -> String {
+        switch uuid {
+        case HMCharacteristicTypePowerState, HMCharacteristicTypeMotionDetected,
+             HMCharacteristicTypeOutletInUse, HMCharacteristicTypeObstructionDetected,
+             HMCharacteristicTypeStatusActive:
+            return "bool (true=On, false=Off)"
+        case HMCharacteristicTypeBrightness, HMCharacteristicTypeSaturation,
+             HMCharacteristicTypeBatteryLevel, HMCharacteristicTypeCurrentRelativeHumidity,
+             HMCharacteristicTypeTargetRelativeHumidity, HMCharacteristicTypeCurrentPosition,
+             HMCharacteristicTypeTargetPosition, HMCharacteristicTypeRotationSpeed:
+            return "percentage 0-100%"
+        case HMCharacteristicTypeHue:
+            return "degrees 0-360°"
+        case HMCharacteristicTypeColorTemperature:
+            return "integer 140-500K (mireds)"
+        case HMCharacteristicTypeCurrentTemperature:
+            return "read-only, temperature (°C/°F)"
+        case HMCharacteristicTypeTargetTemperature:
+            return "temperature (°C/°F, typically 10-38)"
+        case HMCharacteristicTypeCurrentLightLevel:
+            return "read-only, float (lux)"
+        case HMCharacteristicTypeRemainingDuration:
+            return "read-only, integer (seconds)"
+        case HMCharacteristicTypeSetDuration:
+            return "integer (seconds)"
+        case HMCharacteristicTypeName:
+            return "read-only, string"
+        default:
+            return "value"
+        }
+    }
+
+    private func handleListDeviceCategories(id: JSONRPCId?) -> JSONRPCResponse {
+        let categories = DeviceCategories.allDisplayNames
+        let text = "Known device categories (\(categories.count)):\n" + categories.map { "- \($0)" }.joined(separator: "\n")
+        return toolResult(text: text, id: id)
+    }
+
+    private func handleGetWorkflowSchema(id: JSONRPCId?) -> JSONRPCResponse {
+        let schema: [String: Any] = [
+            "description": "Schema for creating and updating workflows via create_workflow and update_workflow tools.",
+            "topLevelFields": [
+                "name": ["type": "string", "required": true, "description": "Workflow name"],
+                "description": ["type": "string", "required": false, "description": "Workflow description"],
+                "isEnabled": ["type": "boolean", "required": false, "default": true],
+                "continueOnError": ["type": "boolean", "required": false, "default": false,
+                    "description": "Must be true if using blockResult conditions"],
+                "triggers": ["type": "array", "required": true, "description": "Array of trigger objects"],
+                "conditions": ["type": "array", "required": false,
+                    "description": "Optional guard conditions (AND-ed). Only deviceState, timeCondition, sceneActive allowed (no blockResult)."],
+                "blocks": ["type": "array", "required": true, "description": "Array of block objects (actions and flow control)"]
+            ] as [String: Any],
+            "retriggerPolicies": [
+                "description": "Per-trigger policy for concurrent execution",
+                "values": ["ignoreNew", "cancelAndRestart", "queueAndExecute", "cancelOnly"],
+                "default": "ignoreNew"
+            ] as [String: Any],
+            "triggerTypes": [
+                [
+                    "type": "deviceStateChange",
+                    "fields": [
+                        "deviceId": ["type": "string", "required": true, "description": "Stable device ID"],
+                        "deviceName": ["type": "string", "required": true, "description": "Device name (for migration)"],
+                        "roomName": ["type": "string", "required": true, "description": "Room name (for migration)"],
+                        "serviceId": ["type": "string", "required": false, "description": "Service ID (for multi-service devices)"],
+                        "characteristicType": ["type": "string", "required": true,
+                            "description": "Characteristic friendly name (e.g. 'Power', 'Brightness'). Use list_characteristic_types to see all."],
+                        "condition": ["type": "object", "required": true, "description": "Trigger condition (see triggerConditions)"],
+                        "name": ["type": "string", "required": false],
+                        "retriggerPolicy": ["type": "string", "required": false]
+                    ] as [String: Any]
+                ],
+                [
+                    "type": "schedule",
+                    "fields": [
+                        "scheduleType": ["type": "object", "required": true, "description": "See scheduleTypes"],
+                        "name": ["type": "string", "required": false],
+                        "retriggerPolicy": ["type": "string", "required": false]
+                    ] as [String: Any]
+                ],
+                [
+                    "type": "sunEvent",
+                    "fields": [
+                        "event": ["type": "string", "required": true, "values": ["sunrise", "sunset"]],
+                        "offsetMinutes": ["type": "integer", "required": false, "default": 0,
+                            "description": "Negative=before, positive=after, 0=exact"],
+                        "name": ["type": "string", "required": false],
+                        "retriggerPolicy": ["type": "string", "required": false]
+                    ] as [String: Any]
+                ],
+                [
+                    "type": "webhook",
+                    "fields": [
+                        "token": ["type": "string", "required": true, "description": "Unique webhook token"],
+                        "name": ["type": "string", "required": false],
+                        "retriggerPolicy": ["type": "string", "required": false]
+                    ] as [String: Any]
+                ],
+                [
+                    "type": "workflow",
+                    "description": "Makes this workflow callable by other workflows via executeWorkflow blocks.",
+                    "fields": [
+                        "name": ["type": "string", "required": false],
+                        "retriggerPolicy": ["type": "string", "required": false]
+                    ] as [String: Any]
+                ]
+            ] as [[String: Any]],
+            "triggerConditions": [
+                "description": "Condition types for deviceStateChange triggers",
+                "types": [
+                    ["type": "changed", "fields": [:] as [String: Any], "description": "Fires on any value change"],
+                    ["type": "equals", "fields": ["value": "any"], "description": "Fires when value equals"],
+                    ["type": "notEquals", "fields": ["value": "any"], "description": "Fires when value does not equal"],
+                    ["type": "transitioned", "fields": [
+                        "from": ["type": "any", "required": false],
+                        "to": ["type": "any", "required": false]
+                    ] as [String: Any], "description": "Fires on value transition. At least one of from/to required."],
+                    ["type": "greaterThan", "fields": ["value": "number"]],
+                    ["type": "lessThan", "fields": ["value": "number"]],
+                    ["type": "greaterThanOrEqual", "fields": ["value": "number"]],
+                    ["type": "lessThanOrEqual", "fields": ["value": "number"]]
+                ] as [[String: Any]]
+            ] as [String: Any],
+            "scheduleTypes": [
+                ["type": "once", "fields": ["date": ["type": "string", "format": "ISO8601"]]],
+                ["type": "daily", "fields": ["time": ["type": "object", "format": "{hour: 0-23, minute: 0-59}"]]],
+                ["type": "weekly", "fields": [
+                    "time": ["type": "object", "format": "{hour: 0-23, minute: 0-59}"],
+                    "days": ["type": "array", "description": "1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat"]
+                ] as [String: Any]],
+                ["type": "interval", "fields": ["seconds": ["type": "number"]]]
+            ] as [[String: Any]],
+            "blockTypes": [
+                "actions": [
+                    [
+                        "block": "action", "type": "controlDevice",
+                        "fields": [
+                            "deviceId": ["type": "string", "required": true],
+                            "deviceName": ["type": "string", "required": true],
+                            "roomName": ["type": "string", "required": true],
+                            "serviceId": ["type": "string", "required": false],
+                            "characteristicType": ["type": "string", "required": true,
+                                "description": "Friendly name (e.g. 'Power', 'Brightness')"],
+                            "value": ["type": "any", "required": true,
+                                "description": "Value to set. Use list_characteristic_types for valid values."],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "block": "action", "type": "runScene",
+                        "fields": [
+                            "sceneId": ["type": "string", "required": true],
+                            "sceneName": ["type": "string", "required": false],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "block": "action", "type": "webhook",
+                        "fields": [
+                            "url": ["type": "string", "required": true],
+                            "method": ["type": "string", "required": true, "values": ["GET", "POST", "PUT", "PATCH", "DELETE"]],
+                            "headers": ["type": "object", "required": false],
+                            "body": ["type": "any", "required": false],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "block": "action", "type": "log",
+                        "fields": [
+                            "message": ["type": "string", "required": true],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ]
+                ] as [[String: Any]],
+                "flowControl": [
+                    [
+                        "block": "flowControl", "type": "delay",
+                        "fields": [
+                            "seconds": ["type": "number", "required": true],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "block": "flowControl", "type": "waitForState",
+                        "fields": [
+                            "condition": ["type": "WorkflowCondition", "required": true],
+                            "timeoutSeconds": ["type": "number", "required": true],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "block": "flowControl", "type": "conditional",
+                        "fields": [
+                            "condition": ["type": "WorkflowCondition", "required": true,
+                                "description": "All condition types allowed here, including blockResult"],
+                            "thenBlocks": ["type": "array", "required": true, "description": "Blocks to run if true"],
+                            "elseBlocks": ["type": "array", "required": false, "description": "Blocks to run if false"],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "block": "flowControl", "type": "repeat",
+                        "fields": [
+                            "count": ["type": "integer", "required": true],
+                            "blocks": ["type": "array", "required": true],
+                            "delayBetweenSeconds": ["type": "number", "required": false],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "block": "flowControl", "type": "repeatWhile",
+                        "fields": [
+                            "condition": ["type": "WorkflowCondition", "required": true,
+                                "description": "No blockResult allowed here"],
+                            "blocks": ["type": "array", "required": true],
+                            "maxIterations": ["type": "integer", "required": true],
+                            "delayBetweenSeconds": ["type": "number", "required": false],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "block": "flowControl", "type": "group",
+                        "fields": [
+                            "label": ["type": "string", "required": false],
+                            "blocks": ["type": "array", "required": true],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "block": "flowControl", "type": "return",
+                        "fields": [
+                            "outcome": ["type": "string", "required": true, "values": ["success", "error", "cancelled"]],
+                            "message": ["type": "string", "required": false],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "block": "flowControl", "type": "executeWorkflow",
+                        "fields": [
+                            "targetWorkflowId": ["type": "string", "required": true, "description": "UUID of target workflow"],
+                            "executionMode": ["type": "string", "required": true,
+                                "values": ["inline", "parallel", "delegate"],
+                                "description": "inline=wait, parallel=fire-and-continue, delegate=fire-and-stop-current"],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ]
+                ] as [[String: Any]]
+            ] as [String: Any],
+            "conditionTypes": [
+                "description": "WorkflowCondition types used in guard conditions, conditional blocks, waitForState, and repeatWhile.",
+                "types": [
+                    [
+                        "type": "deviceState",
+                        "fields": [
+                            "deviceId": ["type": "string", "required": true],
+                            "deviceName": ["type": "string", "required": true],
+                            "roomName": ["type": "string", "required": true],
+                            "serviceId": ["type": "string", "required": false],
+                            "characteristicType": ["type": "string", "required": true,
+                                "description": "Friendly name (e.g. 'Power', 'Brightness')"],
+                            "comparison": ["type": "object", "required": true, "description": "See comparisonOperators"]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "type": "timeCondition",
+                        "fields": [
+                            "mode": ["type": "string", "required": true,
+                                "values": ["beforeSunrise", "afterSunrise", "beforeSunset", "afterSunset",
+                                           "daytime", "nighttime", "timeRange"]],
+                            "startTime": ["type": "object", "required": false,
+                                "format": "{hour: 0-23, minute: 0-59}", "description": "Required for timeRange"],
+                            "endTime": ["type": "object", "required": false,
+                                "format": "{hour: 0-23, minute: 0-59}", "description": "Required for timeRange"]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "type": "sceneActive",
+                        "fields": [
+                            "sceneId": ["type": "string", "required": true],
+                            "sceneName": ["type": "string", "required": false],
+                            "isActive": ["type": "boolean", "required": true]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "type": "blockResult",
+                        "restriction": "ONLY valid inside conditional block conditions. NOT allowed in guard conditions, repeatWhile, or waitForState.",
+                        "fields": [
+                            "scope": ["type": "string", "required": true,
+                                "values": ["specific", "all", "any"],
+                                "description": "specific requires blockId of a previously-executed block"],
+                            "blockId": ["type": "string", "required": false, "description": "Required when scope is 'specific'"],
+                            "expectedStatus": ["type": "string", "required": true,
+                                "values": ["success", "failure", "cancelled", "skipped", "conditionNotMet"]]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "type": "and",
+                        "fields": ["conditions": ["type": "array", "description": "Array of WorkflowCondition objects"]]
+                    ],
+                    [
+                        "type": "or",
+                        "fields": ["conditions": ["type": "array", "description": "Array of WorkflowCondition objects"]]
+                    ],
+                    [
+                        "type": "not",
+                        "fields": ["condition": ["type": "WorkflowCondition", "description": "Single condition to negate"]]
+                    ]
+                ] as [[String: Any]]
+            ] as [String: Any],
+            "comparisonOperators": [
+                "description": "Comparison types for deviceState conditions",
+                "types": [
+                    ["type": "equals", "fields": ["value": "any"]],
+                    ["type": "notEquals", "fields": ["value": "any"]],
+                    ["type": "greaterThan", "fields": ["value": "number"]],
+                    ["type": "lessThan", "fields": ["value": "number"]],
+                    ["type": "greaterThanOrEqual", "fields": ["value": "number"]],
+                    ["type": "lessThanOrEqual", "fields": ["value": "number"]]
+                ] as [[String: Any]]
+            ] as [String: Any],
+            "importantRules": [
+                "Always include deviceName and roomName alongside deviceId in triggers, conditions, and blocks.",
+                "blockResult conditions are ONLY valid inside conditional block conditions.",
+                "Guard-level conditions only support: deviceState, timeCondition, sceneActive, and/or/not.",
+                "repeatWhile conditions only support: deviceState, timeCondition, sceneActive, and/or/not (no blockResult).",
+                "Set continueOnError=true on the workflow when using blockResult conditions.",
+                "Use list_characteristic_types to discover valid characteristic names and their accepted values.",
+                "Use list_devices to discover device IDs, service IDs, and characteristic IDs."
+            ]
+        ]
+
+        // Encode the schema as formatted JSON
+        if let jsonData = try? JSONSerialization.data(withJSONObject: schema, options: [.prettyPrinted, .sortedKeys]),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            return toolResult(text: jsonString, id: id)
+        }
+        return toolResult(text: "Failed to encode workflow schema", isError: true, id: id)
     }
 
     private func handleListRooms(id: JSONRPCId?) async -> JSONRPCResponse {

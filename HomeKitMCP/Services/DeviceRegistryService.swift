@@ -748,16 +748,35 @@ actor DeviceRegistryService {
                 if isObserved {
                     effectivePermissions.append("notify")
                 }
+                // Convert temperature values if user prefers Fahrenheit
+                let needsConversion = TemperatureConversion.isFahrenheit
+                    && TemperatureConversion.isTemperatureCharacteristic(char.type)
+
+                var convertedValue = char.value
+                var convertedMin = char.minValue
+                var convertedMax = char.maxValue
+                var convertedStep = char.stepValue
+                if needsConversion {
+                    if let v = char.value?.value as? Double {
+                        convertedValue = AnyCodable(TemperatureConversion.celsiusToFahrenheit(v))
+                    } else if let v = char.value?.value as? Int {
+                        convertedValue = AnyCodable(TemperatureConversion.celsiusToFahrenheit(Double(v)))
+                    }
+                    convertedMin = char.minValue.map { TemperatureConversion.celsiusToFahrenheit($0) }
+                    convertedMax = char.maxValue.map { TemperatureConversion.celsiusToFahrenheit($0) }
+                    convertedStep = char.stepValue.map { TemperatureConversion.convertStepFromCelsius($0) }
+                }
+
                 return CharacteristicModel(
                     id: stableCharId,
                     type: char.type,
-                    value: char.value,
+                    value: convertedValue,
                     format: char.format,
-                    units: char.units,
+                    units: needsConversion ? "fahrenheit" : char.units,
                     permissions: effectivePermissions,
-                    minValue: char.minValue,
-                    maxValue: char.maxValue,
-                    stepValue: char.stepValue,
+                    minValue: convertedMin,
+                    maxValue: convertedMax,
+                    stepValue: convertedStep,
                     validValues: char.validValues
                 )
             }

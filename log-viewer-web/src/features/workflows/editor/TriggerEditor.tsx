@@ -197,6 +197,7 @@ export function TriggerEditor({ index, draft, onChange, onRemove }: TriggerEdito
                   : undefined}
                 value={(draft.condition as any)?.to}
                 label="To"
+                allowAny
                 forceEditable
                 onChange={(val) => {
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any

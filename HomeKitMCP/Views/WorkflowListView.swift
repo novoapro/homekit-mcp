@@ -33,7 +33,11 @@ struct WorkflowListView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Theme.mainBackground)
+            .refreshable {
+                await viewModel.refresh()
+            }
         }
+        .refreshBar(isRefreshing: viewModel.isRefreshing)
         .background(Theme.mainBackground)
         .overlay(alignment: .bottom) {
             if viewModel.showClonedToast {

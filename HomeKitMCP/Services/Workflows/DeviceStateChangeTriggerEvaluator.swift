@@ -51,8 +51,19 @@ struct DeviceStateChangeTriggerEvaluator: TriggerEvaluator {
             ?? trigger.characteristicId
         guard change.characteristicType == resolvedType else { return false }
 
+        // Convert temperature values to user's preferred unit before condition evaluation,
+        // since trigger thresholds are stored in the user's preferred unit.
+        var effectiveOld = change.oldValue
+        var effectiveNew = change.newValue
+        if TemperatureConversion.isFahrenheit && TemperatureConversion.isTemperatureCharacteristic(resolvedType) {
+            if let v = effectiveOld as? Double { effectiveOld = TemperatureConversion.celsiusToFahrenheit(v) }
+            else if let v = effectiveOld as? Int { effectiveOld = TemperatureConversion.celsiusToFahrenheit(Double(v)) }
+            if let v = effectiveNew as? Double { effectiveNew = TemperatureConversion.celsiusToFahrenheit(v) }
+            else if let v = effectiveNew as? Int { effectiveNew = TemperatureConversion.celsiusToFahrenheit(Double(v)) }
+        }
+
         // Evaluate condition
-        return evaluateTriggerCondition(trigger.condition, oldValue: change.oldValue, newValue: change.newValue)
+        return evaluateTriggerCondition(trigger.condition, oldValue: effectiveOld, newValue: effectiveNew)
     }
 
     private func evaluateTriggerCondition(_ condition: TriggerCondition, oldValue: Any?, newValue: Any?) -> Bool {
@@ -70,12 +81,9 @@ struct DeviceStateChangeTriggerEvaluator: TriggerEvaluator {
             return !ConditionEvaluator.valuesEqual(newValue, target.value)
 
         case .transitioned(let from, let to):
-            let toMatches = ConditionEvaluator.valuesEqual(newValue, to.value)
-            if let from {
-                let fromMatches = ConditionEvaluator.valuesEqual(oldValue, from.value)
-                return fromMatches && toMatches
-            }
-            return toMatches
+            let fromMatches = from.map { ConditionEvaluator.valuesEqual(oldValue, $0.value) } ?? true
+            let toMatches = to.map { ConditionEvaluator.valuesEqual(newValue, $0.value) } ?? true
+            return fromMatches && toMatches
 
         case .greaterThan(let target):
             guard let numericValue = ConditionEvaluator.toDouble(newValue as Any) else { return false }

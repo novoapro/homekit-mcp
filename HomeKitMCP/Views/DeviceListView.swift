@@ -100,8 +100,9 @@ struct DeviceListView: View {
                 }
                 .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search devices")
                 .refreshable {
-                    viewModel.refresh()
+                    await viewModel.refreshAsync()
                 }
+                .refreshBar(isRefreshing: viewModel.isRefreshing)
             }
         }
         .navigationTitle(navigationTitle)

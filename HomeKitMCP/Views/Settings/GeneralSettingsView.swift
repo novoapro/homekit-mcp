@@ -10,6 +10,17 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
+                Picker("Temperature Unit", selection: $viewModel.temperatureUnit) {
+                    Text("Celsius").tag("celsius")
+                    Text("Fahrenheit").tag("fahrenheit")
+                }
+            } header: {
+                Label("Display", systemImage: "thermometer")
+            } footer: {
+                Text("Temperature values throughout the app, REST API, MCP tools, and WebSocket broadcasts will be displayed and accepted in the selected unit.")
+            }
+
+            Section {
                 Toggle("Log Device State Changes", isOn: $viewModel.deviceStateLoggingEnabled)
                 Toggle("Log Detailed Info", isOn: $viewModel.detailedLogsEnabled)
                 Toggle("Log Access via API", isOn: $viewModel.logAccessEnabled)

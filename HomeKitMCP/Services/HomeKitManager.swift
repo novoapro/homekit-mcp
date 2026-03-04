@@ -587,14 +587,27 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
 
             let roomName = accessory.room?.name
 
+            // Convert temperature values for logging and external broadcasts
+            let isTemp = TemperatureConversion.isTemperatureCharacteristic(characteristic.characteristicType)
+            let convertedOld: AnyCodable? = cachedValue.flatMap { v in
+                if isTemp, let d = v as? Double { return AnyCodable(TemperatureConversion.convertFromCelsius(d)) }
+                if isTemp, let i = v as? Int { return AnyCodable(TemperatureConversion.convertFromCelsius(Double(i))) }
+                return AnyCodable(v)
+            }
+            let convertedNew: AnyCodable? = newValue.flatMap { v in
+                if isTemp, let d = v as? Double { return AnyCodable(TemperatureConversion.convertFromCelsius(d)) }
+                if isTemp, let i = v as? Int { return AnyCodable(TemperatureConversion.convertFromCelsius(Double(i))) }
+                return AnyCodable(v)
+            }
+
             let logEntry = StateChangeLog.stateChange(
                 deviceId: deviceId,
                 deviceName: formattedName,
                 roomName: roomName,
                 serviceName: serviceName,
                 characteristicType: characteristic.characteristicType,
-                oldValue: cachedValue.map { AnyCodable($0) },
-                newValue: newValue.map { AnyCodable($0) }
+                oldValue: convertedOld,
+                newValue: convertedNew
             )
 
             // Translate to stable registry IDs for published StateChange
@@ -990,14 +1003,27 @@ extension HomeKitManager: HMAccessoryDelegate {
 
             let roomName = accessory.room?.name
 
+            // Convert temperature values for logging (persisted in user's preferred unit)
+            let isTemp = TemperatureConversion.isTemperatureCharacteristic(characteristic.characteristicType)
+            let convertedOld: AnyCodable? = cachedValue.flatMap { v in
+                if isTemp, let d = v as? Double { return AnyCodable(TemperatureConversion.convertFromCelsius(d)) }
+                if isTemp, let i = v as? Int { return AnyCodable(TemperatureConversion.convertFromCelsius(Double(i))) }
+                return AnyCodable(v)
+            }
+            let convertedNew: AnyCodable? = value.flatMap { v in
+                if isTemp, let d = v as? Double { return AnyCodable(TemperatureConversion.convertFromCelsius(d)) }
+                if isTemp, let i = v as? Int { return AnyCodable(TemperatureConversion.convertFromCelsius(Double(i))) }
+                return AnyCodable(v)
+            }
+
             let logEntry = StateChangeLog.stateChange(
                 deviceId: accessory.uniqueIdentifier.uuidString,
                 deviceName: formattedName,
                 roomName: roomName,
                 serviceName: ServiceTypes.displayName(for: service.serviceType),
                 characteristicType: characteristic.characteristicType,
-                oldValue: cachedValue.map { AnyCodable($0) },
-                newValue: value.map { AnyCodable($0) }
+                oldValue: convertedOld,
+                newValue: convertedNew
             )
 
             // Translate to stable registry IDs for published StateChange.

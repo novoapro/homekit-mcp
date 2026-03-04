@@ -752,10 +752,20 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             )
         }
 
+        // Convert temperature from user's preferred unit back to Celsius for HomeKit
+        var effectiveValue: Any = action.value.value as Any
+        if TemperatureConversion.isFahrenheit && TemperatureConversion.isTemperatureCharacteristic(resolvedType) {
+            if let doubleVal = action.value.value as? Double {
+                effectiveValue = TemperatureConversion.fahrenheitToCelsius(doubleVal)
+            } else if let intVal = action.value.value as? Int {
+                effectiveValue = TemperatureConversion.fahrenheitToCelsius(Double(intVal))
+            }
+        }
+
         try await homeKitManager.updateDevice(
             id: action.deviceId,
             characteristicType: resolvedType,
-            value: action.value.value,
+            value: effectiveValue,
             serviceId: action.serviceId
         )
     }
