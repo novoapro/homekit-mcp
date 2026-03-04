@@ -51,6 +51,7 @@ web-install: ## Install web app dependencies
 
 deploy: kill ## Pull latest, build & launch production MCP app + web app
 	git pull origin main
+	$(MAKE) generate
 	$(XCODEBUILD) -configuration 'Prod Debug' build
 	@echo "Launching HomeKitMCP (Prod)..."
 	@open "$(PRODUCTS)/Prod Debug-maccatalyst/HomeKitMCP.app"
