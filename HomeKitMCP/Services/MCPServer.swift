@@ -1104,6 +1104,8 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
         struct GenerateRequest: Decodable {
             let prompt: String
+            let deviceIds: [String]?
+            let sceneIds: [String]?
         }
 
         let generateReq: GenerateRequest
@@ -1121,7 +1123,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
         let workflow: Workflow
         do {
-            workflow = try await aiService.generateWorkflow(from: generateReq.prompt)
+            workflow = try await aiService.generateWorkflow(from: generateReq.prompt, deviceIds: generateReq.deviceIds, sceneIds: generateReq.sceneIds)
         } catch let error as AIWorkflowError {
             let statusCode: HTTPResponseStatus
             switch error {

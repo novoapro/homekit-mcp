@@ -20,12 +20,14 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-elevated);
   width: min(440px, 100%);
+  max-height: min(90vh, 680px);
   padding: var(--spacing-lg);
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: var(--spacing-sm);
+  overflow-y: auto;
   animation: aigSlideUp 250ms cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -179,4 +181,199 @@
   color: var(--status-error);
   line-height: var(--line-height-relaxed);
   margin: 0;
+}
+
+/* Selected item pills */
+.aig-selected-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.aig-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tint-main) 12%, transparent);
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.aig-pill.scene {
+  background: color-mix(in srgb, var(--status-success) 12%, transparent);
+}
+
+.aig-pill-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--tint-main);
+}
+
+.aig-pill.scene .aig-pill-icon {
+  color: var(--status-success);
+}
+
+.aig-pill-name {
+  font-weight: var(--font-weight-semibold);
+}
+
+.aig-pill-room {
+  color: var(--text-tertiary);
+}
+
+.aig-pill-room::before {
+  content: '\B7';
+  margin-right: 4px;
+}
+
+.aig-pill-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+@media (hover: hover) {
+  .aig-pill-remove:hover {
+    color: var(--status-error);
+    background: color-mix(in srgb, var(--status-error) 10%, transparent);
+  }
+}
+
+/* Picker toggle button */
+.aig-picker-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-family: inherit;
+  cursor: pointer;
+  padding: 4px 0;
+  align-self: flex-start;
+}
+
+@media (hover: hover) {
+  .aig-picker-toggle:hover {
+    color: var(--tint-main);
+  }
+}
+
+.aig-picker-count {
+  background: var(--tint-main);
+  color: white;
+  border-radius: 999px;
+  font-size: 10px;
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-bold);
+}
+
+/* Inline device/scene picker */
+.aig-picker {
+  width: 100%;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-sm);
+  background: var(--bg-main);
+  text-align: left;
+}
+
+.aig-picker-section {
+  padding: 8px 0;
+}
+
+.aig-picker-section + .aig-picker-section {
+  border-top: 1px solid var(--border-main);
+}
+
+.aig-picker-section-title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 12px 4px;
+}
+
+.aig-picker-room-name {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  padding: 4px 12px 2px;
+}
+
+.aig-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 20px;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  transition: background var(--transition-fast);
+}
+
+.aig-picker-item.selected {
+  background: color-mix(in srgb, var(--tint-main) 6%, transparent);
+}
+
+@media (hover: hover) {
+  .aig-picker-item:hover {
+    background: color-mix(in srgb, var(--tint-main) 8%, transparent);
+  }
+}
+
+.aig-picker-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tint-main) 10%, transparent);
+  color: var(--tint-main);
+  flex-shrink: 0;
+}
+
+.aig-picker-item-icon.scene {
+  background: color-mix(in srgb, var(--status-success) 10%, transparent);
+  color: var(--status-success);
+}
+
+.aig-picker-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aig-picker-check {
+  display: inline-flex;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  opacity: 0.4;
+}
+
+.aig-picker-check.checked {
+  color: var(--tint-main);
+  opacity: 1;
 }

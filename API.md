@@ -348,8 +348,18 @@ The MCP server acts as a proxy — it enriches the prompt with device context, c
 **Request body:**
 
 ```json
-{ "prompt": "Turn on the living room lights at sunset" }
+{
+  "prompt": "Turn on the living room lights at sunset",
+  "deviceIds": ["device-uuid-1", "device-uuid-2"],
+  "sceneIds": ["scene-uuid-1"]
+}
 ```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `prompt` | string | yes | Natural language description of the automation |
+| `deviceIds` | string[] | no | Pre-selected device IDs to use as context. When provided (and at least one ID across deviceIds/sceneIds is non-empty), the server skips automatic device selection and prompt validation, using only the specified devices. |
+| `sceneIds` | string[] | no | Pre-selected scene IDs to use as context. Same behavior as deviceIds. |
 
 **Success response (201):**
 

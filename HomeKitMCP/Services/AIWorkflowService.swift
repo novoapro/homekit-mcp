@@ -202,21 +202,35 @@ actor AIWorkflowService {
 
     /// Generate a Workflow from a natural language description.
     /// Uses a two-stage pipeline: (1) select relevant devices, (2) generate workflow with focused context.
-    func generateWorkflow(from description: String) async throws -> Workflow {
+    /// When `deviceIds`/`sceneIds` are provided (and at least one is non-empty), Stage 1 and prompt
+    /// validation are skipped — the caller has already chosen which devices/scenes to use.
+    func generateWorkflow(from description: String, deviceIds: [String]? = nil, sceneIds: [String]? = nil) async throws -> Workflow {
         let (client, apiKey, model) = try getClientConfig()
         let provider = storage.readAIProvider()
 
-        // Validate the prompt references known devices, scenes, or HomeKit concepts
-        try await validatePrompt(description)
-
-        // Stage 1: Select relevant devices/scenes
         let (allDevices, allScenes) = await stableContext()
-        let (selectedDevices, selectedScenes) = try await selectRelevantContext(
-            description: description,
-            devices: allDevices, scenes: allScenes,
-            client: client, apiKey: apiKey, model: model,
-            provider: provider.rawValue
-        )
+        let selectedDevices: [DeviceModel]
+        let selectedScenes: [SceneModel]
+
+        let hasPreselection = (deviceIds != nil || sceneIds != nil) &&
+                              (!(deviceIds ?? []).isEmpty || !(sceneIds ?? []).isEmpty)
+
+        if hasPreselection {
+            // User pre-selected devices/scenes: skip validation and Stage 1
+            let deviceIdSet = Set(deviceIds ?? [])
+            let sceneIdSet = Set(sceneIds ?? [])
+            selectedDevices = allDevices.filter { deviceIdSet.contains($0.id) }
+            selectedScenes = allScenes.filter { sceneIdSet.contains($0.id) }
+        } else {
+            // No pre-selection: validate prompt and use two-stage pipeline
+            try await validatePrompt(description)
+            (selectedDevices, selectedScenes) = try await selectRelevantContext(
+                description: description,
+                devices: allDevices, scenes: allScenes,
+                client: client, apiKey: apiKey, model: model,
+                provider: provider.rawValue
+            )
+        }
 
         // Stage 2: Generate workflow with focused device context
         let systemPrompt = buildSystemPrompt()

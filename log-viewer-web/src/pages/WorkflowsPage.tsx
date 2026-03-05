@@ -105,8 +105,8 @@ export function WorkflowsPage() {
   // Bulk delete confirmation
   const [bulkDeletePending, setBulkDeletePending] = useState(false);
 
-  const handleGenerate = useCallback(async (prompt: string) => {
-    return api.generateWorkflow(prompt);
+  const handleGenerate = useCallback(async (prompt: string, deviceIds?: string[], sceneIds?: string[]) => {
+    return api.generateWorkflow(prompt, deviceIds, sceneIds);
   }, [api]);
 
   const handleViewWorkflow = useCallback((id: string) => {

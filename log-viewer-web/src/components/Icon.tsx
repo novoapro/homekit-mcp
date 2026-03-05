@@ -82,6 +82,8 @@ const ICON_MAP: Record<string, IconEntry> = {
   'eye-slash':               { ms: 'visibility_off'                },
   'bell':                    { ms: 'notifications'                 },
 
+  'circle':                    { ms: 'radio_button_unchecked'         },
+
   // HomeKit services
   'hk-lightbulb':            { ms: 'lightbulb'                     },
   'hk-switch':               { ms: 'toggle_on',          fill: 1  },

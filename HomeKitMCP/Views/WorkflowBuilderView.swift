@@ -15,6 +15,9 @@ struct WorkflowBuilderView: View {
     @State private var errorMessage: String?
     @State private var showingSaveConfirmation = false
     @State private var showingDiagnostics = false
+    @State private var selectedDeviceIds: Set<String> = []
+    @State private var selectedSceneIds: Set<String> = []
+    @State private var showingDevicePicker = false
 
     private enum BuilderPhase {
         case describe
@@ -88,6 +91,73 @@ struct WorkflowBuilderView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(.horizontal)
+
+                // Selected devices/scenes pills
+                if !selectedDeviceIds.isEmpty || !selectedSceneIds.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Context")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+
+                        FlowLayout(spacing: 6) {
+                            ForEach(devices.filter { selectedDeviceIds.contains($0.id) }) { device in
+                                DevicePillView(device: device) {
+                                    selectedDeviceIds.remove(device.id)
+                                }
+                            }
+                            ForEach(scenes.filter { selectedSceneIds.contains($0.id) }) { scene in
+                                ScenePillView(scene: scene) {
+                                    selectedSceneIds.remove(scene.id)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+
+                // Device/scene picker toggle
+                Button {
+                    showingDevicePicker = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.subheadline)
+                        Text("Add Devices & Scenes")
+                            .font(.subheadline)
+                        if !selectedDeviceIds.isEmpty || !selectedSceneIds.isEmpty {
+                            Text("\(selectedDeviceIds.count + selectedSceneIds.count)")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Theme.Tint.main)
+                                .clipShape(Capsule())
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(12)
+                    .background(Theme.contentBackground)
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal)
+                .sheet(isPresented: $showingDevicePicker) {
+                    DeviceScenePickerSheet(
+                        devices: devices,
+                        scenes: scenes,
+                        selectedDeviceIds: $selectedDeviceIds,
+                        selectedSceneIds: $selectedSceneIds
+                    )
+                }
 
                 // Example hints
                 VStack(alignment: .leading, spacing: 8) {
@@ -300,7 +370,9 @@ struct WorkflowBuilderView: View {
 
         Task {
             do {
-                let workflow = try await aiWorkflowService.generateWorkflow(from: description)
+                let dIds = selectedDeviceIds.isEmpty ? nil : Array(selectedDeviceIds)
+                let sIds = selectedSceneIds.isEmpty ? nil : Array(selectedSceneIds)
+                let workflow = try await aiWorkflowService.generateWorkflow(from: description, deviceIds: dIds, sceneIds: sIds)
                 await MainActor.run {
                     self.generatedWorkflow = workflow
                     self.isGenerating = false
@@ -729,6 +801,282 @@ private struct BuilderFlowControlBlockRow: View {
         case .repeatWhile(let b): return b.blocks
         case .group(let b): return b.blocks
         }
+    }
+}
+
+// MARK: - Device Pill View
+
+private struct DevicePillView: View {
+    let device: DeviceModel
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: deviceIcon(for: device.categoryType))
+                .font(.caption2)
+                .foregroundColor(Theme.Category.color(for: device.categoryType))
+            Text(device.name)
+                .font(.caption)
+                .fontWeight(.medium)
+            if let room = device.roomName {
+                Text(room)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Theme.Category.color(for: device.categoryType).opacity(0.12))
+        .clipShape(Capsule())
+    }
+}
+
+// MARK: - Scene Pill View
+
+private struct ScenePillView: View {
+    let scene: SceneModel
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "play.rectangle.fill")
+                .font(.caption2)
+                .foregroundColor(.green)
+            Text(scene.name)
+                .font(.caption)
+                .fontWeight(.medium)
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Color.green.opacity(0.12))
+        .clipShape(Capsule())
+    }
+}
+
+// MARK: - Device/Scene Picker Sheet
+
+private struct DeviceScenePickerSheet: View {
+    let devices: [DeviceModel]
+    let scenes: [SceneModel]
+    @Binding var selectedDeviceIds: Set<String>
+    @Binding var selectedSceneIds: Set<String>
+    @Environment(\.dismiss) private var dismiss
+
+    private var devicesByRoom: [(String, [DeviceModel])] {
+        let grouped = Dictionary(grouping: devices) { $0.roomName ?? "No Room" }
+        return grouped.sorted { $0.key < $1.key }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if !devices.isEmpty {
+                    ForEach(devicesByRoom, id: \.0) { room, roomDevices in
+                        Section {
+                            ForEach(roomDevices) { device in
+                                DevicePickerRow(
+                                    device: device,
+                                    isSelected: selectedDeviceIds.contains(device.id),
+                                    onToggle: {
+                                        if selectedDeviceIds.contains(device.id) {
+                                            selectedDeviceIds.remove(device.id)
+                                        } else {
+                                            selectedDeviceIds.insert(device.id)
+                                        }
+                                    }
+                                )
+                            }
+                        } header: {
+                            Text(room)
+                        }
+                        .listRowBackground(Theme.contentBackground)
+                    }
+                }
+
+                if !scenes.isEmpty {
+                    Section {
+                        ForEach(scenes) { scene in
+                            ScenePickerRow(
+                                scene: scene,
+                                isSelected: selectedSceneIds.contains(scene.id),
+                                onToggle: {
+                                    if selectedSceneIds.contains(scene.id) {
+                                        selectedSceneIds.remove(scene.id)
+                                    } else {
+                                        selectedSceneIds.insert(scene.id)
+                                    }
+                                }
+                            )
+                        }
+                    } header: {
+                        Text("Scenes")
+                    }
+                    .listRowBackground(Theme.contentBackground)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Theme.mainBackground)
+            .navigationTitle("Select Devices & Scenes")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Device Picker Row
+
+private struct DevicePickerRow: View {
+    let device: DeviceModel
+    let isSelected: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Theme.Category.color(for: device.categoryType).opacity(isSelected ? 0.2 : 0.1))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: deviceIcon(for: device.categoryType))
+                        .font(.system(size: 15))
+                        .foregroundColor(Theme.Category.color(for: device.categoryType))
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(device.name)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                    Text(device.services.map { $0.effectiveDisplayName }.joined(separator: ", "))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundColor(isSelected ? Theme.Tint.main : .secondary.opacity(0.4))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Scene Picker Row
+
+private struct ScenePickerRow: View {
+    let scene: SceneModel
+    let isSelected: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.green.opacity(isSelected ? 0.2 : 0.1))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.system(size: 15))
+                        .foregroundColor(.green)
+                }
+
+                Text(scene.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundColor(isSelected ? Theme.Tint.main : .secondary.opacity(0.4))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Flow Layout
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = layout(in: proposal.replacingUnspecifiedDimensions().width, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = layout(in: bounds.width, subviews: subviews)
+        for (index, position) in result.positions.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+        }
+    }
+
+    private func layout(in width: CGFloat, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+        var positions: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var maxWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > width, x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            positions.append(CGPoint(x: x, y: y))
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+            maxWidth = max(maxWidth, x - spacing)
+        }
+
+        return (CGSize(width: maxWidth, height: y + rowHeight), positions)
+    }
+}
+
+// MARK: - Shared Device Icon Helper
+
+private func deviceIcon(for categoryType: String) -> String {
+    switch categoryType {
+    case "HMAccessoryCategoryTypeLightbulb": return "lightbulb.fill"
+    case "HMAccessoryCategoryTypeSwitch": return "switch.2"
+    case "HMAccessoryCategoryTypeOutlet": return "poweroutlet.type.b"
+    case "HMAccessoryCategoryTypeThermostat": return "thermometer"
+    case "HMAccessoryCategoryTypeFan": return "fan"
+    case "HMAccessoryCategoryTypeDoor": return "door.left.hand.closed"
+    case "HMAccessoryCategoryTypeWindow": return "window.vertical.closed"
+    case "HMAccessoryCategoryTypeDoorLock": return "lock.fill"
+    case "HMAccessoryCategoryTypeSensor": return "sensor"
+    case "HMAccessoryCategoryTypeGarageDoorOpener": return "door.garage.closed"
+    case "HMAccessoryCategoryTypeProgrammableSwitch": return "button.programmable"
+    case "HMAccessoryCategoryTypeSecuritySystem": return "shield.fill"
+    case "HMAccessoryCategoryTypeBridge": return "network"
+    default: return "house.fill"
     }
 }
 

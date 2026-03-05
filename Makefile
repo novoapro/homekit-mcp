@@ -19,10 +19,14 @@ dev: kill generate ## Build and run in Dev config
 	@open "$(PRODUCTS)/Dev Debug-maccatalyst/HomeKitMCP.app"
 
 dev-all: dev ## Build and run both apps in Dev mode
-	@echo "Starting web dashboard..."
-	@cd log-viewer-web && npm run dev &
-	@sleep 3
-	@open "http://localhost:$(WEB_PORT)"
+	@if lsof -iTCP:$(WEB_PORT) -sTCP:LISTEN >/dev/null 2>&1; then \
+		echo "Web dev server already running, skipping browser open."; \
+	else \
+		echo "Starting web dashboard..."; \
+		cd log-viewer-web && npm run dev & \
+		sleep 3; \
+		open "http://localhost:$(WEB_PORT)"; \
+	fi
 
 prod: kill generate ## Build and run in Prod config
 	$(XCODEBUILD) -configuration 'Prod Debug' build
