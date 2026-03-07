@@ -50,8 +50,62 @@ enum CharacteristicTypes {
         HMCharacteristicTypeIsConfigured: "Is Configured",
     ]
 
+    /// Semantic descriptions explaining what each characteristic represents.
+    private static let descriptions: [String: String] = [
+        HMCharacteristicTypePowerState: "On/off state of a device",
+        HMCharacteristicTypeBrightness: "Light intensity level",
+        HMCharacteristicTypeHue: "Color hue component on the color wheel",
+        HMCharacteristicTypeSaturation: "Color saturation intensity; 0% is white, 100% is full color",
+        HMCharacteristicTypeColorTemperature: "White light warmth; low values are warm (yellow), high values are cool (blue)",
+        HMCharacteristicTypeCurrentTemperature: "Ambient temperature reading from a sensor (read-only)",
+        HMCharacteristicTypeTargetTemperature: "Desired temperature setpoint for a thermostat",
+        HMCharacteristicTypeTemperatureUnits: "Display unit preference for temperature (Celsius or Fahrenheit)",
+        HMCharacteristicTypeCurrentHeatingCooling: "Current operating mode of a thermostat (off, heating, or cooling) (read-only)",
+        HMCharacteristicTypeTargetHeatingCooling: "Desired operating mode for a thermostat (off, heat, cool, or auto)",
+        HMCharacteristicTypeCurrentRelativeHumidity: "Current relative humidity reading from a sensor (read-only)",
+        HMCharacteristicTypeTargetRelativeHumidity: "Desired humidity level for a humidifier/dehumidifier",
+        HMCharacteristicTypeCurrentDoorState: "Current physical state of a door (open, closed, opening, closing, stopped) (read-only)",
+        HMCharacteristicTypeTargetDoorState: "Desired state for a motorized door (open or closed)",
+        HMCharacteristicTypeCurrentLockMechanismState: "Current state of a lock (secured, unsecured, jammed, unknown) (read-only)",
+        HMCharacteristicTypeTargetLockMechanismState: "Desired state for a lock (secured or unsecured)",
+        HMCharacteristicTypeCurrentPosition: "Current position of a window covering, door, or window as percentage (read-only)",
+        HMCharacteristicTypeTargetPosition: "Desired position for a window covering, door, or window as percentage",
+        HMCharacteristicTypePositionState: "Movement direction of a positionable device (increasing, decreasing, stopped) (read-only)",
+        HMCharacteristicTypeMotionDetected: "Whether motion is currently detected in the sensor's field (read-only)",
+        HMCharacteristicTypeContactState: "Whether a door or window is open or closed (read-only)",
+        HMCharacteristicTypeOccupancyDetected: "Whether a room is currently occupied (read-only)",
+        HMCharacteristicTypeSmokeDetected: "Whether smoke is detected by the sensor (read-only)",
+        HMCharacteristicTypeCarbonMonoxideDetected: "Whether carbon monoxide is at abnormal levels (read-only)",
+        HMCharacteristicTypeBatteryLevel: "Remaining battery charge as a percentage (read-only)",
+        HMCharacteristicTypeStatusLowBattery: "Whether battery level is critically low (read-only)",
+        HMCharacteristicTypeChargingState: "Whether the device battery is currently charging (read-only)",
+        HMCharacteristicTypeOutletInUse: "Whether an outlet is currently supplying power to a connected device (read-only)",
+        HMCharacteristicTypeRotationSpeed: "Fan or motor rotation speed as a percentage",
+        HMCharacteristicTypeCurrentFanState: "Current operating state of a fan (inactive, idle, blowing) (read-only)",
+        HMCharacteristicTypeTargetFanState: "Desired fan operating mode (manual or auto)",
+        HMCharacteristicTypeActive: "Whether a device is actively operating (e.g. air purifier running, valve open)",
+        HMCharacteristicTypeStatusActive: "Whether a device is currently active and functional (read-only)",
+        HMCharacteristicTypeName: "User-assigned name of the accessory or service (read-only)",
+        HMCharacteristicTypeObstructionDetected: "Whether a physical obstruction is blocking a device like a garage door (read-only)",
+        HMCharacteristicTypeStatusFault: "Whether the device has detected an internal fault (read-only)",
+        HMCharacteristicTypeStatusTampered: "Whether the device has been physically tampered with (read-only)",
+        HMCharacteristicTypeCurrentLightLevel: "Ambient light level measured in lux (read-only)",
+        HMCharacteristicTypeInputEvent: "Button press event type (single press, double press, long press) (read-only)",
+        HMCharacteristicTypeProgramMode: "Current scheduling/program mode of a valve or irrigation system (read-only)",
+        HMCharacteristicTypeInUse: "Whether a valve or sprinkler is currently running water (read-only)",
+        HMCharacteristicTypeRemainingDuration: "Seconds remaining in the current valve/sprinkler cycle (read-only)",
+        HMCharacteristicTypeSetDuration: "Duration in seconds to run a valve or sprinkler when activated",
+        HMCharacteristicTypeValveType: "Type of valve (generic, irrigation, shower head, faucet) (read-only)",
+        HMCharacteristicTypeIsConfigured: "Whether a service has been set up and is ready to use (read-only)",
+    ]
+
     static func displayName(for characteristicType: String) -> String {
         return mapping[characteristicType] ?? characteristicType
+    }
+
+    /// Returns the semantic description for a characteristic type, or nil if unknown.
+    static func description(for characteristicType: String) -> String? {
+        return descriptions[characteristicType]
     }
     
     /// All known characteristic type friendly names, sorted alphabetically.

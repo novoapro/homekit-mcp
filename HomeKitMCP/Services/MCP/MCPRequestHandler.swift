@@ -514,9 +514,16 @@ final class MCPRequestHandler: Sendable {
     // MARK: - Metadata Tools
 
     private func handleListServiceTypes(id: JSONRPCId?) -> JSONRPCResponse {
-        let types = ServiceTypes.allDisplayNames
-        let text = "Known service types (\(types.count)):\n" + types.map { "- \($0)" }.joined(separator: "\n")
-        return toolResult(text: text, id: id)
+        let entries = ServiceTypes.allEntries
+        var lines: [String] = ["Known service types (\(entries.count)):"]
+        for entry in entries {
+            if entry.description.isEmpty {
+                lines.append("- \(entry.displayName)")
+            } else {
+                lines.append("- \(entry.displayName) — \(entry.description)")
+            }
+        }
+        return toolResult(text: lines.joined(separator: "\n"), id: id)
     }
 
     private func handleListCharacteristicTypes(id: JSONRPCId?) -> JSONRPCResponse {
@@ -526,6 +533,9 @@ final class MCPRequestHandler: Sendable {
         for entry in allMappings {
             let name = entry.displayName
             let uuid = entry.uuid
+
+            // Semantic description
+            let semanticDesc = CharacteristicTypes.description(for: uuid)
 
             // Build value description
             var valueDesc = ""
@@ -548,7 +558,10 @@ final class MCPRequestHandler: Sendable {
             if !aliases.isEmpty {
                 line += " (aliases: \(aliases.joined(separator: ", ")))"
             }
-            line += " — \(valueDesc)"
+            if let desc = semanticDesc {
+                line += " — \(desc)"
+            }
+            line += " [\(valueDesc)]"
             lines.append(line)
         }
 
@@ -589,9 +602,16 @@ final class MCPRequestHandler: Sendable {
     }
 
     private func handleListDeviceCategories(id: JSONRPCId?) -> JSONRPCResponse {
-        let categories = DeviceCategories.allDisplayNames
-        let text = "Known device categories (\(categories.count)):\n" + categories.map { "- \($0)" }.joined(separator: "\n")
-        return toolResult(text: text, id: id)
+        let entries = DeviceCategories.allEntries
+        var lines: [String] = ["Known device categories (\(entries.count)):"]
+        for entry in entries {
+            if entry.description.isEmpty {
+                lines.append("- \(entry.displayName)")
+            } else {
+                lines.append("- \(entry.displayName) — \(entry.description)")
+            }
+        }
+        return toolResult(text: lines.joined(separator: "\n"), id: id)
     }
 
     private func handleGetWorkflowSchema(id: JSONRPCId?) -> JSONRPCResponse {

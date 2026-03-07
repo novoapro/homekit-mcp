@@ -686,19 +686,25 @@ Always available. These tools help AI agents discover valid type names and workf
 
 ##### list_service_types
 
-List all known HomeKit service types.
+List all known HomeKit service types with semantic descriptions.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | *(none)* | | | |
 
-Returns a text list of all service type friendly names (e.g. "Lightbulb", "Fan", "Thermostat"). These names can be used as filter values in `list_devices` and `get_devices_by_type`.
+Returns a text list of all service types. Each entry includes:
+- Friendly name (e.g. "Lightbulb", "Fan", "Thermostat")
+- Semantic description explaining the service's purpose and typical capabilities
+
+These names can be used as filter values in `list_devices` and `get_devices_by_type`.
+
+Example entry: `- Thermostat — Climate control; reads current temperature, sets target temperature and heating/cooling mode`
 
 ---
 
 ##### list_characteristic_types
 
-List all known HomeKit characteristic types with value type information.
+List all known HomeKit characteristic types with semantic descriptions and value type information.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -707,21 +713,30 @@ List all known HomeKit characteristic types with value type information.
 Returns a rich text list of all characteristic types. Each entry includes:
 - Friendly name (e.g. "Power", "Brightness")
 - Accepted aliases (e.g. "power", "temperature")
-- Value type and range (bool, percentage 0-100%, enum values, etc.)
+- Semantic description explaining what the characteristic represents
+- Value type and range in brackets (bool, percentage 0-100%, enum values, etc.)
 
 These names can be used in `control_device`, workflow triggers, conditions, actions, and as filter values in `list_devices`.
+
+Example entry: `- Brightness (aliases: brightness) — Light intensity level [percentage 0-100%]`
 
 ---
 
 ##### list_device_categories
 
-List all known HomeKit device categories.
+List all known HomeKit device categories with semantic descriptions.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | *(none)* | | | |
 
-Returns a text list of all device category friendly names (e.g. "Lightbulb", "Thermostat", "Sensor"). These names can be used as filter values in `list_devices`.
+Returns a text list of all device categories. Each entry includes:
+- Friendly name (e.g. "Lightbulb", "Thermostat", "Sensor")
+- Semantic description explaining what kind of physical device the category represents
+
+These names can be used as filter values in `list_devices`.
+
+Example entry: `- Sensor — Environmental or state sensor (motion, temperature, humidity, contact, leak, etc.)`
 
 ---
 
