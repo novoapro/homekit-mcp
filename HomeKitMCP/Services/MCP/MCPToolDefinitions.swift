@@ -298,7 +298,6 @@ enum MCPToolDefinitions {
                   mode: beforeSunrise, afterSunrise, beforeSunset, afterSunset, daytime (sunrise–sunset), \
                 nighttime (sunset–sunrise), timeRange (custom hours, cross-midnight aware). \
                 startTime/endTime required only for timeRange (hour 0-23, minute 0-59)
-                • { "type":"sceneActive", "sceneId":"uuid", "isActive":true }
                 • { "type":"and", "conditions":[...] } — all must pass
                 • { "type":"or",  "conditions":[...] } — any must pass
                 • { "type":"not", "condition":{...} } — negates inner condition
@@ -312,9 +311,9 @@ enum MCPToolDefinitions {
                 "specific" can ONLY reference blocks with a lower ordinal (earlier in the blocks array). \
                 If the referenced block has not executed, the condition evaluates to false.
                 The same WorkflowCondition format is used in the top-level "conditions" guard array \
-                (deviceState, timeCondition, sceneActive only), in "conditional" block "condition" \
+                (deviceState, timeCondition only), in "conditional" block "condition" \
                 fields (all types including blockResult), and in "repeatWhile" block "condition" fields \
-                (deviceState, timeCondition, sceneActive only — no blockResult).
+                (deviceState, timeCondition only — no blockResult).
 
                 DEVICE METADATA: Always include "deviceName" and "roomName" alongside "deviceId" in \
                 triggers, guard conditions, and blocks. This enables cross-machine migration when HomeKit \

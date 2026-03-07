@@ -625,7 +625,7 @@ final class MCPRequestHandler: Sendable {
                     "description": "Must be true if using blockResult conditions"],
                 "triggers": ["type": "array", "required": true, "description": "Array of trigger objects"],
                 "conditions": ["type": "array", "required": false,
-                    "description": "Optional guard conditions (AND-ed). Only deviceState, timeCondition, sceneActive allowed (no blockResult)."],
+                    "description": "Optional guard conditions (AND-ed). Only deviceState, timeCondition allowed (no blockResult)."],
                 "blocks": ["type": "array", "required": true, "description": "Array of block objects (actions and flow control)"]
             ] as [String: Any],
             "retriggerPolicies": [
@@ -852,14 +852,6 @@ final class MCPRequestHandler: Sendable {
                         ] as [String: Any]
                     ],
                     [
-                        "type": "sceneActive",
-                        "fields": [
-                            "sceneId": ["type": "string", "required": true],
-                            "sceneName": ["type": "string", "required": false],
-                            "isActive": ["type": "boolean", "required": true]
-                        ] as [String: Any]
-                    ],
-                    [
                         "type": "blockResult",
                         "restriction": "ONLY valid inside conditional block conditions. NOT allowed in guard conditions, repeatWhile, or waitForState.",
                         "fields": [
@@ -899,8 +891,8 @@ final class MCPRequestHandler: Sendable {
             "importantRules": [
                 "Always include deviceName and roomName alongside deviceId in triggers, conditions, and blocks.",
                 "blockResult conditions are ONLY valid inside conditional block conditions.",
-                "Guard-level conditions only support: deviceState, timeCondition, sceneActive, and/or/not.",
-                "repeatWhile conditions only support: deviceState, timeCondition, sceneActive, and/or/not (no blockResult).",
+                "Guard-level conditions only support: deviceState, timeCondition, and/or/not.",
+                "repeatWhile conditions only support: deviceState, timeCondition, and/or/not (no blockResult).",
                 "Set continueOnError=true on the workflow when using blockResult conditions.",
                 "Use list_devices to discover device IDs, service IDs, and characteristic IDs.",
                 "Use characteristic IDs (not types) in triggers, conditions, and controlDevice actions."

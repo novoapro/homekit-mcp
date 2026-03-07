@@ -388,7 +388,6 @@ Evaluated after a trigger fires but before blocks execute. All must pass.
 |------|-------------|
 | `deviceState` | Check current device characteristic against a comparison |
 | `timeCondition` | Time-based condition (before/after sunrise/sunset, daytime, nighttime, time range) |
-| `sceneActive` | Check if a scene is currently active |
 | `blockResult` | Check the result of a previous block (requires `continueOnError`) |
 | `and` | All sub-conditions must be true |
 | `or` | Any sub-condition must be true |

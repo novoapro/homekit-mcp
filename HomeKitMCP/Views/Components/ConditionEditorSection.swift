@@ -146,11 +146,6 @@ struct ConditionGroupEditor: View {
                 } label: {
                     Label("Time Condition", systemImage: "clock.fill")
                 }
-                Button {
-                    group.children.append(.leaf(.emptySceneActive()))
-                } label: {
-                    Label("Scene Active", systemImage: "play.rectangle.fill")
-                }
                 if allowBlockResult && continueOnError {
                     Button {
                         group.children.append(.leaf(.emptyBlockResult()))
@@ -484,18 +479,9 @@ private struct ConditionLeafEditSheet: View {
                     .foregroundStyle(.secondary)
             }
         case .sceneActive:
-            Picker("Scene", selection: $condition.sceneId) {
-                Text("Select scene\u{2026}").tag("")
-                ForEach(scenes) { scene in
-                    Text(scene.name).tag(scene.id)
-                }
-            }
-
-            Picker("Check", selection: $condition.sceneIsActive) {
-                Text("Is Active").tag(true)
-                Text("Is Not Active").tag(false)
-            }
-            .pickerStyle(.segmented)
+            // Legacy — no longer offered for new conditions
+            Text("Scene Active (legacy)")
+                .foregroundStyle(.secondary)
 
         case .blockResult:
             blockResultContent

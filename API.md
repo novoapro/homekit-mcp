@@ -1201,7 +1201,7 @@ All blocks accept an optional `name` field.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `type` | `"waitForState"` | yes | |
-| `condition` | WorkflowCondition | yes | Condition to wait for (same format as conditional/repeatWhile — supports AND/OR/NOT groups, deviceState, timeCondition, sceneActive) |
+| `condition` | WorkflowCondition | yes | Condition to wait for (same format as conditional/repeatWhile — supports AND/OR/NOT groups, deviceState, timeCondition) |
 | `timeoutSeconds` | number | yes | Max wait time in seconds |
 
 > **Backward compatibility:** The old flat format (`deviceId`, `characteristicId`, `condition` as ComparisonOperator) is still accepted for decoding and automatically converted to a `WorkflowCondition.deviceState`.
@@ -1286,14 +1286,6 @@ Conditions are used in workflow-level guards, conditional blocks, and repeatWhil
 | `mode` | string | yes | `beforeSunrise`, `afterSunrise`, `beforeSunset`, `afterSunset`, `daytime`, `nighttime`, `timeRange` |
 | `startTime` | `{hour, minute}` | for `timeRange` | Start time (0-23, 0-59). Cross-midnight aware. |
 | `endTime` | `{hour, minute}` | for `timeRange` | End time |
-
-#### sceneActive
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `type` | `"sceneActive"` | yes | |
-| `sceneId` | string | yes | |
-| `isActive` | boolean | yes | |
 
 #### blockResult
 

@@ -1134,7 +1134,7 @@ struct BlockResultCondition: Codable {
 indirect enum WorkflowCondition: Codable {
     case deviceState(DeviceStateCondition)
     case timeCondition(TimeCondition)
-    case sceneActive(SceneActiveCondition)
+    case sceneActive(SceneActiveCondition) // Legacy — no longer offered in UI; kept for backward compat decoding
     case blockResult(BlockResultCondition)
     case and([WorkflowCondition])
     case or([WorkflowCondition])
@@ -1196,6 +1196,7 @@ indirect enum WorkflowCondition: Codable {
             }
             self = .timeCondition(TimeCondition(mode: mode))
         case .sceneActive:
+            // Legacy: decode for backward compat but no longer offered in UI
             self = try .sceneActive(SceneActiveCondition(
                 sceneId: container.decode(String.self, forKey: .sceneId),
                 sceneName: container.decodeIfPresent(String.self, forKey: .sceneName),
@@ -1232,6 +1233,7 @@ indirect enum WorkflowCondition: Codable {
             try container.encodeIfPresent(cond.startTime, forKey: .startTime)
             try container.encodeIfPresent(cond.endTime, forKey: .endTime)
         case let .sceneActive(cond):
+            // Legacy: encode for backward compat
             try container.encode(ConditionType.sceneActive, forKey: .type)
             try container.encodeIfPresent(cond.sceneName, forKey: .sceneName)
             try container.encode(cond.sceneId, forKey: .sceneId)
@@ -1343,6 +1345,8 @@ struct TimeCondition: Codable {
     }
 }
 
+/// Legacy — kept only for backward-compatible decoding of existing workflows.
+/// No longer offered in the UI or documented in the API.
 struct SceneActiveCondition: Codable {
     let sceneId: String
     let sceneName: String?

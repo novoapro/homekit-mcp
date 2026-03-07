@@ -3,7 +3,7 @@ import { Icon } from '@/components/Icon';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import type {
   WorkflowConditionDef, DeviceStateConditionDef, TimeConditionDef,
-  SceneActiveConditionDef, BlockResultConditionDef,
+  BlockResultConditionDef,
   LogicAndConditionDef, LogicOrConditionDef, LogicNotConditionDef,
 } from '@/types/workflow-definition';
 import { formatComparisonOperator, formatTimeConditionMode } from '@/utils/workflow-definition-utils';
@@ -50,11 +50,6 @@ export function DefinitionCondition({ condition, depth = 0 }: DefinitionConditio
         return registry.lookupDevice(d.deviceId)?.name || d.deviceId;
       }
       case 'timeCondition': return 'Time Condition';
-      case 'sceneActive': {
-        const s = condition as SceneActiveConditionDef;
-        const scene = registry.lookupScene(s.sceneId);
-        return scene?.name || s.sceneId;
-      }
       case 'blockResult': return 'Block Result';
       case 'and': return 'All conditions (AND)';
       case 'or': return 'Any condition (OR)';
@@ -78,10 +73,6 @@ export function DefinitionCondition({ condition, depth = 0 }: DefinitionConditio
       case 'timeCondition': {
         const t = condition as TimeConditionDef;
         return formatTimeConditionMode(t.mode, t.startTime, t.endTime);
-      }
-      case 'sceneActive': {
-        const s = condition as SceneActiveConditionDef;
-        return s.isActive ? 'Is active' : 'Is not active';
       }
       case 'blockResult': {
         const b = condition as BlockResultConditionDef;

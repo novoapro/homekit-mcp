@@ -92,12 +92,6 @@ export interface TimeConditionDef {
   endTime?: { hour: number; minute: number };
 }
 
-export interface SceneActiveConditionDef {
-  type: 'sceneActive';
-  sceneId: string;
-  isActive: boolean;
-}
-
 export interface BlockResultConditionDef {
   type: 'blockResult';
   blockResultScope: { scope: string; blockId?: string };
@@ -120,7 +114,7 @@ export interface LogicNotConditionDef {
 }
 
 export type WorkflowConditionDef =
-  | DeviceStateConditionDef | TimeConditionDef | SceneActiveConditionDef
+  | DeviceStateConditionDef | TimeConditionDef
   | BlockResultConditionDef | LogicAndConditionDef | LogicOrConditionDef | LogicNotConditionDef;
 
 // Workflow Blocks

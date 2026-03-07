@@ -92,15 +92,16 @@ struct ConditionEvaluator {
 
     // MARK: - Internal
 
-    /// Evaluate a leaf condition (deviceState, timeCondition, sceneActive). Compound conditions are handled by `evaluate(_:)`.
+    /// Evaluate a leaf condition (deviceState, timeCondition, blockResult). Compound conditions are handled by `evaluate(_:)`.
     private func evaluateLeaf(_ condition: WorkflowCondition) async -> (Bool, String) {
         switch condition {
         case .deviceState(let cond):
             return await evaluateDeviceState(cond)
         case .timeCondition(let cond):
             return evaluateTimeCondition(cond)
-        case .sceneActive(let cond):
-            return await evaluateSceneActive(cond)
+        case .sceneActive:
+            // Legacy: sceneActive conditions are no longer supported; always pass
+            return (true, "Scene condition (legacy, always passes)")
         case .blockResult(let cond):
             return evaluateBlockResult(cond)
         case .and, .or, .not:
@@ -247,38 +248,6 @@ struct ConditionEvaluator {
         }
 
         return (passed, "Time Range \(start.formatted)–\(end.formatted) = \(passed)")
-    }
-
-    private func evaluateSceneActive(_ condition: SceneActiveCondition) async -> (Bool, String) {
-        guard let scene = await MainActor.run(body: { homeKitManager.getScene(id: condition.sceneId) }) else {
-            return (false, "Scene not found")
-        }
-
-        var allMatch = true
-        for action in scene.actions {
-            guard let device = await MainActor.run(body: { homeKitManager.getDeviceState(id: action.deviceId) }) else {
-                await logOrphan(
-                    location: "scene condition '\(scene.name)'",
-                    detail: "device in scene not found"
-                )
-                allMatch = false
-                break
-            }
-
-            let currentValue = findCharacteristicValue(in: device, characteristicType: action.characteristicType, serviceId: nil)
-            if !Self.valuesEqual(currentValue, action.targetValue.value) {
-                allMatch = false
-                break
-            }
-        }
-
-        if condition.isActive {
-            // Checking if scene IS active
-            return (allMatch, allMatch ? "Scene '\(scene.name)' is active" : "Scene '\(scene.name)' is not active")
-        } else {
-            // Checking if scene is NOT active
-            return (!allMatch, !allMatch ? "Scene '\(scene.name)' is not active" : "Scene '\(scene.name)' is active")
-        }
     }
 
     private func findCharacteristicValue(in device: DeviceModel, characteristicType: String, serviceId: String?) -> Any? {

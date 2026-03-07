@@ -683,7 +683,7 @@ actor AIWorkflowService {
         right state for this workflow to run. They are the PRIMARY mechanism for AND/OR/NOT logic. \
         Use guard conditions whenever the user describes multi-condition scenarios like \
         "when X AND Y", "only if Z", "unless W", "but only during...", "if ... is on/off". \
-        IMPORTANT: Only deviceState, timeCondition, sceneActive (and logical and/or/not) are valid here. \
+        IMPORTANT: Only deviceState, timeCondition (and logical and/or/not) are valid here. \
         Do NOT use blockResult in guard conditions — no blocks have executed yet at that point.
 
         ```json
@@ -692,7 +692,6 @@ actor AIWorkflowService {
         { "type": "timeCondition", "mode": "nighttime" }
         { "type": "timeCondition", "mode": "daytime" }
         { "type": "timeCondition", "mode": "timeRange", "startTime": { "hour": 22, "minute": 0 }, "endTime": { "hour": 6, "minute": 0 } }
-        { "type": "sceneActive", "sceneId": "scene-uuid", "sceneName": "Scene Name", "isActive": true }
         { "type": "and", "conditions": [ ... ] }
         { "type": "or", "conditions": [ ... ] }
         { "type": "not", "condition": { ... } }
@@ -737,7 +736,7 @@ actor AIWorkflowService {
         Use short, descriptive names like "Turn on lamp", "Wait for door", "Check temperature"
         - The "serviceId" field is optional; use it only for devices with multiple services of the same type
         - Always include "deviceName" and "roomName" alongside "deviceId" in triggers, conditions, and blocks — copy them from the available devices list. This metadata enables cross-device migration
-        - Always include "sceneName" alongside "sceneId" in runScene actions and sceneActive conditions — copy the name from the available scenes list
+        - Always include "sceneName" alongside "sceneId" in runScene actions — copy the name from the available scenes list
         - Do not include "id", "createdAt", "updatedAt", or "metadata" — they are auto-generated
         """
 

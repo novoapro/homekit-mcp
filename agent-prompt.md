@@ -429,5 +429,5 @@ Guard conditions (the workflow-level `"conditions"` array) check **readiness** a
 - Always include `"sceneName"` alongside `"sceneId"`.
 - Use `characteristicId` (stable IDs from device listings), NOT characteristic type names, in workflow triggers, conditions, and actions.
 - Do NOT include `id`, `createdAt`, `updatedAt`, or `metadata` — they are auto-generated.
-- Guard-level conditions only support: `deviceState`, `timeCondition`, `sceneActive`, and `and`/`or`/`not`. Do NOT use `blockResult` in guard conditions.
+- Guard-level conditions only support: `deviceState`, `timeCondition`, and `and`/`or`/`not`. Do NOT use `blockResult` in guard conditions.
 - `blockResult` conditions are ONLY valid inside conditional block conditions, and require `continueOnError: true`.

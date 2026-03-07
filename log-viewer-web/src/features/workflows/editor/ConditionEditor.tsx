@@ -11,7 +11,6 @@ import './TriggerEditor.css'; // reuse shared form styles
 const CONDITION_LEAF_TYPES = [
   { value: 'deviceState', label: 'Device State' },
   { value: 'timeCondition', label: 'Time Window' },
-  { value: 'sceneActive', label: 'Scene Active' },
   { value: 'blockResult', label: 'Block Result' },
 ];
 
@@ -180,28 +179,6 @@ export function ConditionEditor({ draft, allowBlockResult = true, allBlocks, cur
               </div>
             </>
           )}
-        </>
-      )}
-
-      {/* sceneActive */}
-      {draft.type === 'sceneActive' && (
-        <>
-          <div className="editor-field">
-            <label>Scene</label>
-            <select className="editor-select" value={draft.sceneId || ''} onChange={(e) => patch({ sceneId: e.target.value })}>
-              <option value="">-- Select scene --</option>
-              {registry.scenes.map((scene) => (
-                <option key={scene.id} value={scene.id}>{scene.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="editor-field">
-            <label>State</label>
-            <select className="editor-select" value={draft.isActive !== false ? 'true' : 'false'} onChange={(e) => patch({ isActive: e.target.value === 'true' })}>
-              <option value="true">Is Active</option>
-              <option value="false">Is Not Active</option>
-            </select>
-          </div>
         </>
       )}
 

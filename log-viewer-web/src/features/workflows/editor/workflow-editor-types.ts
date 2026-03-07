@@ -37,7 +37,7 @@ export interface WorkflowTriggerDraft {
 
 export interface WorkflowConditionDraft {
   _draftId: string;
-  type: 'deviceState' | 'timeCondition' | 'sceneActive' | 'blockResult' | 'and' | 'or' | 'not';
+  type: 'deviceState' | 'timeCondition' | 'blockResult' | 'and' | 'or' | 'not';
   // deviceState
   deviceId?: string;
   serviceId?: string;
@@ -47,9 +47,6 @@ export interface WorkflowConditionDraft {
   mode?: string;
   startTime?: { hour: number; minute: number };
   endTime?: { hour: number; minute: number };
-  // sceneActive
-  sceneId?: string;
-  isActive?: boolean;
   // blockResult
   blockResultScope?: { scope: string; blockId?: string };
   expectedStatus?: string;

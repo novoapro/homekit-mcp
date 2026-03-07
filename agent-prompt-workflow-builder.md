@@ -92,7 +92,7 @@ Guard conditions (the workflow-level `"conditions"` array) check **readiness** a
 
 ## Condition Rules
 
-- **Guard-level conditions** (workflow `"conditions"` array) only support: `deviceState`, `timeCondition`, `sceneActive`, and `and`/`or`/`not`. Do NOT use `blockResult` in guard conditions.
+- **Guard-level conditions** (workflow `"conditions"` array) only support: `deviceState`, `timeCondition`, and `and`/`or`/`not`. Do NOT use `blockResult` in guard conditions.
 - **`blockResult` conditions** are ONLY valid inside conditional block conditions, and require `continueOnError: true`.
 
 ---

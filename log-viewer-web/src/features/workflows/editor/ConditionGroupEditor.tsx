@@ -10,7 +10,6 @@ import './ConditionGroupEditor.css';
 const CONDITION_ICONS: Record<string, string> = {
   deviceState: 'house',
   timeCondition: 'clock',
-  sceneActive: 'sparkles',
   blockResult: 'checkmark-circle',
   and: 'arrow-triangle-branch',
   or: 'arrow-triangle-branch',
@@ -20,7 +19,6 @@ const CONDITION_ICONS: Record<string, string> = {
 const LEAF_TYPE_OPTIONS = [
   { value: 'deviceState', label: 'Device State' },
   { value: 'timeCondition', label: 'Time Window' },
-  { value: 'sceneActive', label: 'Scene Active' },
   { value: 'blockResult', label: 'Block Result' },
 ];
 

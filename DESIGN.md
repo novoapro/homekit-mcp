@@ -303,7 +303,6 @@ struct Workflow {
 |------|-------------|
 | `deviceState` | Current value of a characteristic (comparison operators) |
 | `timeCondition` | Current time within a range or day/night check |
-| `sceneActive` | Whether a scene is currently executing |
 | `and` / `or` / `not` | Logic operators for compound conditions |
 
 **Block types (indirect enum for recursion):**

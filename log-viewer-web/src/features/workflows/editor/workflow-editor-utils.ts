@@ -68,9 +68,6 @@ export function newConditionLeaf(type: string): WorkflowConditionDraft {
       base.startTime = { hour: 8, minute: 0 };
       base.endTime = { hour: 20, minute: 0 };
       break;
-    case 'sceneActive':
-      base.isActive = true;
-      break;
     case 'blockResult':
       base.blockResultScope = { scope: 'any' };
       base.expectedStatus = 'success';
@@ -206,8 +203,6 @@ function conditionDraftToPayload(c: WorkflowConditionDraft): WorkflowConditionDe
         ...(c.startTime && { startTime: c.startTime }),
         ...(c.endTime && { endTime: c.endTime }),
       };
-    case 'sceneActive':
-      return { type: 'sceneActive', sceneId: c.sceneId!, isActive: c.isActive ?? true };
     case 'blockResult':
       return {
         type: 'blockResult',
@@ -413,10 +408,6 @@ function conditionDefToDraft(c: WorkflowConditionDef): WorkflowConditionDraft {
       base.startTime = c.startTime;
       base.endTime = c.endTime;
       break;
-    case 'sceneActive':
-      base.sceneId = c.sceneId;
-      base.isActive = c.isActive;
-      break;
     case 'blockResult':
       base.blockResultScope = c.blockResultScope;
       base.expectedStatus = c.expectedStatus;
@@ -619,12 +610,6 @@ export function conditionAutoName(c: WorkflowConditionDraft, registry: RegistryL
         default:
           return 'Time Window';
       }
-    }
-    case 'sceneActive': {
-      if (!c.sceneId) return 'Scene Active';
-      const scene = registry.lookupScene(c.sceneId);
-      const name = scene?.name || c.sceneId;
-      return c.isActive ? `Scene "${name}" active` : `Scene "${name}" not active`;
     }
     case 'blockResult': {
       const scope = c.blockResultScope?.scope || 'any';
