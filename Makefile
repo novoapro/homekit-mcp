@@ -1,4 +1,4 @@
-.PHONY: generate dev dev-all prod test test-swift test-web web-dev web-build web-prod web-install clean kill help
+.PHONY: generate dev dev-all prod test test-swift test-web web-dev web-build web-prod web-install clean kill web-stop stop help
 
 WEB_PORT = 5173
 
@@ -67,3 +67,9 @@ clean: ## Clean build artifacts
 
 kill: ## Kill running HomeKitMCP process
 	pkill -9 -f HomeKitMCP || true
+
+web-stop: ## Stop web app dev server
+	@lsof -iTCP:$(WEB_PORT) -sTCP:LISTEN -t | xargs kill -9 2>/dev/null || true
+	@echo "Web dev server stopped."
+
+stop: kill web-stop ## Stop both the MCP server and web app
