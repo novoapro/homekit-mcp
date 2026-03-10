@@ -12,8 +12,10 @@ struct WorkflowDetailView: View {
     let onUpdate: (WorkflowDraft) -> Void
     var onClone: (() -> Void)?
     var onCancelExecution: ((UUID) -> Void)?
+    var onResetStatistics: (() -> Void)?
 
     @State private var showingDeleteConfirmation = false
+    @State private var showingResetConfirmation = false
     @State private var showingEditor = false
     @State private var isEnabled: Bool = false
     @State private var showClonedToast = false
@@ -61,6 +63,14 @@ struct WorkflowDetailView: View {
             }
         } message: {
             Text("This will permanently delete \"\(workflow.name)\" and its execution history.")
+        }
+        .alert("Reset Statistics?", isPresented: $showingResetConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset", role: .destructive) {
+                onResetStatistics?()
+            }
+        } message: {
+            Text("This will reset all execution counters and remove all execution logs for \"\(workflow.name)\".")
         }
         .overlay(alignment: .bottom) {
             if showClonedToast {
@@ -210,6 +220,14 @@ struct WorkflowDetailView: View {
                     }
                 } label: {
                     Label("Duplicate Workflow", systemImage: "doc.on.doc")
+                }
+            }
+
+            if let onResetStatistics, workflow.metadata.totalExecutions > 0 || workflow.metadata.lastTriggeredAt != nil {
+                Button(role: .destructive) {
+                    showingResetConfirmation = true
+                } label: {
+                    Label("Reset Statistics", systemImage: "arrow.counterclockwise")
                 }
             }
 

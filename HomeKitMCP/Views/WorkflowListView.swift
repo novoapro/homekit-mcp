@@ -117,7 +117,8 @@ struct WorkflowListView: View {
                     onClone: { viewModel.cloneWorkflow(id: workflowId) },
                     onCancelExecution: { executionId in
                         viewModel.cancelExecution(executionId: executionId)
-                    }
+                    },
+                    onResetStatistics: { viewModel.resetStatistics(id: workflowId) }
                 )
             }
         }

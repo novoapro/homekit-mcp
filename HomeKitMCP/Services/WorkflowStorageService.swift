@@ -80,6 +80,15 @@ actor WorkflowStorageService: WorkflowStorageServiceProtocol {
         publishAndSave()
     }
 
+    func resetStatistics(id: UUID) {
+        guard var workflow = workflows[id] else { return }
+        workflow.metadata.totalExecutions = 0
+        workflow.metadata.consecutiveFailures = 0
+        workflow.metadata.lastTriggeredAt = nil
+        workflows[id] = workflow
+        publishAndSave()
+    }
+
     func replaceAll(workflows newWorkflows: [Workflow]) {
         workflows.removeAll()
         for workflow in newWorkflows {

@@ -111,6 +111,13 @@ class WorkflowViewModel: ObservableObject {
         }
     }
 
+    func resetStatistics(id: UUID) {
+        Task {
+            await storageService.resetStatistics(id: id)
+            await executionLogService.clearLogs(forWorkflowId: id)
+        }
+    }
+
     func triggerWorkflow(id: UUID) {
         Task {
             _ = await workflowEngine.triggerWorkflow(id: id)
