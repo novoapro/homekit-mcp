@@ -323,37 +323,37 @@ Trigger a workflow immediately (fire-and-forget).
 
 ---
 
-## How Triggers and Guard Conditions Work Together
+## How Triggers and Execution Guards Work Together
 
 Triggers are **atomic event detectors**. Each trigger fires on exactly ONE event. They cannot be combined with AND/OR.
 
 Multiple triggers in the `"triggers"` array act as **OR** — any single trigger can start the workflow.
 
-Guard conditions (the workflow-level `"conditions"` array) check **readiness** after a trigger fires. If any guard condition fails, the workflow is skipped.
+Execution guards (the workflow-level `"conditions"` array) check **readiness** after a trigger fires. If any execution guard fails, the workflow is skipped.
 
 **For "when X happens AND Y is true" logic:**
 
 - ONE trigger (the event)
-- Guard conditions in `"conditions"` (the readiness checks)
+- Execution guards in `"conditions"` (the readiness checks)
 
 ### Pattern Examples
 
 **"When motion is detected AND it's nighttime, turn on the light":**
 
 - Trigger: `deviceStateChange` on motion sensor (equals true)
-- Guard condition: `timeCondition` with mode `"nighttime"`
+- Execution guard: `timeCondition` with mode `"nighttime"`
 - Block: `controlDevice` to turn on the light
 
 **"When the door opens AND the hallway light is off, turn on the light":**
 
 - Trigger: `deviceStateChange` on door sensor
-- Guard condition: `deviceState` on hallway light (Power equals false)
+- Execution guard: `deviceState` on hallway light (Power equals false)
 - Block: `controlDevice` to turn on hallway light
 
 **"At sunset, if temperature is above 75, turn on the fan":**
 
 - Trigger: `sunEvent` with `"sunset"`
-- Guard condition: `deviceState` on temperature sensor (greaterThan 75)
+- Execution guard: `deviceState` on temperature sensor (greaterThan 75)
 - Block: `controlDevice` to turn on fan
 
 ---
@@ -368,5 +368,5 @@ Guard conditions (the workflow-level `"conditions"` array) check **readiness** a
 - Always include `"sceneName"` alongside `"sceneId"`.
 - Use `characteristicId` (stable IDs from device listings), NOT characteristic type names, in workflow triggers, conditions, and actions.
 - Do NOT include `id`, `createdAt`, `updatedAt`, or `metadata` — they are auto-generated.
-- Guard-level conditions only support: `deviceState`, `timeCondition`, and `and`/`or`/`not`. Do NOT use `blockResult` in guard conditions.
+- Execution guards only support: `deviceState`, `timeCondition`, and `and`/`or`/`not`. Do NOT use `blockResult` in execution guards.
 - `blockResult` conditions are ONLY valid inside conditional block conditions, and require `continueOnError: true`.

@@ -254,10 +254,12 @@ enum MCPToolDefinitions {
                 "comparison":{"type":"equals","value":true} }
                   comparison types: equals/notEquals/greaterThan/lessThan/greaterThanOrEqual/lessThanOrEqual (with "value")
                 • { "type":"timeCondition", "mode":"beforeSunrise"|"afterSunrise"|"beforeSunset"|"afterSunset"|"daytime"|"nighttime"|"timeRange", \
-                "startTime":{"hour":23,"minute":0}, "endTime":{"hour":2,"minute":0} }
+                "startTime":{"type":"fixed","hour":23,"minute":0}, "endTime":{"type":"marker","marker":"sunrise"} }
                   mode: beforeSunrise, afterSunrise, beforeSunset, afterSunset, daytime (sunrise–sunset), \
-                nighttime (sunset–sunrise), timeRange (custom hours, cross-midnight aware). \
-                startTime/endTime required only for timeRange (hour 0-23, minute 0-59)
+                nighttime (sunset–sunrise), timeRange (custom hours or markers, cross-midnight aware). \
+                startTime/endTime required only for timeRange. Each is a TimePoint: \
+                {"type":"fixed","hour":0-23,"minute":0-59} or {"type":"marker","marker":"midnight"|"noon"|"sunrise"|"sunset"}. \
+                sunrise/sunset markers require location configured. Legacy {hour,minute} without type also accepted.
                 • { "type":"and", "conditions":[...] } — all must pass
                 • { "type":"or",  "conditions":[...] } — any must pass
                 • { "type":"not", "condition":{...} } — negates inner condition
@@ -266,18 +268,18 @@ enum MCPToolDefinitions {
                 "expectedStatus":"success"|"failure"|"cancelled" } — checks the execution result of a \
                 previously-run block. Requires continueOnError=true on the workflow. \
                 IMPORTANT: blockResult is ONLY valid inside conditional (if/else) block conditions. \
-                Do NOT use blockResult in workflow-level global guard conditions, per-trigger conditions, repeatWhile conditions, or anywhere else. \
+                Do NOT use blockResult in workflow-level execution guards, per-trigger guards, repeatWhile conditions, or anywhere else. \
                 Each block has a 1-based ordinal in depth-first execution order. A blockResult with scope \
                 "specific" can ONLY reference blocks with a lower ordinal (earlier in the blocks array). \
                 If the referenced block has not executed, the condition evaluates to false.
-                The same WorkflowCondition format is used in the top-level "conditions" global guard array \
+                The same WorkflowCondition format is used in the top-level "conditions" execution guards array \
                 (deviceState, timeCondition only), in per-trigger "conditions" arrays \
                 (deviceState, timeCondition only — if conditions fail, trigger is silently skipped), \
                 in "conditional" block "condition" fields (all types including blockResult), \
                 and in "repeatWhile" block "condition" fields (deviceState, timeCondition only — no blockResult).
 
                 DEVICE METADATA: Always include "deviceName" and "roomName" alongside "deviceId" in \
-                triggers, global guard conditions, per-trigger conditions, and blocks. This enables \
+                triggers, execution guards, per-trigger guards, and blocks. This enables \
                 cross-machine migration when HomeKit reassigns UUIDs.
                 """,
             "inputSchema": [
@@ -309,9 +311,9 @@ enum MCPToolDefinitions {
                 controlDevice, runScene, webhook, log, delay, waitForState, conditional, repeat, \
                 repeatWhile, group, return, executeWorkflow. \
                 Condition types (WorkflowCondition, nestable via and/or/not): \
-                deviceState, timeCondition, sceneActive, and, or, not (global guard, per-trigger, and block level); \
-                blockResult (conditional/if-else blocks only, NOT in global guard conditions, per-trigger conditions, or repeatWhile). \
-                Each trigger can have an optional "conditions" array for per-trigger guard conditions. \
+                deviceState, timeCondition, sceneActive, and, or, not (execution guards, per-trigger guards, and block level); \
+                blockResult (conditional/if-else blocks only, NOT in execution guards, per-trigger guards, or repeatWhile). \
+                Each trigger can have an optional "conditions" array for per-trigger guards. \
                 Always include "deviceName" and "roomName" alongside "deviceId" wherever device references appear.
                 """,
             "inputSchema": [

@@ -65,7 +65,16 @@ export function formatScheduleType(s: ScheduleType): string {
   }
 }
 
-export function formatTimeConditionMode(mode: string, startTime?: { hour: number; minute: number }, endTime?: { hour: number; minute: number }): string {
+function formatTimePoint(tp: { type?: string; hour?: number; minute?: number; marker?: string } | undefined): string {
+  if (!tp) return '?';
+  if (tp.type === 'marker' && tp.marker) {
+    const labels: Record<string, string> = { midnight: 'Midnight', noon: 'Noon', sunrise: 'Sunrise', sunset: 'Sunset' };
+    return labels[tp.marker] || tp.marker;
+  }
+  return formatTime(tp.hour ?? 0, tp.minute ?? 0);
+}
+
+export function formatTimeConditionMode(mode: string, startTime?: { type?: string; hour?: number; minute?: number; marker?: string }, endTime?: { type?: string; hour?: number; minute?: number; marker?: string }): string {
   switch (mode) {
     case 'beforeSunrise': return 'Before Sunrise';
     case 'afterSunrise': return 'After Sunrise';
@@ -74,9 +83,7 @@ export function formatTimeConditionMode(mode: string, startTime?: { hour: number
     case 'daytime': return 'Daytime';
     case 'nighttime': return 'Nighttime';
     case 'timeRange': {
-      const s = startTime ? formatTime(startTime.hour, startTime.minute) : '?';
-      const e = endTime ? formatTime(endTime.hour, endTime.minute) : '?';
-      return `${s} – ${e}`;
+      return `${formatTimePoint(startTime)} – ${formatTimePoint(endTime)}`;
     }
     default: return mode;
   }

@@ -230,13 +230,16 @@ struct ConditionEvaluator {
             return (false, "Time Range: start/end time not configured")
         }
 
+        // Resolve time points (markers like sunrise/sunset need location)
+        guard let startMins = resolveTimePoint(start), let endMins = resolveTimePoint(end) else {
+            return (false, "Time Range: cannot resolve \(start.formatted)–\(end.formatted) (location not configured or polar region)")
+        }
+
         let calendar = Calendar.current
         let now = Date()
         let hour = calendar.component(.hour, from: now)
         let minute = calendar.component(.minute, from: now)
         let nowMins = hour * 60 + minute
-        let startMins = start.totalMinutes
-        let endMins = end.totalMinutes
 
         let passed: Bool
         if startMins <= endMins {
@@ -248,6 +251,33 @@ struct ConditionEvaluator {
         }
 
         return (passed, "Time Range \(start.formatted)–\(end.formatted) = \(passed)")
+    }
+
+    /// Resolves a TimePoint to minutes since midnight. Returns nil if location is needed but not available.
+    private func resolveTimePoint(_ point: TimePoint) -> Int? {
+        switch point {
+        case .fixed(let tod):
+            return tod.totalMinutes
+        case .marker(let marker):
+            switch marker {
+            case .midnight: return 0
+            case .noon: return 720
+            case .sunrise, .sunset:
+                let latitude = storage?.readSunEventLatitude() ?? 0
+                let longitude = storage?.readSunEventLongitude() ?? 0
+                guard latitude != 0 || longitude != 0 else { return nil }
+                let now = Date()
+                let (sunrise, sunset) = SolarCalculator.sunTimes(for: now, latitude: latitude, longitude: longitude)
+                let calendar = Calendar.current
+                if marker == .sunrise {
+                    guard let sunrise else { return nil }
+                    return calendar.component(.hour, from: sunrise) * 60 + calendar.component(.minute, from: sunrise)
+                } else {
+                    guard let sunset else { return nil }
+                    return calendar.component(.hour, from: sunset) * 60 + calendar.component(.minute, from: sunset)
+                }
+            }
+        }
     }
 
     private func findCharacteristicValue(in device: DeviceModel, characteristicType: String, serviceId: String?) -> Any? {

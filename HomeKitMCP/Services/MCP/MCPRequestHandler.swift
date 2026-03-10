@@ -473,7 +473,7 @@ final class MCPRequestHandler: Sendable {
                     "description": "Must be true if using blockResult conditions"],
                 "triggers": ["type": "array", "required": true, "description": "Array of trigger objects"],
                 "conditions": ["type": "array", "required": false,
-                    "description": "Optional global guard conditions (AND-ed). Evaluated after any trigger fires. Only deviceState, timeCondition allowed (no blockResult). Failure logs as conditionNotMet (skipped)."],
+                    "description": "Optional execution guards (AND-ed). Evaluated after any trigger fires. Only deviceState, timeCondition allowed (no blockResult). Failure logs as conditionNotMet (skipped)."],
                 "blocks": ["type": "array", "required": true, "description": "Array of block objects (actions and flow control)"]
             ] as [String: Any],
             "retriggerPolicies": [
@@ -683,7 +683,7 @@ final class MCPRequestHandler: Sendable {
                 ] as [[String: Any]]
             ] as [String: Any],
             "conditionTypes": [
-                "description": "WorkflowCondition types used in global guard conditions, per-trigger conditions, conditional blocks, waitForState, and repeatWhile.",
+                "description": "WorkflowCondition types used in execution guards, per-trigger guards, conditional blocks, waitForState, and repeatWhile.",
                 "types": [
                     [
                         "type": "deviceState",
@@ -704,14 +704,16 @@ final class MCPRequestHandler: Sendable {
                                 "values": ["beforeSunrise", "afterSunrise", "beforeSunset", "afterSunset",
                                            "daytime", "nighttime", "timeRange"]],
                             "startTime": ["type": "object", "required": false,
-                                "format": "{hour: 0-23, minute: 0-59}", "description": "Required for timeRange"],
+                                "format": "TimePoint: {type:'fixed',hour:0-23,minute:0-59} or {type:'marker',marker:'midnight'|'noon'|'sunrise'|'sunset'}",
+                                "description": "Required for timeRange. Supports fixed times or named markers. Legacy {hour,minute} without type field also accepted."],
                             "endTime": ["type": "object", "required": false,
-                                "format": "{hour: 0-23, minute: 0-59}", "description": "Required for timeRange"]
+                                "format": "TimePoint: {type:'fixed',hour:0-23,minute:0-59} or {type:'marker',marker:'midnight'|'noon'|'sunrise'|'sunset'}",
+                                "description": "Required for timeRange. Supports fixed times or named markers. Legacy {hour,minute} without type field also accepted."]
                         ] as [String: Any]
                     ],
                     [
                         "type": "blockResult",
-                        "restriction": "ONLY valid inside conditional block conditions. NOT allowed in guard conditions, repeatWhile, or waitForState.",
+                        "restriction": "ONLY valid inside conditional block conditions. NOT allowed in execution guards, per-trigger guards, repeatWhile, or waitForState.",
                         "fields": [
                             "scope": ["type": "string", "required": true,
                                 "values": ["specific", "all", "any"],

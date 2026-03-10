@@ -29,12 +29,12 @@ struct ConditionEditorSection: View {
                 blockOrdinals: blockOrdinals
             )
         } header: {
-            Text("Global Guard Conditions (\(conditionRoot.leafCount))")
+            Text("Execution Guards (\(conditionRoot.leafCount))")
         } footer: {
             if conditionRoot.children.isEmpty {
-                Text("No global guard conditions — workflow will always proceed after any trigger fires.")
+                Text("No execution guards — workflow will always proceed after any trigger fires.")
             } else {
-                Text("Global guard conditions apply after any trigger fires. Conditions combine with \(conditionRoot.logicOperator.displayName).")
+                Text("Execution guards apply after any trigger fires. Conditions combine with \(conditionRoot.logicOperator.displayName).")
             }
         }
         .listRowBackground(Theme.contentBackground)
@@ -560,69 +560,98 @@ private struct ConditionLeafEditSheet: View {
 
     @ViewBuilder
     private var timeRangePickers: some View {
-        let startHour = Binding(
-            get: { condition.timeRangeStart.hour },
-            set: { condition.timeRangeStart = TimeOfDay(hour: $0, minute: condition.timeRangeStart.minute) }
-        )
-        let startMinute = Binding(
-            get: { condition.timeRangeStart.minute },
-            set: { condition.timeRangeStart = TimeOfDay(hour: condition.timeRangeStart.hour, minute: $0) }
-        )
-        let endHour = Binding(
-            get: { condition.timeRangeEnd.hour },
-            set: { condition.timeRangeEnd = TimeOfDay(hour: $0, minute: condition.timeRangeEnd.minute) }
-        )
-        let endMinute = Binding(
-            get: { condition.timeRangeEnd.minute },
-            set: { condition.timeRangeEnd = TimeOfDay(hour: condition.timeRangeEnd.hour, minute: $0) }
-        )
+        timePointPicker(label: "Start Time", point: $condition.timeRangeStart)
+        timePointPicker(label: "End Time", point: $condition.timeRangeEnd)
 
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Start Time")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 4) {
-                Picker("Hour", selection: startHour) {
-                    ForEach(0..<24, id: \.self) { h in
-                        Text(String(format: "%d %@", h == 0 ? 12 : (h > 12 ? h - 12 : h), h < 12 ? "AM" : "PM")).tag(h)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                Text(":")
-                Picker("Minute", selection: startMinute) {
-                    ForEach(Array(stride(from: 0, to: 60, by: 5)), id: \.self) { m in
-                        Text(String(format: ":%02d", m)).tag(m)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-
-        VStack(alignment: .leading, spacing: 8) {
-            Text("End Time")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 4) {
-                Picker("Hour", selection: endHour) {
-                    ForEach(0..<24, id: \.self) { h in
-                        Text(String(format: "%d %@", h == 0 ? 12 : (h > 12 ? h - 12 : h), h < 12 ? "AM" : "PM")).tag(h)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                Text(":")
-                Picker("Minute", selection: endMinute) {
-                    ForEach(Array(stride(from: 0, to: 60, by: 5)), id: \.self) { m in
-                        Text(String(format: ":%02d", m)).tag(m)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-
-        if condition.timeRangeStart.totalMinutes > condition.timeRangeEnd.totalMinutes {
+        if let startMins = timePointMinutes(condition.timeRangeStart),
+           let endMins = timePointMinutes(condition.timeRangeEnd),
+           startMins > endMins {
             Label("Spans midnight", systemImage: "moon.fill")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+        }
+
+        if condition.timeRangeStart.requiresLocation || condition.timeRangeEnd.requiresLocation {
+            Label("Sunrise/Sunset markers require location in Settings", systemImage: "location.fill")
+                .font(.footnote)
+                .foregroundStyle(.orange)
+        }
+    }
+
+    @ViewBuilder
+    private func timePointPicker(label: String, point: Binding<TimePoint>) -> some View {
+        let isMarker = Binding<Bool>(
+            get: {
+                if case .marker = point.wrappedValue { return true }
+                return false
+            },
+            set: { useMarker in
+                if useMarker {
+                    point.wrappedValue = .marker(.sunset)
+                } else {
+                    point.wrappedValue = .fixed(TimeOfDay(hour: 12, minute: 0))
+                }
+            }
+        )
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Picker("Type", selection: isMarker) {
+                Text("Custom Time").tag(false)
+                Text("Marker").tag(true)
+            }
+            .pickerStyle(.segmented)
+
+            if case .marker(let marker) = point.wrappedValue {
+                let markerBinding = Binding<TimePointMarker>(
+                    get: { marker },
+                    set: { point.wrappedValue = .marker($0) }
+                )
+                Picker("Marker", selection: markerBinding) {
+                    ForEach(TimePointMarker.allCases) { m in
+                        Label(m.displayName, systemImage: m.icon).tag(m)
+                    }
+                }
+            } else if case .fixed(let tod) = point.wrappedValue {
+                let hourBinding = Binding<Int>(
+                    get: { tod.hour },
+                    set: { point.wrappedValue = .fixed(TimeOfDay(hour: $0, minute: tod.minute)) }
+                )
+                let minuteBinding = Binding<Int>(
+                    get: { tod.minute },
+                    set: { point.wrappedValue = .fixed(TimeOfDay(hour: tod.hour, minute: $0)) }
+                )
+                HStack(spacing: 4) {
+                    Picker("Hour", selection: hourBinding) {
+                        ForEach(0..<24, id: \.self) { h in
+                            Text(String(format: "%d %@", h == 0 ? 12 : (h > 12 ? h - 12 : h), h < 12 ? "AM" : "PM")).tag(h)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    Text(":")
+                    Picker("Minute", selection: minuteBinding) {
+                        ForEach(Array(stride(from: 0, to: 60, by: 5)), id: \.self) { m in
+                            Text(String(format: ":%02d", m)).tag(m)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+    }
+
+    private func timePointMinutes(_ point: TimePoint) -> Int? {
+        switch point {
+        case .fixed(let tod): return tod.totalMinutes
+        case .marker(let m):
+            switch m {
+            case .midnight: return 0
+            case .noon: return 720
+            case .sunrise, .sunset: return nil // dynamic, can't determine statically
+            }
         }
     }
 }

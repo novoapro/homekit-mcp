@@ -701,8 +701,8 @@ struct ConditionDraft: Identifiable {
 
     // Time Condition fields
     var timeConditionMode: TimeConditionMode = .afterSunset
-    var timeRangeStart: TimeOfDay = TimeOfDay(hour: 22, minute: 0)
-    var timeRangeEnd: TimeOfDay = TimeOfDay(hour: 6, minute: 0)
+    var timeRangeStart: TimePoint = .fixed(TimeOfDay(hour: 22, minute: 0))
+    var timeRangeEnd: TimePoint = .fixed(TimeOfDay(hour: 6, minute: 0))
 
     // Scene Active fields
     var sceneId: String = ""
@@ -1460,8 +1460,8 @@ extension WorkflowDraft {
                 comparisonType: .equals,
                 comparisonValue: "",
                 timeConditionMode: c.mode,
-                timeRangeStart: c.startTime ?? TimeOfDay(hour: 22, minute: 0),
-                timeRangeEnd: c.endTime ?? TimeOfDay(hour: 6, minute: 0)
+                timeRangeStart: c.startTime ?? .fixed(TimeOfDay(hour: 22, minute: 0)),
+                timeRangeEnd: c.endTime ?? .fixed(TimeOfDay(hour: 6, minute: 0))
             ))
         case let .sceneActive(c):
             return .leaf(ConditionDraft(

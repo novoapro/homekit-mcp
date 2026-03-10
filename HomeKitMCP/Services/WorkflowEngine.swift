@@ -480,7 +480,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
     // MARK: - Trigger Evaluation
 
     /// Returns the retrigger policy of the first matching trigger, or nil if no trigger matched.
-    /// Per-trigger conditions are evaluated after the trigger matches — if they fail, the trigger is silently skipped.
+    /// Per-trigger guards are evaluated after the trigger matches — if they fail, the trigger is silently skipped.
     private func checkTriggers(_ triggers: [WorkflowTrigger], context: TriggerContext) async -> ConcurrentExecutionPolicy? {
         for trigger in triggers {
             var matched = false
@@ -494,7 +494,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             }
             guard matched else { continue }
 
-            // Evaluate per-trigger conditions — if they fail, skip this trigger silently
+            // Evaluate per-trigger guards — if they fail, skip this trigger silently
             if let conditions = trigger.conditions, !conditions.isEmpty {
                 let (allPassed, _) = await conditionEvaluator.evaluateAll(conditions)
                 if !allPassed {
@@ -536,7 +536,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         conditionEvaluator.workflowName = workflow.name
         conditionEvaluator.blockResults = [:]
 
-        // Evaluate global guard conditions BEFORE logging — a triggered workflow is not yet "running"
+        // Evaluate execution guards BEFORE logging — a triggered workflow is not yet "running"
         if let conditions = workflow.conditions, !conditions.isEmpty {
             let (allPassed, condResults) = await conditionEvaluator.evaluateAll(conditions)
             execLog.conditionResults = condResults
@@ -544,7 +544,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             if !allPassed {
                 execLog.status = .conditionNotMet
                 let failedDescriptions = condResults.filter { !$0.passed }.map { $0.conditionDescription }
-                execLog.errorMessage = "Global guard condition not met: \(failedDescriptions.joined(separator: "; "))"
+                execLog.errorMessage = "Execution guard not met: \(failedDescriptions.joined(separator: "; "))"
                 execLog.completedAt = Date()
                 if storage.readLogSkippedWorkflows() {
                     // Log the skipped execution as a completed entry (never "running")
@@ -560,7 +560,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
             }
         }
 
-        // Global guard conditions passed (or none) — now the workflow is truly running
+        // Execution guards passed (or none) — now the workflow is truly running
         executionToWorkflow[execLog.id] = workflow.id
         await executionLogService.logEntry(execLog.toStateChangeLog())
 

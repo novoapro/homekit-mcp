@@ -216,6 +216,54 @@
   }
 }
 
+/* Type-selection dropdown menu (used by Add Trigger / Add Condition) */
+.wfe-add-menu-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+.wfe-add-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 200px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  padding: 4px 0;
+  animation: wfe-menu-in 0.12s ease-out;
+}
+@keyframes wfe-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.wfe-add-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  text-align: left;
+}
+@media (hover: hover) {
+  .wfe-add-menu-item:hover {
+    background: color-mix(in srgb, var(--tint-main) 10%, transparent);
+  }
+}
+.wfe-add-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+}
+
 /* Condition section */
 .wfe-condition-node {
   display: flex;

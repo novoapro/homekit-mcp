@@ -141,7 +141,7 @@ export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps
             const conds = trigger.conditions!;
             return (
               <span className="retrigger-badge" style={{ borderColor: 'var(--tint-secondary)', color: 'var(--tint-secondary)' }}>
-                <span className="retrigger-badge-key">Conditions</span>
+                <span className="retrigger-badge-key">Guard</span>
                 {conds.length === 1 && conds[0]?.type === 'and'
                   ? `${(conds[0] as { conditions?: unknown[] }).conditions?.length ?? 0} condition(s)`
                   : `${conds.length} condition(s)`

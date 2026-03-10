@@ -1,10 +1,11 @@
 import { useCallback, useMemo } from 'react';
+import { Icon } from '@/components/Icon';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import { DevicePicker } from './DevicePicker';
 import { CharacteristicValueInput } from './CharacteristicValueInput';
 import { CurrentValueIndicator } from './CurrentValueIndicator';
 import type { WorkflowConditionDraft } from './workflow-editor-types';
-import { newConditionLeaf } from './workflow-editor-utils';
+import type { TimePoint } from '@/types/workflow-definition';
 import type { BlockInfo } from './workflow-editor-utils';
 import './TriggerEditor.css'; // reuse shared form styles
 
@@ -42,7 +43,7 @@ interface ConditionEditorProps {
   onChange: (updated: WorkflowConditionDraft) => void;
 }
 
-export function ConditionEditor({ draft, allowBlockResult = true, allBlocks, currentBlockDraftId, continueOnError, onChange }: ConditionEditorProps) {
+export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChange }: ConditionEditorProps) {
   const registry = useDeviceRegistry();
 
   const currentOrdinal = useMemo(
@@ -55,38 +56,28 @@ export function ConditionEditor({ draft, allowBlockResult = true, allBlocks, cur
     return allBlocks.filter((b) => b.ordinal < currentOrdinal);
   }, [allBlocks, currentOrdinal]);
 
-  const leafTypes = useMemo(() => {
-    const isFirstBlock = currentOrdinal === 1;
-    const shouldHideBlockResult = !allowBlockResult || !continueOnError || isFirstBlock || precedingBlocks.length === 0;
-    return shouldHideBlockResult
-      ? CONDITION_LEAF_TYPES.filter((t) => t.value !== 'blockResult')
-      : CONDITION_LEAF_TYPES;
-  }, [allowBlockResult, continueOnError, currentOrdinal, precedingBlocks.length]);
-
   const patch = useCallback(
     (changes: Partial<WorkflowConditionDraft>) => onChange({ ...draft, ...changes }),
     [draft, onChange],
   );
 
-  const timeStr = (t: { hour: number; minute: number } | undefined): string => {
-    if (!t) return '08:00';
-    return `${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}`;
+  const timeStr = (tp: TimePoint | undefined): string => {
+    if (!tp) return '08:00';
+    if (tp.type === 'fixed') return `${String(tp.hour).padStart(2, '0')}:${String(tp.minute).padStart(2, '0')}`;
+    return '';
   };
+
+  const isMarker = (tp: TimePoint | undefined): boolean => !!tp && tp.type === 'marker';
+  const markerValue = (tp: TimePoint | undefined): string => tp?.type === 'marker' ? tp.marker : 'sunset';
 
   return (
     <div className="trigger-editor">
-      {/* Type selector */}
+      {/* Type (read-only) */}
       <div className="editor-field">
         <label>Condition Type</label>
-        <select
-          className="editor-select"
-          value={draft.type}
-          onChange={(e) => onChange(newConditionLeaf(e.target.value))}
-        >
-          {leafTypes.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </select>
+        <div className="editor-readonly-value">
+          {CONDITION_LEAF_TYPES.find((t) => t.value === draft.type)?.label || draft.type}
+        </div>
       </div>
 
       {/* deviceState */}
@@ -153,30 +144,101 @@ export function ConditionEditor({ draft, allowBlockResult = true, allBlocks, cur
           </div>
           {draft.mode === 'timeRange' && (
             <>
-              <div className="editor-field">
-                <label>Start Time</label>
-                <input
-                  className="editor-input"
-                  type="time"
-                  value={timeStr(draft.startTime)}
-                  onChange={(e) => {
-                    const [h, m] = e.target.value.split(':');
-                    patch({ startTime: { hour: +h!, minute: +m! } });
-                  }}
-                />
+              <div className="time-range-row">
+                {/* Start Time */}
+                <div className="time-point-cell">
+                  <label>Start</label>
+                  <div className="tp-mode-toggle">
+                    <button type="button" className={`tp-mode-btn${!isMarker(draft.startTime) ? ' active' : ''}`} onClick={() => { if (isMarker(draft.startTime)) patch({ startTime: { type: 'fixed', hour: 20, minute: 0 } }); }}>Time</button>
+                    <button type="button" className={`tp-mode-btn${isMarker(draft.startTime) ? ' active' : ''}`} onClick={() => { if (!isMarker(draft.startTime)) patch({ startTime: { type: 'marker', marker: 'sunset' } }); }}>Marker</button>
+                  </div>
+                  {isMarker(draft.startTime) ? (
+                    <select
+                      className="editor-select"
+                      value={markerValue(draft.startTime)}
+                      onChange={(e) => patch({ startTime: { type: 'marker', marker: e.target.value as 'midnight' | 'noon' | 'sunrise' | 'sunset' } })}
+                    >
+                      <option value="midnight">Midnight</option>
+                      <option value="noon">Noon</option>
+                      <option value="sunrise">Sunrise</option>
+                      <option value="sunset">Sunset</option>
+                    </select>
+                  ) : (
+                    <input
+                      className="editor-input"
+                      type="time"
+                      value={timeStr(draft.startTime)}
+                      onChange={(e) => {
+                        const [h, m] = e.target.value.split(':');
+                        patch({ startTime: { type: 'fixed', hour: +h!, minute: +m! } });
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* End Time */}
+                <div className="time-point-cell">
+                  <label>End</label>
+                  <div className="tp-mode-toggle">
+                    <button type="button" className={`tp-mode-btn${!isMarker(draft.endTime) ? ' active' : ''}`} onClick={() => { if (isMarker(draft.endTime)) patch({ endTime: { type: 'fixed', hour: 6, minute: 0 } }); }}>Time</button>
+                    <button type="button" className={`tp-mode-btn${isMarker(draft.endTime) ? ' active' : ''}`} onClick={() => { if (!isMarker(draft.endTime)) patch({ endTime: { type: 'marker', marker: 'sunrise' } }); }}>Marker</button>
+                  </div>
+                  {isMarker(draft.endTime) ? (
+                    <select
+                      className="editor-select"
+                      value={markerValue(draft.endTime)}
+                      onChange={(e) => patch({ endTime: { type: 'marker', marker: e.target.value as 'midnight' | 'noon' | 'sunrise' | 'sunset' } })}
+                    >
+                      <option value="midnight">Midnight</option>
+                      <option value="noon">Noon</option>
+                      <option value="sunrise">Sunrise</option>
+                      <option value="sunset">Sunset</option>
+                    </select>
+                  ) : (
+                    <input
+                      className="editor-input"
+                      type="time"
+                      value={timeStr(draft.endTime)}
+                      onChange={(e) => {
+                        const [h, m] = e.target.value.split(':');
+                        patch({ endTime: { type: 'fixed', hour: +h!, minute: +m! } });
+                      }}
+                    />
+                  )}
+                </div>
               </div>
-              <div className="editor-field">
-                <label>End Time</label>
-                <input
-                  className="editor-input"
-                  type="time"
-                  value={timeStr(draft.endTime)}
-                  onChange={(e) => {
-                    const [h, m] = e.target.value.split(':');
-                    patch({ endTime: { hour: +h!, minute: +m! } });
-                  }}
-                />
-              </div>
+
+              {/* Cross-midnight indicator */}
+              {(() => {
+                // Approximate minutes for static comparison; sunrise/sunset use rough estimates
+                const toMins = (tp: TimePoint | undefined): number | null => {
+                  if (!tp) return null;
+                  if (tp.type === 'fixed') return tp.hour * 60 + tp.minute;
+                  if (tp.type === 'marker') {
+                    switch (tp.marker) {
+                      case 'midnight': return 0;
+                      case 'noon': return 720;
+                      case 'sunrise': return 360;  // ~6:00 AM estimate
+                      case 'sunset': return 1140;  // ~7:00 PM estimate
+                    }
+                  }
+                  return null;
+                };
+                const hasDynamic = (tp: TimePoint | undefined) =>
+                  tp?.type === 'marker' && (tp.marker === 'sunrise' || tp.marker === 'sunset');
+                const sMins = toMins(draft.startTime);
+                const eMins = toMins(draft.endTime);
+                const dynamic = hasDynamic(draft.startTime) || hasDynamic(draft.endTime);
+                if (sMins !== null && eMins !== null && sMins > eMins) {
+                  return (
+                    <div className="time-range-midnight">
+                      <Icon name="moon" size={14} style={{ opacity: 0.6 }} />
+                      {dynamic ? 'Likely spans midnight (crosses into next day)' : 'Spans midnight (crosses into next day)'}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </>
           )}
         </>

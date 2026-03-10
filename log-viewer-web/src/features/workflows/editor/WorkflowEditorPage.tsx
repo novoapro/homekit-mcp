@@ -26,6 +26,7 @@ import { ConditionEditor } from './ConditionEditor';
 import { ConditionGroupEditor } from './ConditionGroupEditor';
 import { BlockCard } from './BlockCard';
 import { AddBlockSheet } from './AddBlockSheet';
+import { AddTriggerSheet } from './AddTriggerSheet';
 import { newBlockDraft, containerTargets, moveBlockToContainer, cloneBlockDraft, BLOCK_TYPE_LABELS, BLOCK_ICONS } from './block-helpers';
 import { validateDraft } from './workflow-editor-validation';
 import { draftToPayload, definitionToDraft, triggerAutoName, conditionAutoName, collectAllBlockInfos } from './workflow-editor-utils';
@@ -51,9 +52,8 @@ const TRIGGER_BADGES: Record<string, string> = {
 };
 
 interface PanelFrame {
-  type: 'trigger' | 'condition' | 'conditionGroup';
+  type: 'condition' | 'conditionGroup';
   title: string;
-  triggerIndex?: number;
   conditionPath?: number[];
 }
 
@@ -96,11 +96,25 @@ export function WorkflowEditorPage() {
   const [reorderMode, setReorderMode] = useState(false);
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [nestingStack, setNestingStack] = useState<NestingFrame[]>([]);
+  const [showAddTriggerSheet, setShowAddTriggerSheet] = useState(false);
+  const [expandedTriggerId, setExpandedTriggerId] = useState<string | null>(null);
+
+  // Auto-expand newly added trigger
+  const expandNewTriggerRef = useRef(false);
+  const prevTriggerCountRef = useRef(draft.triggers.length);
+  useEffect(() => {
+    if (expandNewTriggerRef.current && draft.triggers.length > prevTriggerCountRef.current) {
+      const lastTrigger = draft.triggers[draft.triggers.length - 1];
+      if (lastTrigger) setExpandedTriggerId(lastTrigger._draftId);
+      expandNewTriggerRef.current = false;
+    }
+    prevTriggerCountRef.current = draft.triggers.length;
+  }, [draft.triggers]);
 
   // Temp state for panel editing
-  const panelTriggerRef = useRef<WorkflowTriggerDraft | null>(null);
   const panelConditionRef = useRef<WorkflowConditionDraft | null>(null);
   const editingBlockIdRef = useRef<string | null>(null);
+  const editingTriggerGuardIndexRef = useRef<number | null>(null);
   // Force re-render when condition ref changes (buttons derive state from draft prop)
   const [, forcePanel] = useReducer((x: number) => x + 1, 0);
 
@@ -222,6 +236,35 @@ export function WorkflowEditorPage() {
     const ordinal = ordinalMap.get(block._draftId);
     return { block, index: idx, ordinal };
   }, [expandedBlockId, reorderMode, currentBlocks, ordinalMap]);
+
+  const selectedTrigger = useMemo(() => {
+    if (!expandedTriggerId) return null;
+    const idx = draft.triggers.findIndex((t) => t._draftId === expandedTriggerId);
+    if (idx < 0) return null;
+    return { trigger: draft.triggers[idx]!, index: idx };
+  }, [expandedTriggerId, draft.triggers]);
+
+  const handleTriggerClone = useCallback(
+    (index: number) => {
+      const original = draft.triggers[index];
+      if (!original) return;
+      const clone: WorkflowTriggerDraft = {
+        ...JSON.parse(JSON.stringify(original)),
+        _draftId: newUUID(),
+      };
+      patchDraft({ triggers: [...draft.triggers, clone] });
+      setExpandedTriggerId(clone._draftId);
+    },
+    [draft.triggers, patchDraft],
+  );
+
+  const handleTriggerRemove = useCallback(
+    (index: number) => {
+      removeTrigger(index);
+      setExpandedTriggerId(null);
+    },
+    [removeTrigger],
+  );
 
   const selectedMoveTargets = useMemo(() => {
     if (!selectedBlock) return [];
@@ -490,29 +533,28 @@ export function WorkflowEditorPage() {
 
   const closePanel = useCallback(() => {
     setPanel(null);
-    panelTriggerRef.current = null;
     panelConditionRef.current = null;
     editingBlockIdRef.current = null;
+    editingTriggerGuardIndexRef.current = null;
   }, []);
 
-  // --- Trigger panel ---
+  // --- Trigger guard panel ---
 
-  const openTriggerPanel = useCallback(
-    (index: number) => {
-      const trigger = draft.triggers[index];
+  const openTriggerGuardPanel = useCallback(
+    (triggerIndex: number) => {
+      const trigger = draft.triggers[triggerIndex];
       if (!trigger) return;
-      panelTriggerRef.current = { ...trigger };
-      setPanel({ type: 'trigger', title: `Trigger ${index + 1}`, triggerIndex: index });
+      const root = trigger.conditions?.[0];
+      if (root) {
+        panelConditionRef.current = JSON.parse(JSON.stringify(root));
+      } else {
+        panelConditionRef.current = { _draftId: newUUID(), type: 'and', conditions: [] };
+      }
+      editingTriggerGuardIndexRef.current = triggerIndex;
+      setPanel({ type: 'conditionGroup', title: `${trigger.name } guard`, conditionPath: [0] });
     },
     [draft.triggers],
   );
-
-  const applyTriggerPanel = useCallback(() => {
-    if (panel?.triggerIndex !== undefined && panelTriggerRef.current) {
-      setTrigger(panel.triggerIndex, panelTriggerRef.current);
-    }
-    closePanel();
-  }, [panel, setTrigger, closePanel]);
 
   // --- Condition panel ---
 
@@ -523,7 +565,7 @@ export function WorkflowEditorPage() {
     } else {
       panelConditionRef.current = { _draftId: newUUID(), type: 'and', conditions: [] };
     }
-    setPanel({ type: 'conditionGroup', title: 'Global Guard Conditions', conditionPath: [0] });
+    setPanel({ type: 'conditionGroup', title: 'Execution Guards', conditionPath: [0] });
   }, [draft.conditions]);
 
   const openNestedConditionPanel = useCallback(
@@ -592,6 +634,34 @@ export function WorkflowEditorPage() {
         }
       }
       editingBlockIdRef.current = null;
+    } else if (editingTriggerGuardIndexRef.current !== null) {
+      // Applying to a trigger's guard conditions
+      const triggerIdx = editingTriggerGuardIndexRef.current;
+      const trigger = draft.triggers[triggerIdx];
+      if (trigger) {
+        if (path.length === 1) {
+          setTrigger(triggerIdx, { ...trigger, conditions: [panelConditionRef.current] });
+        } else {
+          const rootCopy: WorkflowConditionDraft = JSON.parse(JSON.stringify(
+            trigger.conditions?.[0] ?? { _draftId: newUUID(), type: 'and', conditions: [] }
+          ));
+          let current = rootCopy;
+          for (let i = 1; i < path.length - 1; i++) {
+            let inner = current;
+            if (inner.type === 'not' && inner.condition && (inner.condition.type === 'and' || inner.condition.type === 'or')) {
+              inner = inner.condition;
+            }
+            current = inner.conditions![path[i]!]!;
+          }
+          let innerTarget = current;
+          if (innerTarget.type === 'not' && innerTarget.condition && (innerTarget.condition.type === 'and' || innerTarget.condition.type === 'or')) {
+            innerTarget = innerTarget.condition;
+          }
+          innerTarget.conditions![path[path.length - 1]!] = panelConditionRef.current;
+          setTrigger(triggerIdx, { ...trigger, conditions: [rootCopy] });
+        }
+      }
+      editingTriggerGuardIndexRef.current = null;
     } else {
       // Applying to root guard conditions
       if (path.length === 1) {
@@ -615,7 +685,7 @@ export function WorkflowEditorPage() {
       }
     }
     closePanel();
-  }, [panel, draft.conditions, currentBlocks, setRootConditions, handleBlockChange, closePanel]);
+  }, [panel, draft.conditions, draft.triggers, currentBlocks, setRootConditions, setTrigger, handleBlockChange, closePanel]);
 
   // --- Save ---
 
@@ -730,48 +800,84 @@ export function WorkflowEditorPage() {
           Triggers <span className="wfe-section-count">({draft.triggers.length})</span>
         </h3>
         {draft.triggers.length > 0 && (
-          <div className="wfe-trigger-list">
-            {draft.triggers.map((trigger, i) => (
-              <div key={trigger._draftId} className="wfe-trigger-node" onClick={() => openTriggerPanel(i)}>
-                <Icon name={TRIGGER_ICONS[trigger.type] || 'bolt'} size={15} style={{ color: 'var(--text-tertiary)', opacity: 0.5 }} />
-                <div className="wfe-trigger-node-info">
-                  <span className="wfe-trigger-node-name">
-                    {trigger.name || triggerAutoName(trigger, registry)}
-                  </span>
+          <div className="wfe-block-list">
+            {draft.triggers.map((trigger, i) => {
+              const isExpanded = expandedTriggerId === trigger._draftId;
+              return (
+                <div key={trigger._draftId} className={`block-card${isExpanded ? ' expanded' : ''}`}>
+                  <div className="block-card-header" onClick={() => setExpandedTriggerId(isExpanded ? null : trigger._draftId)}>
+                    <span className="bc-icon-wrap action">
+                      <Icon name={TRIGGER_ICONS[trigger.type] || 'bolt'} size={15} />
+                    </span>
+                    <div className="bc-info">
+                      <span className="bc-name">{trigger.name || triggerAutoName(trigger, registry)}</span>
+                    </div>
+                    <span className="bc-type-badge action">{TRIGGER_BADGES[trigger.type] || trigger.type}</span>
+                    <Icon name={isExpanded ? 'chevron-down' : 'chevron-right'} size={12} className="bc-chevron" />
+                  </div>
+                  {isExpanded && (
+                    <div className="block-card-body">
+                      <TriggerEditor
+                        draft={trigger}
+                        onChange={(updated) => setTrigger(i, updated)}
+                        onOpenGuardPanel={() => openTriggerGuardPanel(i)}
+                      />
+                    </div>
+                  )}
                 </div>
-                <span className="wfe-trigger-badge">{TRIGGER_BADGES[trigger.type] || trigger.type}</span>
-                <Icon name="chevron-down" size={12} style={{ color: 'var(--text-tertiary)', opacity: 0.25, transform: 'rotate(-90deg)' }} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
-        <button className="wfe-add-btn" onClick={() => { addTrigger(); openTriggerPanel(draft.triggers.length); }} type="button">
+        <button className="wfe-add-btn" onClick={() => setShowAddTriggerSheet(true)} type="button">
           <Icon name="plus-circle" size={14} />
           Add Trigger
         </button>
       </div>
 
-      {/* Global Guard Conditions Section */}
+      {/* Add Trigger Sheet */}
+      <AddTriggerSheet
+        open={showAddTriggerSheet}
+        onClose={() => setShowAddTriggerSheet(false)}
+        onAdd={(type) => {
+          addTrigger(type as WorkflowTriggerDraft['type']);
+          // Mark that we want to expand the next newly added trigger
+          expandNewTriggerRef.current = true;
+        }}
+      />
+
+      {/* Execution Guards Section */}
       <div className="wfe-section">
-        <h3 className="wfe-section-title">Global Guard Conditions</h3>
+        <h3 className="wfe-section-title">Execution Guards</h3>
         {draft.conditions.length > 0 && draft.conditions[0] && (
-          <div className="wfe-condition-node" onClick={openConditionGroupPanel}>
-            <Icon name="arrow-triangle-branch" size={15} style={{ color: 'var(--text-tertiary)', opacity: 0.5 }} />
-            <div className="wfe-trigger-node-info">
-              <span className="wfe-trigger-node-name">
+          <div className="trigger-guard-summary" onClick={openConditionGroupPanel}>
+            <Icon name="arrow-triangle-branch" size={14} style={{ opacity: 0.5 }} />
+            <div className="trigger-guard-summary-info">
+              <span className="trigger-guard-summary-name">
                 {conditionAutoName(draft.conditions[0], registry, allBlocks)}
+              </span>
+              <span className="trigger-guard-summary-meta">
+                {(() => {
+                  function countLeaves(c: WorkflowConditionDraft): number {
+                    if (c.type === 'and' || c.type === 'or') return (c.conditions ?? []).reduce((s, ch) => s + countLeaves(ch), 0);
+                    if (c.type === 'not') return c.condition ? countLeaves(c.condition) : 0;
+                    return 1;
+                  }
+                  const n = countLeaves(draft.conditions[0]!);
+                  return `${n} condition${n !== 1 ? 's' : ''} — tap to edit`;
+                })()}
               </span>
             </div>
             <span className="child-badge logic">
               {draft.conditions[0].type === 'not' ? 'NOT' : draft.conditions[0].type.toUpperCase()}
             </span>
-            <Icon name="chevron-down" size={12} style={{ color: 'var(--text-tertiary)', opacity: 0.25, transform: 'rotate(-90deg)' }} />
+            <Icon name="chevron-right" size={12} style={{ color: 'var(--text-tertiary)', opacity: 0.3 }} />
           </div>
         )}
         {draft.conditions.length === 0 && (
           <button className="wfe-condition-add-btn" onClick={openConditionGroupPanel} type="button">
             <Icon name="plus-circle" size={14} />
-            Add Global Guard Conditions
+            Add Execution Guards
           </button>
         )}
       </div>
@@ -872,17 +978,6 @@ export function WorkflowEditorPage() {
               </button>
             </div>
             <div className="wfe-panel-body">
-              {panel.type === 'trigger' && panel.triggerIndex !== undefined && panelTriggerRef.current && (
-                <TriggerEditor
-                  index={panel.triggerIndex}
-                  draft={panelTriggerRef.current}
-                  onChange={(updated) => { panelTriggerRef.current = updated; forcePanel(); }}
-                  onRemove={() => {
-                    removeTrigger(panel.triggerIndex!);
-                    closePanel();
-                  }}
-                />
-              )}
               {panel.type === 'conditionGroup' && panelConditionRef.current && (
                 <ConditionGroupEditor
                   draft={panelConditionRef.current}
@@ -910,8 +1005,7 @@ export function WorkflowEditorPage() {
               <button
                 className="wfe-panel-btn apply"
                 onClick={() => {
-                  if (panel.type === 'trigger') applyTriggerPanel();
-                  else applyConditionPanel();
+                  applyConditionPanel();
                 }}
                 type="button"
               >
@@ -926,6 +1020,38 @@ export function WorkflowEditorPage() {
       {/* Sticky Footer */}
       <div className="wfe-footer" ref={footerRef}>
         <div className="wfe-footer-inner">
+          {selectedTrigger && (
+            <div className="wfe-footer-block" key={selectedTrigger.trigger._draftId}>
+              <div className="wfe-footer-block-row">
+                <div className="wfe-footer-block-info">
+                  <span className="wfe-footer-block-icon action">
+                    <Icon name={TRIGGER_ICONS[selectedTrigger.trigger.type] || 'bolt'} size={13} />
+                  </span>
+                  <span className="wfe-footer-block-label">
+                    {selectedTrigger.trigger.name || triggerAutoName(selectedTrigger.trigger, registry)}
+                  </span>
+                </div>
+                <div className="wfe-footer-block-actions">
+                  <button
+                    className="wfe-footer-block-btn"
+                    onClick={() => handleTriggerClone(selectedTrigger.index)}
+                    title="Duplicate"
+                    type="button"
+                  >
+                    <Icon name="doc-on-doc" size={16} />
+                  </button>
+                  <button
+                    className="wfe-footer-block-btn danger"
+                    onClick={() => handleTriggerRemove(selectedTrigger.index)}
+                    title="Delete"
+                    type="button"
+                  >
+                    <Icon name="trash" size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {selectedBlock && (
             <div className="wfe-footer-block" key={selectedBlock.block._draftId}>
               <div className="wfe-footer-block-row">

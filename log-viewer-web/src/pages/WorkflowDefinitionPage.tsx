@@ -205,10 +205,10 @@ export function WorkflowDefinitionPage() {
             </div>
           </div>
 
-          {/* Global Guard Conditions Section */}
+          {/* Execution Guards Section */}
           {workflow.conditions && workflow.conditions.length > 0 && (
             <div className="wfd-section animate-fade-in">
-              <h3 className="wfd-section-title">Global Guard Conditions</h3>
+              <h3 className="wfd-section-title">Execution Guards</h3>
               <div className="wfd-tree-content">
                 {workflow.conditions.map((condition, i) => (
                   <DefinitionCondition key={i} condition={condition} depth={0} />

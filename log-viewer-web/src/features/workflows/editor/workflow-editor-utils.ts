@@ -65,8 +65,8 @@ export function newConditionLeaf(type: string): WorkflowConditionDraft {
       break;
     case 'timeCondition':
       base.mode = 'timeRange';
-      base.startTime = { hour: 8, minute: 0 };
-      base.endTime = { hour: 20, minute: 0 };
+      base.startTime = { type: 'fixed', hour: 8, minute: 0 };
+      base.endTime = { type: 'fixed', hour: 20, minute: 0 };
       break;
     case 'blockResult':
       base.blockResultScope = { scope: 'any' };
@@ -514,11 +514,16 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-function fmtTime(t: { hour: number; minute: number } | undefined): string {
+const MARKER_LABELS: Record<string, string> = { midnight: 'Midnight', noon: 'Noon', sunrise: 'Sunrise', sunset: 'Sunset' };
+
+function fmtTime(t: { type?: string; hour?: number; minute?: number; marker?: string } | undefined): string {
   if (!t) return '?';
-  const period = t.hour >= 12 ? 'PM' : 'AM';
-  const h = t.hour % 12 || 12;
-  return `${h}:${pad2(t.minute)} ${period}`;
+  if (t.type === 'marker' && t.marker) return MARKER_LABELS[t.marker] || t.marker;
+  const hour = t.hour ?? 0;
+  const minute = t.minute ?? 0;
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const h = hour % 12 || 12;
+  return `${h}:${pad2(minute)} ${period}`;
 }
 
 export function triggerAutoName(t: WorkflowTriggerDraft, registry: RegistryLike): string {

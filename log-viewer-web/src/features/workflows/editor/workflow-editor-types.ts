@@ -1,4 +1,4 @@
-import type { TriggerCondition, ComparisonOperator } from '@/types/workflow-definition';
+import type { TriggerCondition, ComparisonOperator, TimePoint } from '@/types/workflow-definition';
 
 export function newUUID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -47,8 +47,8 @@ export interface WorkflowConditionDraft {
   comparison?: ComparisonOperator;
   // timeCondition
   mode?: string;
-  startTime?: { hour: number; minute: number };
-  endTime?: { hour: number; minute: number };
+  startTime?: TimePoint;
+  endTime?: TimePoint;
   // blockResult
   blockResultScope?: { scope: string; blockId?: string };
   expectedStatus?: string;

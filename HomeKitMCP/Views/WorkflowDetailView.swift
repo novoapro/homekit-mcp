@@ -150,9 +150,9 @@ struct WorkflowDetailView: View {
                 WorkflowConditionRow(condition: condition, devices: devices, scenes: scenes, depth: 0)
             }
         } header: {
-            Text("Global Guard Conditions")
+            Text("Execution Guards")
         } footer: {
-            Text("Global guard conditions are evaluated after any trigger fires. Failure marks the workflow as skipped.")
+            Text("Execution guards are evaluated after any trigger fires. Failure marks the workflow as skipped.")
         }
         .listRowBackground(Theme.contentBackground)
     }
@@ -267,7 +267,7 @@ private struct WorkflowTriggerRow: View {
                 Image(systemName: "shield.fill")
                     .font(.caption2)
                     .foregroundStyle(.indigo)
-                Text("\(count) trigger condition\(count == 1 ? "" : "s")")
+                Text("\(count) guard condition\(count == 1 ? "" : "s")")
                     .font(.caption)
                     .foregroundStyle(.indigo)
             }

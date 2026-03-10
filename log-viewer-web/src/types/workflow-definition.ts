@@ -90,11 +90,17 @@ export interface DeviceStateConditionDef {
   comparison: ComparisonOperator;
 }
 
+// Time Point: either a fixed time or a named marker (midnight, noon, sunrise, sunset)
+export type TimePointMarker = 'midnight' | 'noon' | 'sunrise' | 'sunset';
+export type TimePointFixed = { type: 'fixed'; hour: number; minute: number };
+export type TimePointMarkerDef = { type: 'marker'; marker: TimePointMarker };
+export type TimePoint = TimePointFixed | TimePointMarkerDef;
+
 export interface TimeConditionDef {
   type: 'timeCondition';
   mode: string;
-  startTime?: { hour: number; minute: number };
-  endTime?: { hour: number; minute: number };
+  startTime?: TimePoint;
+  endTime?: TimePoint;
 }
 
 export interface BlockResultConditionDef {

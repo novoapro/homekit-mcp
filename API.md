@@ -931,7 +931,7 @@ Private IP ranges are blocked by default (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0
 | `description` | string | yes | Optional description |
 | `isEnabled` | boolean | no | Whether the workflow is active |
 | `triggers` | WorkflowTrigger[] | no | What starts the workflow |
-| `conditions` | WorkflowCondition[] | yes | Global guard conditions (all must pass for workflow to run). Evaluated after any trigger fires. Failure logs as `conditionNotMet`. |
+| `conditions` | WorkflowCondition[] | yes | Execution guards (all must pass for workflow to run). Evaluated after any trigger fires. Failure logs as `conditionNotMet`. |
 | `blocks` | WorkflowBlock[] | no | Sequence of actions/flow control |
 | `continueOnError` | boolean | no | Skip failed blocks instead of stopping |
 | `retriggerPolicy` | string | no | Default concurrent execution policy (see below) |
@@ -964,7 +964,7 @@ Private IP ranges are blocked by default (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0
 
 Each trigger has a `type` discriminator, an optional `retriggerPolicy` that overrides the workflow-level default, and an optional `conditions` array for per-trigger guard conditions.
 
-**Per-trigger conditions** are evaluated after the trigger matches but before the workflow is considered triggered. If per-trigger conditions fail, the trigger is **silently skipped** (as if it never matched). No execution log entry is created. Only `deviceState` and `timeCondition` condition types are allowed (no `blockResult`). Per-trigger conditions use the same `WorkflowCondition` format as global guard conditions.
+**Per-trigger guards** are evaluated after the trigger matches but before the workflow is considered triggered. If per-trigger guards fail, the trigger is **silently skipped** (as if it never matched). No execution log entry is created. Only `deviceState` and `timeCondition` condition types are allowed (no `blockResult`). Per-trigger guards use the same `WorkflowCondition` format as execution guards.
 
 #### deviceStateChange
 
@@ -1199,8 +1199,14 @@ Conditions are used in workflow-level guards, conditional blocks, and repeatWhil
 |---|---|---|---|
 | `type` | `"timeCondition"` | yes | |
 | `mode` | string | yes | `beforeSunrise`, `afterSunrise`, `beforeSunset`, `afterSunset`, `daytime`, `nighttime`, `timeRange` |
-| `startTime` | `{hour, minute}` | for `timeRange` | Start time (0-23, 0-59). Cross-midnight aware. |
-| `endTime` | `{hour, minute}` | for `timeRange` | End time |
+| `startTime` | TimePoint | for `timeRange` | Start time. Cross-midnight aware. See TimePoint format below. |
+| `endTime` | TimePoint | for `timeRange` | End time. See TimePoint format below. |
+
+**TimePoint** — either a fixed clock time or a named marker:
+- Fixed: `{"type": "fixed", "hour": 23, "minute": 0}` (hour 0-23, minute 0-59)
+- Marker: `{"type": "marker", "marker": "midnight"}` — available markers: `midnight`, `noon`, `sunrise`, `sunset`
+- Legacy format `{"hour": 23, "minute": 0}` (without `type` field) is accepted and treated as fixed.
+- `sunrise` and `sunset` markers require location to be configured in Settings.
 
 #### blockResult
 
@@ -1303,7 +1309,7 @@ Embedded in `StateChangeLog` entries with `workflow_execution` or `workflow_erro
 | `triggeredAt` | string (ISO 8601) | no | When the execution was triggered |
 | `completedAt` | string (ISO 8601) | yes | When the execution finished (null if still running) |
 | `triggerEvent` | TriggerEvent | yes | What triggered the execution |
-| `conditionResults` | ConditionResult[] | yes | Results of global guard conditions |
+| `conditionResults` | ConditionResult[] | yes | Results of execution guards |
 | `blockResults` | BlockResult[] | no | Execution results for each block |
 | `status` | ExecutionStatus | no | Current execution status |
 | `errorMessage` | string | yes | Top-level error message |
@@ -1316,7 +1322,7 @@ Embedded in `StateChangeLog` entries with `workflow_execution` or `workflow_erro
 | `success` | Completed successfully |
 | `failure` | Failed with an error |
 | `skipped` | Skipped (e.g. condition not met for a block) |
-| `conditionNotMet` | Global guard conditions not met (displayed as "Skipped"). The `errorMessage` field describes which conditions failed. When the "Log Skipped Workflows" setting is disabled, workflows with this status are not logged. Per-trigger condition failures are not logged — the trigger is silently skipped. |
+| `conditionNotMet` | Execution guards not met (displayed as "Skipped"). The `errorMessage` field describes which conditions failed. When the "Log Skipped Workflows" setting is disabled, workflows with this status are not logged. Per-trigger guard failures are not logged — the trigger is silently skipped. |
 | `cancelled` | Cancelled (by retrigger policy, return block, or user request). The `errorMessage` field describes the cancellation reason. |
 
 #### TriggerEvent

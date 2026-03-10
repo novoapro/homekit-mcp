@@ -266,7 +266,7 @@ struct WorkflowBuilderView: View {
                             WorkflowBuilderConditionRow(condition: condition, devices: devices, scenes: scenes)
                         }
                     } header: {
-                        Text("Global Guard Conditions")
+                        Text("Execution Guards")
                     }
                     .listRowBackground(Theme.contentBackground)
                 }

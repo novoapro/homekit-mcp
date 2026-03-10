@@ -4,21 +4,11 @@ import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import { DevicePicker } from './DevicePicker';
 import { CharacteristicValueInput } from './CharacteristicValueInput';
 import { CurrentValueIndicator } from './CurrentValueIndicator';
-import { ConditionGroupEditor } from './ConditionGroupEditor';
 import { useConfig } from '@/contexts/ConfigContext';
 import type { WorkflowTriggerDraft, WorkflowConditionDraft } from './workflow-editor-types';
 import { newUUID } from './workflow-editor-types';
-import { triggerAutoName, conditionAutoName } from './workflow-editor-utils';
+import { conditionAutoName } from './workflow-editor-utils';
 import './TriggerEditor.css';
-import '../tree-common.css';
-
-const TRIGGER_TYPES = [
-  { value: 'deviceStateChange', label: 'Device State Change' },
-  { value: 'schedule', label: 'Schedule' },
-  { value: 'sunEvent', label: 'Sun Event' },
-  { value: 'webhook', label: 'Webhook' },
-  { value: 'workflow', label: 'Callable (by other workflows)' },
-];
 
 const SCHEDULE_TYPES = [
   { value: 'once', label: 'Once' },
@@ -48,40 +38,21 @@ const RETRIGGER_POLICIES = [
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 interface TriggerEditorProps {
-  index: number;
   draft: WorkflowTriggerDraft;
   onChange: (updated: WorkflowTriggerDraft) => void;
-  onRemove: () => void;
+  onOpenGuardPanel?: () => void;
 }
 
-export function TriggerEditor({ index, draft, onChange, onRemove }: TriggerEditorProps) {
+export function TriggerEditor({ draft, onChange, onOpenGuardPanel }: TriggerEditorProps) {
   const registry = useDeviceRegistry();
   const { baseUrl } = useConfig();
   const [copied, setCopied] = useState<'token' | 'url' | null>(null);
-
-  const autoDescription = useMemo(
-    () => draft.name || triggerAutoName(draft, registry),
-    [draft, registry],
-  );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const conditionType = (draft.condition as any)?.type ?? 'changed';
   const patch = useCallback(
     (changes: Partial<WorkflowTriggerDraft>) => onChange({ ...draft, ...changes }),
     [draft, onChange],
-  );
-
-  const onTypeChange = useCallback(
-    (type: string) => {
-      const base: WorkflowTriggerDraft = {
-        _draftId: draft._draftId,
-        type: type as WorkflowTriggerDraft['type'],
-      };
-      if (type === 'schedule') { base.scheduleType = 'daily'; base.scheduleTime = { hour: 8, minute: 0 }; }
-      if (type === 'sunEvent') { base.event = 'sunrise'; base.offsetMinutes = 0; }
-      onChange(base);
-    },
-    [draft._draftId, onChange],
   );
 
   const timeString = (t: { hour: number; minute: number } | undefined): string => {
@@ -108,24 +79,6 @@ export function TriggerEditor({ index, draft, onChange, onRemove }: TriggerEdito
 
   return (
     <div className="trigger-editor">
-      <div className="trigger-header">
-        <span className="trigger-index">Trigger {index + 1}</span>
-        <span className="trigger-auto-name">{autoDescription}</span>
-        <button className="trigger-remove-btn" onClick={onRemove} title="Remove trigger" type="button">
-          <Icon name="xmark-circle-fill" size={16} />
-        </button>
-      </div>
-
-      {/* Type selector */}
-      <div className="editor-field">
-        <label>Type</label>
-        <select className="editor-select" value={draft.type} onChange={(e) => onTypeChange(e.target.value)}>
-          {TRIGGER_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </select>
-      </div>
-
       {/* deviceStateChange */}
       {draft.type === 'deviceStateChange' && (
         <>
@@ -366,7 +319,7 @@ export function TriggerEditor({ index, draft, onChange, onRemove }: TriggerEdito
       )}
 
       {/* Per-trigger conditions */}
-      <TriggerConditionsSection draft={draft} onChange={onChange} />
+      <TriggerConditionsSection draft={draft} onChange={onChange} onOpenGuardPanel={onOpenGuardPanel} />
 
       {/* Retrigger policy */}
       {draft.type !== 'workflow' && (
@@ -398,10 +351,9 @@ export function TriggerEditor({ index, draft, onChange, onRemove }: TriggerEdito
   );
 }
 
-// Per-trigger conditions section
-function TriggerConditionsSection({ draft, onChange }: { draft: WorkflowTriggerDraft; onChange: (d: WorkflowTriggerDraft) => void }) {
+// Per-trigger guard section (summary + open panel)
+function TriggerConditionsSection({ draft, onChange, onOpenGuardPanel }: { draft: WorkflowTriggerDraft; onChange: (d: WorkflowTriggerDraft) => void; onOpenGuardPanel?: () => void }) {
   const registry = useDeviceRegistry();
-  const [expanded, setExpanded] = useState(false);
 
   const hasConditions = draft.conditions && draft.conditions.length > 0 && draft.conditions[0];
   const root = hasConditions ? draft.conditions![0]! : null;
@@ -419,57 +371,32 @@ function TriggerConditionsSection({ draft, onChange }: { draft: WorkflowTriggerD
   const addConditions = useCallback(() => {
     const emptyRoot: WorkflowConditionDraft = { _draftId: newUUID(), type: 'and', conditions: [] };
     onChange({ ...draft, conditions: [emptyRoot] });
-    setExpanded(true);
-  }, [draft, onChange]);
-
-  const removeConditions = useCallback(() => {
-    onChange({ ...draft, conditions: undefined });
-    setExpanded(false);
-  }, [draft, onChange]);
-
-  const onRootChange = useCallback((updated: WorkflowConditionDraft) => {
-    onChange({ ...draft, conditions: [updated] });
-  }, [draft, onChange]);
+    requestAnimationFrame(() => onOpenGuardPanel?.());
+  }, [draft, onChange, onOpenGuardPanel]);
 
   return (
     <div className="editor-field">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => hasConditions && setExpanded(!expanded)}>
-        <label style={{ margin: 0, cursor: 'pointer' }}>Trigger Conditions</label>
-        {condCount > 0 && (
-          <span className="child-badge" style={{ fontSize: 11 }}>{condCount}</span>
-        )}
-        {hasConditions && (
-          <Icon name={expanded ? 'chevron-down' : 'chevron-forward'} size={12} style={{ color: 'var(--text-tertiary)', marginLeft: 'auto' }} />
-        )}
-      </div>
-      {!hasConditions && (
+      <label>Trigger Guard</label>
+      {!hasConditions ? (
         <button className="wfe-condition-add-btn" onClick={addConditions} type="button" style={{ marginTop: 4 }}>
           <Icon name="plus-circle" size={14} />
-          Add Trigger Conditions
+          Add Trigger Guard
         </button>
-      )}
-      {hasConditions && expanded && root && (
-        <div style={{ marginTop: 8 }}>
-          <ConditionGroupEditor
-            draft={root}
-            allowBlockResult={false}
-            onChange={onRootChange}
-            onEditNestedCondition={() => {}}
-          />
-          <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-              If conditions fail, this trigger is silently skipped.
-            </span>
-            <button className="wfe-remove-btn" onClick={removeConditions} type="button" style={{ fontSize: 11 }}>
-              Remove
-            </button>
+      ) : (
+        <div
+          className="trigger-guard-summary"
+          onClick={() => onOpenGuardPanel?.()}
+        >
+          <Icon name="arrow-triangle-branch" size={14} style={{ opacity: 0.5 }} />
+          <div className="trigger-guard-summary-info">
+            <span className="trigger-guard-summary-name">{conditionAutoName(root!, registry)}</span>
+            <span className="trigger-guard-summary-meta">{condCount} condition{condCount !== 1 ? 's' : ''} — tap to edit</span>
           </div>
+          <span className="child-badge logic">
+            {root!.type === 'not' ? 'NOT' : root!.type.toUpperCase()}
+          </span>
+          <Icon name="chevron-right" size={12} style={{ color: 'var(--text-tertiary)', opacity: 0.3 }} />
         </div>
-      )}
-      {hasConditions && !expanded && root && condCount > 0 && (
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-          {conditionAutoName(root, registry)}
-        </span>
       )}
     </div>
   );

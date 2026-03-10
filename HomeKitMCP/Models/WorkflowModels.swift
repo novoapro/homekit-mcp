@@ -1212,8 +1212,8 @@ indirect enum WorkflowCondition: Codable {
         case .timeCondition:
             self = try .timeCondition(TimeCondition(
                 mode: container.decode(TimeConditionMode.self, forKey: .mode),
-                startTime: container.decodeIfPresent(TimeOfDay.self, forKey: .startTime),
-                endTime: container.decodeIfPresent(TimeOfDay.self, forKey: .endTime)
+                startTime: container.decodeIfPresent(TimePoint.self, forKey: .startTime),
+                endTime: container.decodeIfPresent(TimePoint.self, forKey: .endTime)
             ))
         case .sunEvent:
             // Backward compat: map old sunEvent → timeCondition
@@ -1365,15 +1365,119 @@ struct TimeOfDay: Codable, Equatable, Hashable {
     static let noon = TimeOfDay(hour: 12, minute: 0)
 }
 
+// MARK: - Time Point (fixed time or named marker)
+
+enum TimePointMarker: String, Codable, CaseIterable, Identifiable {
+    case midnight
+    case noon
+    case sunrise
+    case sunset
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .midnight: return "Midnight"
+        case .noon: return "Noon"
+        case .sunrise: return "Sunrise"
+        case .sunset: return "Sunset"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .midnight: return "moon.fill"
+        case .noon: return "sun.max.fill"
+        case .sunrise: return "sunrise.fill"
+        case .sunset: return "sunset.fill"
+        }
+    }
+
+    /// Whether this marker requires lat/lon for resolution
+    var requiresLocation: Bool {
+        switch self {
+        case .sunrise, .sunset: return true
+        case .midnight, .noon: return false
+        }
+    }
+}
+
+enum TimePoint: Codable, Equatable, Hashable {
+    case fixed(TimeOfDay)
+    case marker(TimePointMarker)
+
+    var formatted: String {
+        switch self {
+        case .fixed(let tod): return tod.formatted
+        case .marker(let m): return m.displayName
+        }
+    }
+
+    var requiresLocation: Bool {
+        switch self {
+        case .fixed: return false
+        case .marker(let m): return m.requiresLocation
+        }
+    }
+
+    // MARK: Codable
+
+    private enum CodingKeys: String, CodingKey {
+        case type, hour, minute, marker
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .fixed(let tod):
+            try container.encode("fixed", forKey: .type)
+            try container.encode(tod.hour, forKey: .hour)
+            try container.encode(tod.minute, forKey: .minute)
+        case .marker(let m):
+            try container.encode("marker", forKey: .type)
+            try container.encode(m, forKey: .marker)
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Backward compat: if no "type" key, treat as plain {hour, minute}
+        if let type = try container.decodeIfPresent(String.self, forKey: .type) {
+            switch type {
+            case "marker":
+                let m = try container.decode(TimePointMarker.self, forKey: .marker)
+                self = .marker(m)
+            default: // "fixed"
+                let hour = try container.decode(Int.self, forKey: .hour)
+                let minute = try container.decode(Int.self, forKey: .minute)
+                self = .fixed(TimeOfDay(hour: hour, minute: minute))
+            }
+        } else {
+            // Legacy: plain {hour, minute} without "type"
+            let hour = try container.decode(Int.self, forKey: .hour)
+            let minute = try container.decode(Int.self, forKey: .minute)
+            self = .fixed(TimeOfDay(hour: hour, minute: minute))
+        }
+    }
+}
+
 struct TimeCondition: Codable {
     let mode: TimeConditionMode
-    let startTime: TimeOfDay?  // Only for .timeRange
-    let endTime: TimeOfDay?    // Only for .timeRange
+    let startTime: TimePoint?  // Only for .timeRange
+    let endTime: TimePoint?    // Only for .timeRange
 
-    init(mode: TimeConditionMode, startTime: TimeOfDay? = nil, endTime: TimeOfDay? = nil) {
+    init(mode: TimeConditionMode, startTime: TimePoint? = nil, endTime: TimePoint? = nil) {
         self.mode = mode
         self.startTime = startTime
         self.endTime = endTime
+    }
+
+    /// Whether this condition requires location configuration
+    var requiresLocation: Bool {
+        if mode.requiresLocation { return true }
+        if let s = startTime, s.requiresLocation { return true }
+        if let e = endTime, e.requiresLocation { return true }
+        return false
     }
 }
 

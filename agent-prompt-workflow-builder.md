@@ -61,55 +61,55 @@ Triggers are **atomic event detectors**. Each trigger fires on exactly ONE event
 
 Multiple triggers in the `"triggers"` array act as **OR** — any single trigger can start the workflow.
 
-There are **two levels** of guard conditions:
+There are **two levels** of guards:
 
-### Per-Trigger Conditions (trigger-level `"conditions"` array)
+### Per-Trigger Guards (trigger-level `"conditions"` array)
 
-Each trigger can have an optional `"conditions"` array. These are evaluated AFTER the trigger matches but BEFORE the workflow is considered triggered. If per-trigger conditions fail, the trigger is **silently ignored** (as if it never matched). No execution log entry is created.
+Each trigger can have an optional `"conditions"` array (trigger guards). These are evaluated AFTER the trigger matches but BEFORE the workflow is considered triggered. If per-trigger guards fail, the trigger is **silently ignored** (as if it never matched). No execution log entry is created.
 
-Use per-trigger conditions when different triggers should fire under different environmental conditions.
+Use per-trigger guards when different triggers should fire under different environmental conditions.
 
-### Global Guard Conditions (workflow-level `"conditions"` array)
+### Execution Guards (workflow-level `"conditions"` array)
 
-Global guard conditions check **readiness** after a trigger fires. If any global guard condition fails, the workflow is marked as skipped (`conditionNotMet`).
+Execution guards check **readiness** after a trigger fires. If any execution guard fails, the workflow is marked as skipped (`conditionNotMet`).
 
-Use global guard conditions when ALL triggers share the same readiness requirements.
+Use execution guards when ALL triggers share the same readiness requirements.
 
 **For "when X happens AND Y is true" logic:**
 
 - ONE trigger (the event)
-- Per-trigger conditions or global guard conditions (the readiness checks)
+- Per-trigger guards or execution guards (the readiness checks)
 
 ### Pattern Examples
 
 **"When motion is detected AND it's nighttime, turn on the light":**
 
-- Trigger: `deviceStateChange` on motion sensor (equals true) with per-trigger condition: `timeCondition` `"nighttime"`
+- Trigger: `deviceStateChange` on motion sensor (equals true) with per-trigger guard: `timeCondition` `"nighttime"`
 - Block: `controlDevice` to turn on the light
 
 **"When the door opens AND the hallway light is off, turn on the light":**
 
 - Trigger: `deviceStateChange` on door sensor
-- Global guard condition: `deviceState` on hallway light (Power equals false)
+- Execution guard: `deviceState` on hallway light (Power equals false)
 - Block: `controlDevice` to turn on hallway light
 
 **"At sunset, if temperature is above 75, turn on the fan":**
 
-- Trigger: `sunEvent` with `"sunset"` with per-trigger condition: `deviceState` on temperature sensor (greaterThan 75)
+- Trigger: `sunEvent` with `"sunset"` with per-trigger guard: `deviceState` on temperature sensor (greaterThan 75)
 - Block: `controlDevice` to turn on fan
 
-**"Motion detected at night turns on light, schedule at 7am always turns off light" (two triggers, different conditions):**
+**"Motion detected at night turns on light, schedule at 7am always turns off light" (two triggers, different guards):**
 
-- Trigger 1: `deviceStateChange` on motion sensor with per-trigger condition: `timeCondition` `"nighttime"` → blocks turn on light
-- Trigger 2: `schedule` daily at 7:00 (no per-trigger conditions) → blocks turn off light
-- Note: This pattern requires per-trigger conditions since only trigger 1 needs the nighttime check
+- Trigger 1: `deviceStateChange` on motion sensor with per-trigger guard: `timeCondition` `"nighttime"` → blocks turn on light
+- Trigger 2: `schedule` daily at 7:00 (no per-trigger guards) → blocks turn off light
+- Note: This pattern requires per-trigger guards since only trigger 1 needs the nighttime check
 
 ---
 
 ## Condition Rules
 
-- **Global guard conditions** (workflow `"conditions"` array) only support: `deviceState`, `timeCondition`, and `and`/`or`/`not`. Do NOT use `blockResult`.
-- **Per-trigger conditions** (trigger `"conditions"` array) only support: `deviceState`, `timeCondition`, and `and`/`or`/`not`. Do NOT use `blockResult`.
+- **Execution guards** (workflow `"conditions"` array) only support: `deviceState`, `timeCondition`, and `and`/`or`/`not`. Do NOT use `blockResult`.
+- **Per-trigger guards** (trigger `"conditions"` array) only support: `deviceState`, `timeCondition`, and `and`/`or`/`not`. Do NOT use `blockResult`.
 - **`blockResult` conditions** are ONLY valid inside conditional block conditions, and require `continueOnError: true`.
 
 ---

@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import type { WorkflowConditionDraft } from './workflow-editor-types';
@@ -6,6 +6,7 @@ import { newUUID } from './workflow-editor-types';
 import { newConditionLeaf, conditionAutoName } from './workflow-editor-utils';
 import type { BlockInfo } from './workflow-editor-utils';
 import './ConditionGroupEditor.css';
+import './WorkflowEditorPage.css'; // for wfe-add-menu styles
 
 const CONDITION_ICONS: Record<string, string> = {
   deviceState: 'house',
@@ -235,15 +236,48 @@ export function ConditionGroupEditor({
 
       {/* Add buttons */}
       <div className="cge-add-buttons">
-        <button type="button" className="cge-add-btn" onClick={() => addLeaf('deviceState')}>
-          <Icon name="plus-circle" size={14} />
-          Add Condition
-        </button>
+        <ConditionAddMenu leafTypeOptions={leafTypeOptions} onAddLeaf={addLeaf} />
         <button type="button" className="cge-add-btn group-btn" onClick={addGroup}>
           <Icon name="folder-badge-plus" size={14} />
           Add Group
         </button>
       </div>
+    </div>
+  );
+}
+
+const CONDITION_TYPE_ICONS: Record<string, string> = {
+  deviceState: 'house',
+  timeCondition: 'clock',
+  blockResult: 'checkmark-circle',
+};
+
+function ConditionAddMenu({ leafTypeOptions, onAddLeaf }: { leafTypeOptions: { value: string; label: string }[]; onAddLeaf: (type: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="wfe-add-menu-wrapper">
+      <button type="button" className="cge-add-btn" onClick={() => setOpen((v) => !v)}>
+        <Icon name="plus-circle" size={14} />
+        Add Condition
+      </button>
+      {open && (
+        <>
+          <div className="wfe-add-menu-backdrop" onClick={() => setOpen(false)} />
+          <div className="wfe-add-menu">
+            {leafTypeOptions.map((t) => (
+              <button
+                key={t.value}
+                className="wfe-add-menu-item"
+                type="button"
+                onClick={() => { setOpen(false); onAddLeaf(t.value); }}
+              >
+                <Icon name={CONDITION_TYPE_ICONS[t.value] || 'questionmark-circle'} size={14} style={{ opacity: 0.6 }} />
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

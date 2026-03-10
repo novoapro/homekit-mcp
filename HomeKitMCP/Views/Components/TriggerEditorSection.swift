@@ -156,7 +156,7 @@ private struct TriggerRow: View {
             )
         } label: {
             HStack {
-                Text("Trigger Conditions")
+                Text("Trigger Guard")
                     .font(.subheadline)
                 Spacer()
                 if trigger.conditionRoot.leafCount > 0 {
