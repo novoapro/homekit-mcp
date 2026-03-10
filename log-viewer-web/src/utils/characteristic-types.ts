@@ -86,7 +86,24 @@ export function characteristicDisplayName(type: string): string {
  *   When provided for temperature characteristics, the correct unit symbol is used.
  *   Values are already converted server-side based on the user's temperature unit preference.
  */
-export function formatCharacteristicValue(value: unknown, characteristicType: string, units?: string): string {
+/**
+ * Returns the display unit for a characteristic (e.g., "°C", "%", "°", "K").
+ * Used to render the unit badge separately from the value.
+ */
+export function getCharacteristicDisplayUnit(characteristicType: string, units?: string): string | null {
+  const name = characteristicDisplayName(characteristicType);
+
+  if (TEMPERATURE_TYPES.has(name)) {
+    return units === 'fahrenheit' ? '°F' : '°C';
+  }
+  if (name === 'Hue') return '°';
+  if (name === 'Color Temperature') return 'K';
+  if (PERCENTAGE_TYPES.has(name)) return '%';
+
+  return null;
+}
+
+export function formatCharacteristicValue(value: unknown, characteristicType: string): string {
   if (value === undefined || value === null) return '--';
 
   const name = characteristicDisplayName(characteristicType);
@@ -97,18 +114,14 @@ export function formatCharacteristicValue(value: unknown, characteristicType: st
   }
 
   if (PERCENTAGE_TYPES.has(name)) {
-    return `${value}%`;
+    return `${ Number.isFinite(value) ? value : 0 }`;
   }
 
   if (TEMPERATURE_TYPES.has(name)) {
     if (typeof value === 'number') {
-      const suffix = units === 'fahrenheit' ? '\u00B0F' : '\u00B0C';
-      return `${value.toFixed(1)}${suffix}`;
+      return value.toFixed(1);
     }
   }
-
-  if (name === 'Hue') return `${value}\u00B0`;
-  if (name === 'Color Temperature') return `${value}K`;
 
   if (name === 'Door State' && typeof value === 'number') {
     return DOOR_STATES[value] ?? String(value);

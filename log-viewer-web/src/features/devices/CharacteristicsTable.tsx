@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { characteristicDisplayName, formatCharacteristicValue } from '@/utils/characteristic-types';
+import { characteristicDisplayName, formatCharacteristicValue, getCharacteristicDisplayUnit } from '@/utils/characteristic-types';
 import { PermissionIcons } from './PermissionIcons';
 import type { RESTCharacteristic } from '@/types/homekit-device';
 
@@ -47,10 +47,10 @@ export function CharacteristicsTable({ characteristics, serviceId }: Characteris
             </span>
             <span className="char-col-value">
               <span className="char-value-text">
-                {charType ? formatCharacteristicValue(char.value, charType, char.units) : String(char.value ?? '--')}
+                {charType ? formatCharacteristicValue(char.value, charType) : String(char.value ?? '--')}
               </span>
-              {char.units && (
-                <span className="char-units">{char.units}</span>
+              {charType && getCharacteristicDisplayUnit(charType, char.units) && (
+                <span className="char-units">{getCharacteristicDisplayUnit(charType, char.units)}</span>
               )}
             </span>
             <span className="char-col-perms">
