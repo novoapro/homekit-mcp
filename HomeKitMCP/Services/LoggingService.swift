@@ -4,7 +4,7 @@ import Combine
 actor LoggingService: LoggingServiceProtocol {
     /// Ring buffer: append to end (O(1)), trim from start when full, reverse on read.
     private var logs: [StateChangeLog] = []
-    private let storage: StorageService
+    private let storage: any StorageServiceProtocol
     private let fileURL: URL
     private var saveTask: Task<Void, Never>?
 
@@ -15,7 +15,7 @@ actor LoggingService: LoggingServiceProtocol {
     nonisolated let logUpdatedSubject = PassthroughSubject<StateChangeLog, Never>()
     nonisolated let logsClearedSubject = PassthroughSubject<Void, Never>()
 
-    init(storage: StorageService) {
+    init(storage: any StorageServiceProtocol) {
         self.storage = storage
         let appDir = FileManager.appSupportDirectory
         self.fileURL = appDir.appendingPathComponent("logs.json")

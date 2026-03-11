@@ -256,7 +256,7 @@ actor WebhookService: WebhookServiceProtocol {
 
     /// Matches a host against a pattern that may contain `*` wildcards.
     /// e.g. `192.168.1.*` matches `192.168.1.88`, `*.local` matches `myserver.local`.
-    private static func matchesWildcard(host: String, pattern: String) -> Bool {
+    static func matchesWildcard(host: String, pattern: String) -> Bool {
         if !pattern.contains("*") { return host == pattern }
         let regex = "^" + NSRegularExpression.escapedPattern(for: pattern).replacingOccurrences(of: "\\*", with: ".*") + "$"
         return host.range(of: regex, options: .regularExpression) != nil

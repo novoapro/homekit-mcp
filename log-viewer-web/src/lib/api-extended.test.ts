@@ -11,10 +11,7 @@ describe('createApiClient - Extended Tests', () => {
 
   describe('fetchWithTimeout', () => {
     it('times out correctly using AbortController', async () => {
-      let abortedSignal: AbortSignal | null = null;
-
-      const mockFetch = vi.fn(async (_url: string, options: RequestInit) => {
-        abortedSignal = options.signal;
+      const mockFetch = vi.fn(async (_url: string, _options: RequestInit) => {
         // Simulate timeout by waiting
         await new Promise(resolve => setTimeout(resolve, 100));
         throw new Error('Request aborted');

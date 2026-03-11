@@ -1,6 +1,33 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { usePolling } from './usePolling';
+import type { StateChangeLog } from '@/types/state-change-log';
+import { LogCategory } from '@/types/state-change-log';
+import type { WorkflowExecutionLog, ExecutionStatus } from '@/types/workflow-log';
+
+/** Create a minimal valid WorkflowExecutionLog. */
+function makeWorkflowExec(status: ExecutionStatus = 'success'): WorkflowExecutionLog {
+  return {
+    id: 'exec-1',
+    workflowId: 'wf-1',
+    workflowName: 'Test Workflow',
+    triggeredAt: new Date().toISOString(),
+    blockResults: [],
+    status,
+  };
+}
+
+/** Create a minimal valid StateChangeLog for use in tests. */
+function makeLog(overrides: Partial<StateChangeLog> & { id: string }): StateChangeLog {
+  return {
+    deviceId: 'device-1',
+    deviceName: 'Test Device',
+    characteristicType: 'On',
+    category: LogCategory.StateChange,
+    timestamp: new Date().toISOString(),
+    ...overrides,
+  };
+}
 
 // Mock the useApi hook
 vi.mock('./useApi', () => ({
@@ -25,9 +52,7 @@ describe('usePolling', () => {
 
     mockApi = {
       getLogs: vi.fn().mockResolvedValue({
-        logs: [
-          { id: '1', timestamp: new Date().toISOString(), workflowExecution: { status: 'success' } },
-        ],
+        logs: [makeLog({ id: '1', workflowExecution: makeWorkflowExec('success') })],
         total: 1,
       }),
     };
@@ -88,7 +113,7 @@ describe('usePolling', () => {
   it('loadMore appends logs without replacing existing ones', async () => {
     mockApi.getLogs.mockResolvedValueOnce({
       logs: [
-        { id: '1', timestamp: '2024-01-01T00:00:00Z', workflowExecution: { status: 'success' } },
+        makeLog({ id: '1', timestamp: '2024-01-01T00:00:00Z', workflowExecution: makeWorkflowExec('success') }),
       ],
       total: 3,
     });
@@ -103,7 +128,7 @@ describe('usePolling', () => {
 
     mockApi.getLogs.mockResolvedValueOnce({
       logs: [
-        { id: '2', timestamp: '2024-01-01T00:01:00Z', workflowExecution: { status: 'running' } },
+        makeLog({ id: '2', timestamp: '2024-01-01T00:01:00Z', workflowExecution: makeWorkflowExec('running') }),
       ],
       total: 3,
     });
@@ -118,11 +143,7 @@ describe('usePolling', () => {
   it('injectLog adds new log to the beginning', () => {
     const { result } = renderHook(() => usePolling());
 
-    const log = {
-      id: 'new-log',
-      timestamp: new Date().toISOString(),
-      workflowExecution: { status: 'success' },
-    };
+    const log = makeLog({ id: 'new-log', workflowExecution: makeWorkflowExec('success') });
 
     act(() => {
       result.current.injectLog(log);
@@ -135,11 +156,7 @@ describe('usePolling', () => {
   it('does not inject duplicate logs', () => {
     const { result } = renderHook(() => usePolling());
 
-    const log = {
-      id: 'duplicate-id',
-      timestamp: new Date().toISOString(),
-      workflowExecution: { status: 'success' },
-    };
+    const log = makeLog({ id: 'duplicate-id', workflowExecution: makeWorkflowExec('success') });
 
     act(() => {
       result.current.injectLog(log);
@@ -151,11 +168,7 @@ describe('usePolling', () => {
   });
 
   it('updateLog modifies existing log in place', () => {
-    const log = {
-      id: 'log-1',
-      timestamp: new Date().toISOString(),
-      workflowExecution: { status: 'running' },
-    };
+    const log = makeLog({ id: 'log-1', workflowExecution: makeWorkflowExec('running') });
 
     const { result } = renderHook(() => usePolling());
 
@@ -163,10 +176,7 @@ describe('usePolling', () => {
       result.current.injectLog(log);
     });
 
-    const updatedLog = {
-      ...log,
-      workflowExecution: { status: 'success' },
-    };
+    const updatedLog = makeLog({ id: 'log-1', workflowExecution: makeWorkflowExec('success') });
 
     act(() => {
       result.current.updateLog(updatedLog);
@@ -177,11 +187,7 @@ describe('usePolling', () => {
   });
 
   it('does not overwrite terminal status with running status', () => {
-    const log = {
-      id: 'log-1',
-      timestamp: new Date().toISOString(),
-      workflowExecution: { status: 'success' },
-    };
+    const log = makeLog({ id: 'log-1', workflowExecution: makeWorkflowExec('success') });
 
     const { result } = renderHook(() => usePolling());
 
@@ -189,10 +195,7 @@ describe('usePolling', () => {
       result.current.injectLog(log);
     });
 
-    const staleUpdate = {
-      ...log,
-      workflowExecution: { status: 'running' },
-    };
+    const staleUpdate = makeLog({ id: 'log-1', workflowExecution: makeWorkflowExec('running') });
 
     act(() => {
       result.current.updateLog(staleUpdate);
@@ -204,7 +207,7 @@ describe('usePolling', () => {
   it('clearAll removes all logs', async () => {
     mockApi.getLogs.mockResolvedValue({
       logs: [
-        { id: '1', timestamp: '2024-01-01T00:00:00Z', workflowExecution: { status: 'success' } },
+        makeLog({ id: '1', timestamp: '2024-01-01T00:00:00Z', workflowExecution: makeWorkflowExec('success') }),
       ],
       total: 1,
     });
@@ -242,7 +245,7 @@ describe('usePolling', () => {
   it('tracks latest timestamp for delta polling', async () => {
     mockApi.getLogs.mockResolvedValue({
       logs: [
-        { id: '1', timestamp: '2024-01-01T00:00:10Z', workflowExecution: { status: 'success' } },
+        makeLog({ id: '1', timestamp: '2024-01-01T00:00:10Z', workflowExecution: makeWorkflowExec('success') }),
       ],
       total: 1,
     });
@@ -270,7 +273,7 @@ describe('usePolling', () => {
 
   it('handles error in loadMore', async () => {
     mockApi.getLogs.mockResolvedValueOnce({
-      logs: [{ id: '1', timestamp: '2024-01-01T00:00:00Z', workflowExecution: { status: 'success' } }],
+      logs: [makeLog({ id: '1', timestamp: '2024-01-01T00:00:00Z', workflowExecution: makeWorkflowExec('success') })],
       total: 2,
     });
 
@@ -292,8 +295,8 @@ describe('usePolling', () => {
   it('sets logs from API response', async () => {
     mockApi.getLogs.mockResolvedValue({
       logs: [
-        { id: '1', timestamp: '2024-01-01T00:00:00Z', workflowExecution: { status: 'success' } },
-        { id: '2', timestamp: '2024-01-01T00:01:00Z', workflowExecution: { status: 'running' } },
+        makeLog({ id: '1', timestamp: '2024-01-01T00:00:00Z', workflowExecution: makeWorkflowExec('success') }),
+        makeLog({ id: '2', timestamp: '2024-01-01T00:01:00Z', workflowExecution: makeWorkflowExec('running') }),
       ],
       total: 2,
     });

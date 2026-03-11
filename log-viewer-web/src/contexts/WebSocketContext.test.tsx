@@ -79,7 +79,7 @@ describe('WebSocketContext', () => {
     };
 
     (useConfig as any).mockReturnValue({ config: mockConfig });
-    (global as any).WebSocket = MockWebSocket;
+    (globalThis as any).WebSocket = MockWebSocket;
   });
 
   afterEach(() => {
@@ -181,7 +181,7 @@ describe('WebSocketContext', () => {
     await act(async () => {});
 
     expect(MockWebSocket.instances).toHaveLength(1);
-    expect(MockWebSocket.instances[0].url).toContain('ws://localhost:3000/ws');
+    expect(MockWebSocket.instances[0]!.url).toContain('ws://localhost:3000/ws');
   });
 
   it('does not connect when websocket is disabled', async () => {
@@ -238,7 +238,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     expect(ws).toBeDefined();
 
     act(() => {
@@ -265,7 +265,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     act(() => { ws.simulateOpen(); });
     expect(contextValue.connectionState).toBe('connected');
 
@@ -289,7 +289,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     // onerror fires before onclose; after onerror+onclose the state goes disconnected
     act(() => {
       if (ws.onerror) ws.onerror(new Event('error'));
@@ -313,7 +313,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     const closeSpy = vi.spyOn(ws, 'close');
 
     unmount();
@@ -340,7 +340,7 @@ describe('WebSocketContext', () => {
     await act(async () => {});
 
     expect(MockWebSocket.instances).toHaveLength(1);
-    expect(MockWebSocket.instances[0].url).toContain('ws://192.168.1.100:8080/ws');
+    expect(MockWebSocket.instances[0]!.url).toContain('ws://192.168.1.100:8080/ws');
   });
 
   it('uses wss protocol when useHTTPS is true', async () => {
@@ -359,7 +359,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    expect(MockWebSocket.instances[0].url).toContain('wss://');
+    expect(MockWebSocket.instances[0]!.url).toContain('wss://');
   });
 
   it('includes bearer token in WebSocket URL', async () => {
@@ -378,8 +378,8 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    expect(MockWebSocket.instances[0].url).toContain('token=');
-    expect(MockWebSocket.instances[0].url).toContain('secret-token-123');
+    expect(MockWebSocket.instances[0]!.url).toContain('token=');
+    expect(MockWebSocket.instances[0]!.url).toContain('secret-token-123');
   });
 
   // ─── Subscription helpers ─────────────────────────────────────────────────
@@ -426,7 +426,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     expect(ws).toBeDefined();
 
     const handler1 = vi.fn();
@@ -459,7 +459,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     const handler = vi.fn();
     contextValue.onWorkflowLog(handler);
 
@@ -487,7 +487,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     const handler = vi.fn();
     contextValue.onWorkflowsUpdated(handler);
 
@@ -515,7 +515,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     const handler = vi.fn();
     contextValue.onDevicesUpdated(handler);
 
@@ -542,7 +542,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     const handler = vi.fn();
     contextValue.onCharacteristicUpdated(handler);
 
@@ -570,7 +570,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     const handler = vi.fn();
     contextValue.onLogsCleared(handler);
 
@@ -597,7 +597,7 @@ describe('WebSocketContext', () => {
 
     await act(async () => {});
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     const handler = vi.fn();
     contextValue.onLog(handler);
 
