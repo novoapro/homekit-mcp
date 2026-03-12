@@ -13,6 +13,7 @@ struct WorkflowDetailView: View {
     var onClone: (() -> Void)?
     var onCancelExecution: ((UUID) -> Void)?
     var onResetStatistics: (() -> Void)?
+    var onImproveWithAI: ((String?) async throws -> Workflow)?
 
     @State private var showingDeleteConfirmation = false
     @State private var showingResetConfirmation = false
@@ -20,6 +21,12 @@ struct WorkflowDetailView: View {
     @State private var isEnabled: Bool = false
     @State private var showClonedToast = false
     @State private var clonedToastTask: Task<Void, Never>?
+    @State private var showingImproveSheet = false
+    @State private var improvePrompt = ""
+    @State private var isImproving = false
+    @State private var improvedWorkflow: Workflow?
+    @State private var improveError: String?
+    @State private var aiDraftForEditor: Workflow?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -44,9 +51,9 @@ struct WorkflowDetailView: View {
                 Button("Edit") { showingEditor = true }
             }
         }
-        .sheet(isPresented: $showingEditor) {
+        .sheet(isPresented: $showingEditor, onDismiss: { aiDraftForEditor = nil }) {
             WorkflowEditorView(
-                mode: .edit(workflow),
+                mode: .edit(aiDraftForEditor ?? workflow),
                 devices: devices,
                 scenes: scenes,
                 workflows: workflows,
@@ -91,6 +98,48 @@ struct WorkflowDetailView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showClonedToast)
+        .sheet(isPresented: $showingImproveSheet) {
+            WorkflowImproveSheet(
+                workflowName: workflow.name,
+                prompt: $improvePrompt,
+                isImproving: isImproving,
+                improvedWorkflow: improvedWorkflow,
+                error: improveError,
+                onImprove: {
+                    guard let onImproveWithAI else { return }
+                    isImproving = true
+                    improveError = nil
+                    improvedWorkflow = nil
+                    Task {
+                        do {
+                            let result = try await onImproveWithAI(improvePrompt.isEmpty ? nil : improvePrompt)
+                            improvedWorkflow = result
+                        } catch {
+                            improveError = error.localizedDescription
+                        }
+                        isImproving = false
+                    }
+                },
+                onOpenInEditor: {
+                    guard let improved = improvedWorkflow else { return }
+                    aiDraftForEditor = improved
+                    showingImproveSheet = false
+                    improvedWorkflow = nil
+                    improvePrompt = ""
+                    improveError = nil
+                    // Small delay to allow sheet dismissal before presenting editor
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showingEditor = true
+                    }
+                },
+                onDismiss: {
+                    showingImproveSheet = false
+                    improvedWorkflow = nil
+                    improvePrompt = ""
+                    improveError = nil
+                }
+            )
+        }
     }
 
     // MARK: - Status Section
@@ -205,6 +254,14 @@ struct WorkflowDetailView: View {
                 onTrigger()
             } label: {
                 Label("Test Run", systemImage: "play.circle")
+            }
+
+            if onImproveWithAI != nil {
+                Button {
+                    showingImproveSheet = true
+                } label: {
+                    Label("Improve with AI", systemImage: "sparkles")
+                }
             }
 
             if let onClone {
@@ -793,6 +850,135 @@ private struct FlowControlBlockRow: View {
         case let .repeatWhile(b): return b.blocks
         case let .group(b): return b.blocks
         }
+    }
+}
+
+// MARK: - Improve with AI Sheet
+
+private struct WorkflowImproveSheet: View {
+    let workflowName: String
+    @Binding var prompt: String
+    let isImproving: Bool
+    let improvedWorkflow: Workflow?
+    let error: String?
+    let onImprove: () -> Void
+    let onOpenInEditor: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isImproving {
+                    loadingView
+                } else if let improved = improvedWorkflow {
+                    reviewView(improved)
+                } else {
+                    inputView
+                }
+            }
+            .navigationTitle("Improve with AI")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if !isImproving {
+                        Button("Cancel", action: onDismiss)
+                    }
+                }
+            }
+        }
+    }
+
+    private var inputView: some View {
+        Form {
+            Section {
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.fill")
+                        .foregroundColor(Theme.Tint.main)
+                    Text(workflowName)
+                        .fontWeight(.medium)
+                }
+            } header: {
+                Text("Workflow")
+            }
+
+            Section {
+                TextField("e.g., Add a condition to only run during nighttime", text: $prompt, axis: .vertical)
+                    .lineLimit(3...6)
+            } header: {
+                Text("Instructions (optional)")
+            } footer: {
+                Text("Leave empty for an automatic review and optimization.")
+            }
+
+            if let error {
+                Section {
+                    Text(error)
+                        .foregroundColor(Theme.Status.error)
+                        .font(.footnote)
+                }
+            }
+
+            Section {
+                Button(action: onImprove) {
+                    HStack {
+                        Image(systemName: "sparkles")
+                        Text("Improve")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .fontWeight(.semibold)
+                }
+                .tint(Theme.Tint.main)
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Theme.mainBackground)
+    }
+
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .controlSize(.large)
+            Text("Analyzing and improving your workflow...")
+                .font(.subheadline)
+                .foregroundColor(Theme.Text.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.mainBackground)
+    }
+
+    private func reviewView(_ improved: Workflow) -> some View {
+        Form {
+            Section {
+                LabeledContent("Name", value: improved.name)
+                if let desc = improved.description, !desc.isEmpty {
+                    LabeledContent("Description", value: desc)
+                }
+            } header: {
+                Text("Improved Workflow")
+            }
+
+            Section {
+                LabeledContent("Triggers", value: "\(improved.triggers.count)")
+                LabeledContent("Blocks", value: "\(improved.blocks.count)")
+                LabeledContent("Execution Guards", value: "\(improved.conditions?.count ?? 0)")
+            } header: {
+                Text("Summary")
+            }
+
+            Section {
+                Button(action: onOpenInEditor) {
+                    HStack {
+                        Image(systemName: "pencil.circle")
+                        Text("Open in Editor")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .fontWeight(.semibold)
+                }
+                .tint(Theme.Tint.main)
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Theme.mainBackground)
     }
 }
 

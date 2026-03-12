@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useReducer } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useLocation } from 'react-router';
 import {
   DndContext,
   closestCenter,
@@ -33,6 +33,7 @@ import { draftToPayload, definitionToDraft, triggerAutoName, conditionAutoName, 
 import type { BlockInfo } from './workflow-editor-utils';
 import { newUUID } from './workflow-editor-types';
 import type { WorkflowTriggerDraft, WorkflowConditionDraft, WorkflowBlockDraft } from './workflow-editor-types';
+import type { WorkflowDefinition } from '@/types/workflow-definition';
 import './WorkflowEditorPage.css';
 
 const TRIGGER_ICONS: Record<string, string> = {
@@ -66,6 +67,7 @@ interface NestingFrame {
 export function WorkflowEditorPage() {
   const { workflowId } = useParams<{ workflowId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const api = useApi();
   const registry = useDeviceRegistry();
 
@@ -172,20 +174,28 @@ export function WorkflowEditorPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // Load existing workflow for edit mode
+  // Load existing workflow for edit mode (or accept AI-improved draft via navigation state)
   useEffect(() => {
     if (!isEditMode || !workflowId) return;
     (async () => {
       setIsLoading(true);
       try {
-        const wf = await api.getWorkflow(workflowId);
-        reset(definitionToDraft(wf));
+        const aiDraft = (location.state as Record<string, unknown> | null)?.aiDraft as WorkflowDefinition | undefined;
+        if (aiDraft) {
+          reset(definitionToDraft(aiDraft));
+          // Clear navigation state so refresh doesn't re-apply the AI draft
+          navigate(location.pathname, { replace: true, state: {} });
+        } else {
+          const wf = await api.getWorkflow(workflowId);
+          reset(definitionToDraft(wf));
+        }
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to load workflow');
       } finally {
         setIsLoading(false);
       }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, workflowId, isEditMode, reset]);
 
   const validationErrors = useMemo(() => validateDraft(draft), [draft]);

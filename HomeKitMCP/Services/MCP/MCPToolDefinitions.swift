@@ -394,6 +394,24 @@ enum MCPToolDefinitions {
                 "required": ["workflow_id"]
             ] as [String: Any]
         ],
+        [
+            "name": "improve_workflow",
+            "description": "Use AI to analyze and improve an existing workflow. Returns the improved workflow JSON without saving it. Review the result and use update_workflow to apply the changes.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "workflow_id": [
+                        "type": "string",
+                        "description": "UUID of the workflow to improve"
+                    ],
+                    "prompt": [
+                        "type": "string",
+                        "description": "Optional instructions for how to improve the workflow. Leave empty for automatic review and optimization."
+                    ]
+                ] as [String: Any],
+                "required": ["workflow_id"]
+            ] as [String: Any]
+        ],
     ]
 
     // MARK: - Metadata Tools

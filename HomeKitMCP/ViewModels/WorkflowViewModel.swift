@@ -13,6 +13,7 @@ class WorkflowViewModel: ObservableObject {
     private let executionLogService: LoggingService
     private let workflowEngine: WorkflowEngine
     let homeKitManager: HomeKitManager
+    private(set) var aiWorkflowService: AIWorkflowService?
     private var cancellables = Set<AnyCancellable>()
     private var clonedToastTask: Task<Void, Never>?
 
@@ -45,11 +46,12 @@ class WorkflowViewModel: ObservableObject {
         workflows.filter(\.isEnabled).count
     }
 
-    init(storageService: WorkflowStorageService, executionLogService: LoggingService, workflowEngine: WorkflowEngine, homeKitManager: HomeKitManager) {
+    init(storageService: WorkflowStorageService, executionLogService: LoggingService, workflowEngine: WorkflowEngine, homeKitManager: HomeKitManager, aiWorkflowService: AIWorkflowService? = nil) {
         self.storageService = storageService
         self.executionLogService = executionLogService
         self.workflowEngine = workflowEngine
         self.homeKitManager = homeKitManager
+        self.aiWorkflowService = aiWorkflowService
 
         // Subscribe to workflow changes
         storageService.workflowsSubject
@@ -171,6 +173,32 @@ class WorkflowViewModel: ObservableObject {
             await storageService.createWorkflow(cloned)
             showCloneToast()
         }
+    }
+
+    func improveWorkflow(id: UUID, prompt: String?) async throws -> Workflow {
+        guard let aiService = aiWorkflowService else {
+            throw AIWorkflowError.notConfigured
+        }
+        guard let workflow = await storageService.getWorkflow(id: id) else {
+            throw NSError(domain: "WorkflowViewModel", code: 404, userInfo: [NSLocalizedDescriptionKey: "Workflow not found"])
+        }
+        let defaultPrompt = "Review this workflow and suggest improvements. Fix any labels that don't match their configuration. Optimize the structure if possible."
+        let improved = try await aiService.refineWorkflow(workflow, feedback: prompt ?? defaultPrompt)
+        // Preserve identity from the original workflow
+        return Workflow(
+            id: workflow.id,
+            name: improved.name,
+            description: improved.description,
+            isEnabled: improved.isEnabled,
+            triggers: improved.triggers,
+            conditions: improved.conditions,
+            blocks: improved.blocks,
+            continueOnError: improved.continueOnError,
+            retriggerPolicy: improved.retriggerPolicy,
+            metadata: workflow.metadata,
+            createdAt: workflow.createdAt,
+            updatedAt: Date()
+        )
     }
 
     private func showCloneToast() {

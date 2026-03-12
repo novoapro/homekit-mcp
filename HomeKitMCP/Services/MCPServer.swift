@@ -57,7 +57,8 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             storage: storage,
             workflowStorageService: workflowStorageService,
             workflowEngine: workflowEngine,
-            registry: registry
+            registry: registry,
+            aiWorkflowService: aiWorkflowService
         )
     }
 
@@ -546,6 +547,15 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             try self.guardWorkflowsEnabled()
             try self.guardAIEnabled()
             return try await self.handleRestGenerateWorkflow(req)
+        }
+
+        // AI Workflow Improvement (returns improved workflow without persisting)
+        protected.on(.POST, "workflows", ":workflowId", "improve", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            try self.guardWorkflowsEnabled()
+            try self.guardAIEnabled()
+            return try await self.handleRestImproveWorkflow(req)
         }
 
         // Clear all logs (state-change logs + workflow execution logs)
@@ -1218,6 +1228,91 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                     req: req, responseBody: String(data: generateResponseBody, encoding: .utf8))
 
         return jsonResponse(data: generateResponseBody, status: .created)
+    }
+
+    private func handleRestImproveWorkflow(_ req: Request) async throws -> Response {
+        guard let aiService = aiWorkflowService else {
+            logRESTCall(method: "POST", path: "/workflows/:id/improve", statusCode: 503, resultSummary: "AI service unavailable")
+            throw Abort(.serviceUnavailable, reason: "AI service is not available")
+        }
+
+        guard let idStr = req.parameters.get("workflowId"),
+              let workflowId = UUID(uuidString: idStr) else {
+            logRESTCall(method: "POST", path: "/workflows/:id/improve", statusCode: 400, resultSummary: "Bad Request")
+            throw Abort(.badRequest, reason: "Invalid workflow ID")
+        }
+
+        guard let existing = await workflowStorageService.getWorkflow(id: workflowId) else {
+            logRESTCall(method: "POST", path: "/workflows/\(idStr)/improve", statusCode: 404, resultSummary: "Not Found")
+            throw Abort(.notFound, reason: "Workflow not found")
+        }
+
+        struct ImproveRequest: Decodable {
+            let prompt: String?
+        }
+
+        let defaultPrompt = "Review this workflow and suggest improvements. Fix any labels that don't match their configuration. Optimize the structure if possible."
+
+        var feedback = defaultPrompt
+        if let body = req.body.data,
+           let bodyData = body.getData(at: body.readerIndex, length: body.readableBytes),
+           let improveReq = try? JSONDecoder().decode(ImproveRequest.self, from: bodyData),
+           let prompt = improveReq.prompt,
+           !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            feedback = prompt
+        }
+
+        let improved: Workflow
+        do {
+            improved = try await aiService.refineWorkflow(existing, feedback: feedback)
+        } catch let error as AIWorkflowError {
+            let statusCode: HTTPResponseStatus
+            switch error {
+            case .notConfigured:
+                statusCode = .serviceUnavailable
+            case .vagueprompt:
+                statusCode = .unprocessableEntity
+            case .modelRefused:
+                statusCode = .unprocessableEntity
+            case .networkError, .apiError:
+                statusCode = .badGateway
+            case .parseError, .noJSONFound:
+                statusCode = .internalServerError
+            }
+            let errorMessage = error.errorDescription ?? "AI improvement failed"
+            logRESTCall(method: "POST", path: "/workflows/\(idStr)/improve",
+                        statusCode: UInt(statusCode.code),
+                        resultSummary: "AI Error: \(errorMessage)")
+            let errorBody = try JSONSerialization.data(withJSONObject: ["error": errorMessage])
+            return jsonResponse(data: errorBody, status: statusCode)
+        } catch {
+            logRESTCall(method: "POST", path: "/workflows/\(idStr)/improve", statusCode: 500,
+                        resultSummary: "Unexpected error: \(error.localizedDescription)")
+            throw Abort(.internalServerError, reason: error.localizedDescription)
+        }
+
+        // Preserve identity from the original workflow
+        let result = Workflow(
+            id: existing.id,
+            name: improved.name,
+            description: improved.description,
+            isEnabled: improved.isEnabled,
+            triggers: improved.triggers,
+            conditions: improved.conditions,
+            blocks: improved.blocks,
+            continueOnError: improved.continueOnError,
+            retriggerPolicy: improved.retriggerPolicy,
+            metadata: existing.metadata,
+            createdAt: existing.createdAt,
+            updatedAt: Date()
+        )
+
+        let data = try JSONEncoder.iso8601.encode(result)
+        logRESTCall(method: "POST", path: "/workflows/\(idStr)/improve", statusCode: 200,
+                    resultSummary: "Improved: \(result.name)",
+                    req: req, responseBody: String(data: data, encoding: .utf8))
+
+        return jsonResponse(data: data)
     }
 
     // MARK: - Streamable HTTP Transport

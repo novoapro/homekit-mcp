@@ -25,6 +25,7 @@ export interface ApiClient {
   createWorkflow(workflow: Partial<WorkflowDefinition>): Promise<WorkflowDefinition>;
   deleteWorkflow(workflowId: string): Promise<void>;
   generateWorkflow(prompt: string, deviceIds?: string[], sceneIds?: string[]): Promise<{ id: string; name: string; description: string | null }>;
+  improveWorkflow(workflowId: string, prompt?: string): Promise<WorkflowDefinition>;
   getDevices(): Promise<RESTDevice[]>;
   getScenes(): Promise<RESTScene[]>;
   getWorkflowRuntime(): Promise<WorkflowRuntime>;
@@ -168,6 +169,15 @@ export function createApiClient(baseUrl: string, bearerToken: string): ApiClient
       if (deviceIds && deviceIds.length > 0) body.deviceIds = deviceIds;
       if (sceneIds && sceneIds.length > 0) body.sceneIds = sceneIds;
       return requestJson<{ id: string; name: string; description: string | null }>('/workflows/generate', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }, 90_000);
+    },
+
+    async improveWorkflow(workflowId: string, prompt?: string) {
+      const body: Record<string, unknown> = {};
+      if (prompt) body.prompt = prompt;
+      return requestJson<WorkflowDefinition>(`/workflows/${workflowId}/improve`, {
         method: 'POST',
         body: JSON.stringify(body),
       }, 90_000);

@@ -310,6 +310,7 @@ Requires: **REST API enabled** + **Workflows enabled**
 | `POST` | `/workflows/:workflowId/trigger` | Trigger a workflow | 202 | `TriggerResult` |
 | `GET` | `/workflows/:workflowId/logs` | Get execution history | 200 | `WorkflowExecutionLog[]` |
 | `POST` | `/workflows/generate` | Generate a workflow using AI | 201 | `GenerateResult` |
+| `POST` | `/workflows/:workflowId/improve` | Improve a workflow using AI (preview only) | 200 | `Workflow` |
 
 **GET /workflows/:workflowId/logs query params:**
 
@@ -406,6 +407,47 @@ The MCP server acts as a proxy — it enriches the prompt with device context, c
 | 404 | REST API, Workflows, or AI features disabled |
 | 422 | Vague prompt or model refused to generate |
 | 500 | AI response could not be parsed into a valid workflow |
+| 502 | LLM API network or upstream error |
+| 503 | AI not configured (no API key set) |
+
+Error body: `{ "error": "Human-readable error message" }`
+
+### Improve Workflow with AI
+
+Requires: **REST API enabled** + **Workflows enabled** + **AI enabled** (with a valid API key configured in settings)
+
+| Method | Path | Description | Status | Response |
+|---|---|---|---|---|
+| `POST` | `/workflows/:workflowId/improve` | Improve an existing workflow using AI | 200 | `Workflow` |
+
+Analyzes the existing workflow structure, fixes labels/titles that don't match their configuration, and applies the requested improvements. The response is a **preview only** — the workflow is **not saved** until you apply it with `PUT /workflows/:workflowId`.
+
+**Request body:**
+
+```json
+{
+  "prompt": "Add a condition to only run during nighttime"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `prompt` | string | no | Instructions for how to improve the workflow. When omitted or empty, the AI performs an automatic review and optimization (fixes labels, suggests structural improvements). |
+
+**Success response (200):**
+
+Returns the full improved `Workflow` JSON (same schema as `GET /workflows/:workflowId`). The workflow retains its original `id`, `createdAt`, and `metadata`. The `updatedAt` field is set to the current time.
+
+**To apply the improvements**, send the response body (or relevant fields) to `PUT /workflows/:workflowId`.
+
+**Error responses:**
+
+| Status | Reason |
+|---|---|
+| 400 | Invalid workflow ID |
+| 404 | Workflow not found, or REST API / Workflows / AI features disabled |
+| 422 | Vague prompt or model refused |
+| 500 | AI response could not be parsed |
 | 502 | LLM API network or upstream error |
 | 503 | AI not configured (no API key set) |
 
@@ -807,6 +849,21 @@ Manually trigger a workflow (fire-and-forget).
 | `workflow_id` | string | yes | UUID of the workflow |
 
 Returns the scheduling outcome based on the retrigger policy. See [TriggerResult](#triggerresult).
+
+---
+
+##### improve_workflow
+
+Use AI to analyze and improve an existing workflow. Returns the improved workflow JSON **without saving it**. Review the result and use `update_workflow` to apply the changes.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `workflow_id` | string | yes | UUID of the workflow to improve |
+| `prompt` | string | no | Instructions for how to improve the workflow. When omitted, performs automatic review and optimization. |
+
+Returns the full improved workflow JSON as text. The workflow retains its original ID, creation date, and metadata. Use `update_workflow` with the returned JSON to persist the changes.
+
+Requires AI to be configured (API key set in settings). Returns an error if AI is not available.
 
 ---
 

@@ -119,7 +119,8 @@ final class ServiceContainer {
         storageService: workflowStorageService,
         executionLogService: loggingService,
         workflowEngine: workflowEngine,
-        homeKitManager: homeKitManager
+        homeKitManager: homeKitManager,
+        aiWorkflowService: aiWorkflowService
     )
 
     // MARK: - Wiring

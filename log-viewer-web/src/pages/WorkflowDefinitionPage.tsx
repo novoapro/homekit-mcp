@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import { useSetTopBar } from '@/contexts/TopBarContext';
 import { Icon } from '@/components/Icon';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { AIImproveDialog } from '@/components/AIImproveDialog';
 import { DefinitionTrigger } from '@/features/workflows/DefinitionTrigger';
 import { DefinitionCondition } from '@/features/workflows/DefinitionCondition';
 import { DefinitionBlockTree } from '@/features/workflows/DefinitionBlockTree';
@@ -60,6 +61,7 @@ export function WorkflowDefinitionPage() {
   }, [navigate]);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showImproveDialog, setShowImproveDialog] = useState(false);
 
   const confirmDelete = useCallback(async () => {
     if (!workflow) return;
@@ -93,6 +95,12 @@ export function WorkflowDefinitionPage() {
       setIsDuplicating(false);
     }
   }, [api, workflow, navigate]);
+
+  const handleOpenImprovedInEditor = useCallback((improved: WorkflowDefinition) => {
+    if (!workflowId) return;
+    setShowImproveDialog(false);
+    navigate(`/workflows/${workflowId}/edit`, { state: { aiDraft: improved } });
+  }, [workflowId, navigate]);
 
   function formatDate(iso: string): string {
     return new Date(iso).toLocaleString(undefined, {
@@ -129,31 +137,32 @@ export function WorkflowDefinitionPage() {
           {/* Header Section */}
           <div className="wfd-section wfd-header-section animate-fade-in">
             <div className="wfd-header-row">
-              <div className="wfd-header-info">
-                <div className="wfd-name-row">
-                  {workflow.isEnabled ? (
-                    <span className="wfd-status-badge wfd-enabled">Enabled</span>
-                  ) : (
-                    <span className="wfd-status-badge wfd-disabled">Disabled</span>
-                  )}
-                  <h2 className="wfd-workflow-name">{workflow.name}</h2>
+              <h2 className="wfd-workflow-name">{workflow.name}</h2>
+              <div className="wfd-header-actions">
+                <div className="wfd-header-actions-row">
+                  <button className="wfd-icon-btn" onClick={() => setShowImproveDialog(true)} title="Improve with AI">
+                    <Icon name="sparkles" size={16} />
+                  </button>
+                  <button className="wfd-icon-btn" onClick={() => navigate(`/workflows/${workflowId}/edit`)} title="Edit">
+                    <Icon name="pencil" size={16} />
+                  </button>
+                  <button className="wfd-icon-btn" onClick={duplicateWorkflow} disabled={isDuplicating} title="Duplicate">
+                    <Icon name="copy" size={16} />
+                  </button>
+                  <button className="wfd-icon-btn wfd-danger" onClick={() => setShowDeleteConfirm(true)} title="Delete">
+                    <Icon name="trash" size={16} />
+                  </button>
                 </div>
-                {workflow.description && (
-                  <p className="wfd-description">{workflow.description}</p>
+                {workflow.isEnabled ? (
+                  <span className="wfd-status-badge wfd-enabled">Enabled</span>
+                ) : (
+                  <span className="wfd-status-badge wfd-disabled">Disabled</span>
                 )}
               </div>
-              <div className="wfd-header-actions">
-                <button className="wfd-icon-btn" onClick={() => navigate(`/workflows/${workflowId}/edit`)} title="Edit">
-                  <Icon name="pencil" size={16} />
-                </button>
-                <button className="wfd-icon-btn" onClick={duplicateWorkflow} disabled={isDuplicating} title="Duplicate">
-                  <Icon name="copy" size={16} />
-                </button>
-                <button className="wfd-icon-btn wfd-danger" onClick={() => setShowDeleteConfirm(true)} title="Delete">
-                  <Icon name="trash" size={16} />
-                </button>
-              </div>
             </div>
+            {workflow.description && (
+              <p className="wfd-description">{workflow.description}</p>
+            )}
           </div>
 
           {/* Metadata Chips */}
@@ -246,6 +255,17 @@ export function WorkflowDefinitionPage() {
         onConfirm={confirmDelete}
         onCancel={() => setShowDeleteConfirm(false)}
       />
+
+      {workflow && workflowId && (
+        <AIImproveDialog
+          open={showImproveDialog}
+          workflowId={workflowId}
+          workflowName={workflow.name}
+          originalWorkflow={workflow}
+          onClose={() => setShowImproveDialog(false)}
+          onOpenInEditor={handleOpenImprovedInEditor}
+        />
+      )}
     </div>
   );
 }

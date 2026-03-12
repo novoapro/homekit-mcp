@@ -118,7 +118,10 @@ struct WorkflowListView: View {
                     onCancelExecution: { executionId in
                         viewModel.cancelExecution(executionId: executionId)
                     },
-                    onResetStatistics: { viewModel.resetStatistics(id: workflowId) }
+                    onResetStatistics: { viewModel.resetStatistics(id: workflowId) },
+                    onImproveWithAI: viewModel.aiWorkflowService != nil ? { prompt in
+                        try await viewModel.improveWorkflow(id: workflowId, prompt: prompt)
+                    } : nil
                 )
             }
         }

@@ -68,28 +68,31 @@
 
 /* Header */
 .wfd-header-section {
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
 }
 .wfd-header-row {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-.wfd-header-info {
-  flex: 1;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
 }
 .wfd-header-actions {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   gap: var(--spacing-xs);
   flex-shrink: 0;
+}
+.wfd-header-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 .wfd-icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--radius-sm);
   border: none;
   background: none;
@@ -112,20 +115,22 @@
   .wfd-icon-btn.wfd-danger:hover { background: color-mix(in srgb, var(--status-error) 10%, transparent); }
 }
 
-.wfd-name-row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  flex-wrap: wrap;
-}
 .wfd-workflow-name {
+  flex: 1;
+  min-width: 0;
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-black);
   letter-spacing: -0.02em;
   color: var(--text-primary);
   margin: 0;
+  padding-top: 3px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .wfd-status-badge {
+  display: inline-block;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   padding: 2px 8px;
@@ -142,7 +147,7 @@
 .wfd-description {
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
-  margin: var(--spacing-xs) 0 0;
+  margin: var(--spacing-sm) 0 0;
   line-height: 1.5;
 }
 

@@ -10,16 +10,18 @@ final class MCPRequestHandler: Sendable {
     private let workflowStorageService: WorkflowStorageService
     private let workflowEngine: WorkflowEngine
     private let registry: DeviceRegistryService?
+    private let aiWorkflowService: AIWorkflowService?
 
     init(homeKitManager: HomeKitManager, loggingService: LoggingService, storage: StorageService,
          workflowStorageService: WorkflowStorageService, workflowEngine: WorkflowEngine,
-         registry: DeviceRegistryService? = nil) {
+         registry: DeviceRegistryService? = nil, aiWorkflowService: AIWorkflowService? = nil) {
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
         self.storage = storage
         self.workflowStorageService = workflowStorageService
         self.workflowEngine = workflowEngine
         self.registry = registry
+        self.aiWorkflowService = aiWorkflowService
     }
 
     func handle(_ request: JSONRPCRequest) async -> JSONRPCResponse {
@@ -80,7 +82,7 @@ final class MCPRequestHandler: Sendable {
     private static let workflowToolNames: Set<String> = [
         "list_workflows", "get_workflow", "create_workflow", "update_workflow",
         "delete_workflow", "enable_workflow", "get_workflow_logs",
-        "trigger_workflow"
+        "trigger_workflow", "improve_workflow"
     ]
 
     // MARK: - Initialize
@@ -293,6 +295,8 @@ final class MCPRequestHandler: Sendable {
             return await handleGetWorkflowLogs(id: id, arguments: arguments)
         case "trigger_workflow":
             return await handleTriggerWorkflow(id: id, arguments: arguments)
+        case "improve_workflow":
+            return await handleImproveWorkflow(id: id, arguments: arguments)
         default:
             return JSONRPCResponse.error(
                 id: id,
@@ -1192,6 +1196,52 @@ final class MCPRequestHandler: Sendable {
 
         let result = await workflowEngine.scheduleTrigger(id: workflowId)
         return toolResult(text: result.message, isError: !result.isAccepted, id: id)
+    }
+
+    private func handleImproveWorkflow(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let aiService = aiWorkflowService else {
+            return toolResult(text: "AI service is not configured. Set up an AI provider in Settings.", isError: true, id: id)
+        }
+
+        guard let workflowIdStr = arguments["workflow_id"] as? String,
+              let workflowId = UUID(uuidString: workflowIdStr) else {
+            return JSONRPCResponse.error(id: id, code: MCPErrorCode.invalidParams, message: "Missing or invalid workflow_id (must be a UUID)")
+        }
+
+        guard let existing = await workflowStorageService.getWorkflow(id: workflowId) else {
+            return toolResult(text: "Workflow not found: \(workflowIdStr)", isError: true, id: id)
+        }
+
+        let prompt = arguments["prompt"] as? String
+        let defaultPrompt = "Review this workflow and suggest improvements. Fix any labels that don't match their configuration. Optimize the structure if possible."
+        let feedback = (prompt?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ? defaultPrompt : prompt!
+
+        do {
+            let improved = try await aiService.refineWorkflow(existing, feedback: feedback)
+            // Preserve identity from the original workflow
+            let result = Workflow(
+                id: existing.id,
+                name: improved.name,
+                description: improved.description,
+                isEnabled: improved.isEnabled,
+                triggers: improved.triggers,
+                conditions: improved.conditions,
+                blocks: improved.blocks,
+                continueOnError: improved.continueOnError,
+                retriggerPolicy: improved.retriggerPolicy,
+                metadata: existing.metadata,
+                createdAt: existing.createdAt,
+                updatedAt: Date()
+            )
+
+            let data = try JSONEncoder.iso8601Pretty.encode(result)
+            let jsonString = String(data: data, encoding: .utf8) ?? "{}"
+            return toolResult(text: "Improved workflow (NOT saved yet). Review and use update_workflow to apply:\n\n\(jsonString)", id: id)
+        } catch let error as AIWorkflowError {
+            return toolResult(text: "AI improvement failed: \(error.errorDescription ?? error.localizedDescription)", isError: true, id: id)
+        } catch {
+            return toolResult(text: "Unexpected error: \(error.localizedDescription)", isError: true, id: id)
+        }
     }
 
     // MARK: - Workflow JSON Parser
