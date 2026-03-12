@@ -131,12 +131,9 @@
   margin-top: 2px;
 }
 
-.retrigger-badge-key {
-  font-weight: var(--font-weight-bold);
+.retrigger-badge-icon {
   color: var(--text-tertiary);
-  text-transform: uppercase;
-  font-size: 9px;
-  letter-spacing: 0.06em;
+  flex-shrink: 0;
 }
 
 .blocking-badge {

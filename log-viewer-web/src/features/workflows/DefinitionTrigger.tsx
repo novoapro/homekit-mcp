@@ -133,7 +133,7 @@ export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps
           )}
           {retriggerLabel && (
             <span className="retrigger-badge">
-              <span className="retrigger-badge-key">Retrigger</span>
+              <Icon name="repeat" size={12} className="retrigger-badge-icon" />
               {retriggerLabel}
             </span>
           )}
@@ -141,7 +141,7 @@ export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps
             const conds = trigger.conditions!;
             return (
               <span className="retrigger-badge" style={{ borderColor: 'var(--tint-secondary)', color: 'var(--tint-secondary)' }}>
-                <span className="retrigger-badge-key">Guard</span>
+                <Icon name="shield" size={12} className="retrigger-badge-icon" />
                 {conds.length === 1 && conds[0]?.type === 'and'
                   ? `${(conds[0] as { conditions?: unknown[] }).conditions?.length ?? 0} condition(s)`
                   : `${conds.length} condition(s)`

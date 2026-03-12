@@ -91,10 +91,10 @@ export function formatTimeConditionMode(mode: string, startTime?: { type?: strin
 
 export function formatRetriggerPolicy(policy: string): string {
   switch (policy) {
-    case 'ignoreNew': return 'Ignore trigger';
-    case 'cancelAndRestart': return 'Restart workflow';
-    case 'queueAndExecute': return 'Queue new execution';
-    case 'cancelOnly': return 'Cancel workflow';
+    case 'ignoreNew': return 'Ignore new';
+    case 'cancelAndRestart': return 'Cancel and restart';
+    case 'queueAndExecute': return 'Queue and continue';
+    case 'cancelOnly': return 'Cancel';
     default: return policy;
   }
 }
