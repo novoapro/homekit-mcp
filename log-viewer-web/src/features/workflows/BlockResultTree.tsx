@@ -28,17 +28,19 @@ const CONTAINER_TYPES = new Set(['conditional', 'repeat', 'repeatWhile', 'group'
 interface BlockResultTreeProps {
   result: BlockResult;
   depth?: number;
+  isLast?: boolean;
+  isFirst?: boolean;
 }
 
-export function BlockResultTree({ result, depth = 0 }: BlockResultTreeProps) {
+export function BlockResultTree({ result, depth = 0, isLast = true, isFirst = true }: BlockResultTreeProps) {
   const [collapsed, setCollapsed] = useState(false);
   const isRunning = result.status === 'running';
   const tick = useTick(isRunning);
   const hasChildren = (result.nestedResults?.length ?? 0) > 0;
   const isContainer = CONTAINER_TYPES.has(result.blockType);
-  const depthRange = Array.from({ length: depth }, (_, i) => i);
   const statusIcon = STATUS_ICONS[result.status] ?? STATUS_ICONS.skipped;
   const icon = blockTypeIcon(result.blockType, result.blockKind);
+  const lineX = depth * 20 + 25;
 
   void tick;
   const duration = (result.completedAt || isRunning)
@@ -47,22 +49,30 @@ export function BlockResultTree({ result, depth = 0 }: BlockResultTreeProps) {
 
   return (
     <div className="tree-node">
+      {!isFirst && (
+        <div
+          className="tree-vline tree-vline--above"
+          style={{ left: `${lineX}px`, '--line-color': DEPTH_COLORS[depth % DEPTH_COLORS.length] } as React.CSSProperties}
+        />
+      )}
+      {!isLast && (
+        <div
+          className="tree-vline tree-vline--below"
+          style={{ left: `${lineX}px`, '--line-color': DEPTH_COLORS[depth % DEPTH_COLORS.length] } as React.CSSProperties}
+        />
+      )}
+
       <div
         className={`tree-row ${hasChildren ? 'collapsible' : ''}`}
+        style={{ paddingLeft: depth * 20 }}
         onClick={() => hasChildren && setCollapsed(v => !v)}
       >
-        {depthRange.map(i => (
-          <div
-            key={i}
-            className="connector-line"
-            style={{ backgroundColor: DEPTH_COLORS[i % DEPTH_COLORS.length] }}
-          />
-        ))}
-
-        {hasChildren && (
+        {hasChildren ? (
           <span className={`tree-chevron ${collapsed ? 'collapsed' : ''}`}>
             <Icon name="chevron-down" size={12} />
           </span>
+        ) : (
+          <span className="tree-chevron-spacer" />
         )}
 
         <span className="tree-icon" style={{ color: statusIcon.color }}>
@@ -78,18 +88,27 @@ export function BlockResultTree({ result, depth = 0 }: BlockResultTreeProps) {
         <div className="tree-info">
           <span className="tree-name">
             {result.blockName || formatBlockType(result.blockType)}
+            {collapsed && hasChildren && (
+              <span className="collapsed-hint">{result.nestedResults!.length} steps</span>
+            )}
+            {collapsed && result.detail && (
+              <span className="tree-detail-inline">{result.detail}</span>
+            )}
           </span>
-          {result.detail && <span className="tree-detail">{result.detail}</span>}
+          {!collapsed && result.detail && <span className="tree-detail">{result.detail}</span>}
           {result.errorMessage && <span className="tree-error">{result.errorMessage}</span>}
           {duration && <span className="tree-duration">{duration}</span>}
-          {collapsed && hasChildren && (
-            <span className="collapsed-hint">{result.nestedResults!.length} steps</span>
-          )}
         </div>
       </div>
 
-      {!collapsed && result.nestedResults?.map((sub) => (
-        <BlockResultTree key={sub.id} result={sub} depth={depth + 1} />
+      {!collapsed && result.nestedResults?.map((sub, i) => (
+        <BlockResultTree
+          key={sub.id}
+          result={sub}
+          depth={depth + 1}
+          isFirst={i === 0}
+          isLast={i === result.nestedResults!.length - 1}
+        />
       ))}
     </div>
   );

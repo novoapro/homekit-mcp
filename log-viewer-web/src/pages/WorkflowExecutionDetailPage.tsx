@@ -237,7 +237,7 @@ export function WorkflowExecutionDetailPage() {
               <h3 className="wfed-section-title">Conditions</h3>
               <div className="wfed-tree-content">
                 {log.conditionResults.map((condition, i) => (
-                  <ConditionResultTree key={i} result={condition} depth={0} />
+                  <ConditionResultTree key={i} result={condition} depth={0} isFirst={i === 0} isLast={i === log.conditionResults!.length - 1} />
                 ))}
               </div>
             </div>
@@ -250,8 +250,8 @@ export function WorkflowExecutionDetailPage() {
                 Steps <span className="wfed-step-count">({log.blockResults.length})</span>
               </h3>
               <div className="wfed-tree-content">
-                {log.blockResults.map((block) => (
-                  <BlockResultTree key={block.id} result={block} depth={0} />
+                {log.blockResults.map((block, i) => (
+                  <BlockResultTree key={block.id} result={block} depth={0} isFirst={i === 0} isLast={i === log.blockResults.length - 1} />
                 ))}
               </div>
             </div>

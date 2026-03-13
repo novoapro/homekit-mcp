@@ -1,4 +1,4 @@
-import type { WorkflowDraft } from './workflow-editor-types';
+import type { WorkflowDraft, WorkflowBlockDraft } from './workflow-editor-types';
 
 export function validateDraft(draft: WorkflowDraft): string[] {
   const errors: string[] = [];
@@ -25,11 +25,43 @@ export function validateDraft(draft: WorkflowDraft): string[] {
     }
   }
 
+  validateBlocksConditions(draft.blocks, errors);
+
   if (hasBlockResultConditions(draft) && !draft.continueOnError) {
     errors.push('Block Result conditions require "Continue on Error" to be enabled');
   }
 
   return errors;
+}
+
+function validateBlocksConditions(blocks: WorkflowBlockDraft[], errors: string[]): void {
+  for (const block of blocks) {
+    if (block.type === 'conditional' && !isConditionComplete(block.condition)) {
+      errors.push('Conditional block requires a condition');
+    }
+    if (block.thenBlocks?.length) validateBlocksConditions(block.thenBlocks, errors);
+    if (block.elseBlocks?.length) validateBlocksConditions(block.elseBlocks, errors);
+    if (block.blocks?.length) validateBlocksConditions(block.blocks, errors);
+  }
+}
+
+function isConditionComplete(condition: WorkflowBlockDraft['condition']): boolean {
+  if (!condition) return false;
+  switch (condition.type) {
+    case 'deviceState':
+      return !!(condition.deviceId && condition.characteristicId);
+    case 'timeCondition':
+      return !!condition.mode;
+    case 'blockResult':
+      return !!(condition.blockResultScope && condition.expectedStatus);
+    case 'and':
+    case 'or':
+      return (condition.conditions?.length ?? 0) > 0 && condition.conditions!.every(isConditionComplete);
+    case 'not':
+      return isConditionComplete(condition.condition);
+    default:
+      return false;
+  }
 }
 
 function hasBlockResultConditions(draft: WorkflowDraft): boolean {

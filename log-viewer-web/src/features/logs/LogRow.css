@@ -493,11 +493,18 @@
   padding: var(--spacing-xs) 0;
 }
 
+.workflow-detail-links {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  margin-top: var(--spacing-sm);
+}
+
 .view-detail-link {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-top: var(--spacing-sm);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--tint-main);

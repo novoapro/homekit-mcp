@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Icon } from '@/components/Icon';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import type { WorkflowBlockDef } from '@/types/workflow-definition';
-import { formatBlockType, blockTypeIcon, isBlockingType, formatDurationShort } from '@/utils/workflow-definition-utils';
+import { formatBlockType, blockTypeIcon, isBlockingType, formatDurationShort, formatConditionSummary } from '@/utils/workflow-definition-utils';
 import './tree-common.css';
 
 const DEPTH_COLORS = [
@@ -25,9 +25,11 @@ interface DefinitionBlockTreeProps {
   block: WorkflowBlockDef;
   depth?: number;
   index?: number;
+  isLast?: boolean;
+  isFirst?: boolean;
 }
 
-export function DefinitionBlockTree({ block, depth = 0, index }: DefinitionBlockTreeProps) {
+export function DefinitionBlockTree({ block, depth = 0, index, isLast = true, isFirst = true }: DefinitionBlockTreeProps) {
   const registry = useDeviceRegistry();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -43,9 +45,9 @@ export function DefinitionBlockTree({ block, depth = 0, index }: DefinitionBlock
   }, [block]);
 
   const hasChildren = nestedBlocks.some(g => g.blocks.length > 0);
-  const depthRange = Array.from({ length: depth }, (_, i) => i);
   const icon = blockTypeIcon(block.type, block.block);
   const color = iconColor(block);
+  const lineX = depth * 20 + 25;
 
   const displayName = useMemo(() => {
     if (block.name) return block.name;
@@ -87,6 +89,16 @@ export function DefinitionBlockTree({ block, depth = 0, index }: DefinitionBlock
         return block.outcome || undefined;
       case 'executeWorkflow':
         return block.executionMode || undefined;
+      case 'conditional':
+      case 'waitForState':
+      case 'repeatWhile':
+        return block.condition
+          ? formatConditionSummary(
+              block.condition,
+              (id) => registry.lookupDevice(id),
+              (dId, cId) => registry.lookupCharacteristic(dId, cId),
+            )
+          : undefined;
       default:
         return undefined;
     }
@@ -96,31 +108,35 @@ export function DefinitionBlockTree({ block, depth = 0, index }: DefinitionBlock
 
   return (
     <div className="tree-node">
+      {!isFirst && (
+        <div
+          className="tree-vline tree-vline--above"
+          style={{ left: `${lineX}px`, '--line-color': DEPTH_COLORS[depth % DEPTH_COLORS.length] } as React.CSSProperties}
+        />
+      )}
+      {!isLast && (
+        <div
+          className="tree-vline tree-vline--below"
+          style={{ left: `${lineX}px`, '--line-color': DEPTH_COLORS[depth % DEPTH_COLORS.length] } as React.CSSProperties}
+        />
+      )}
+
       <div
         className={`tree-row ${hasChildren ? 'collapsible' : ''}`}
+        style={{ paddingLeft: depth * 20 }}
         onClick={() => hasChildren && setCollapsed(v => !v)}
       >
-        {depthRange.map(i => (
-          <div
-            key={i}
-            className="connector-line"
-            style={{ backgroundColor: DEPTH_COLORS[i % DEPTH_COLORS.length] }}
-          />
-        ))}
-
-        {hasChildren && (
+        {hasChildren ? (
           <span className={`tree-chevron ${collapsed ? 'collapsed' : ''}`}>
             <Icon name="chevron-down" size={12} />
           </span>
+        ) : (
+          <span className="tree-chevron-spacer" />
         )}
 
         <span className="tree-icon" style={{ color }}>
           <Icon name={icon} size={16} />
         </span>
-
-        {isBlockingType(block.type) && (
-          <span className="blocking-badge">Blocking</span>
-        )}
 
         <div className="tree-info">
           <span className="tree-name">
@@ -130,34 +146,69 @@ export function DefinitionBlockTree({ block, depth = 0, index }: DefinitionBlock
               </span>
             )}
             {displayName}
+
+            {collapsed && hasChildren && (
+              <span className="collapsed-hint">{totalNested} blocks</span>
+            )}
           </span>
           {detailText && <span className="tree-detail">{detailText}</span>}
-          {collapsed && hasChildren && (
-            <span className="collapsed-hint">{totalNested} blocks</span>
-          )}
         </div>
       </div>
 
-      {!collapsed && nestedBlocks.map((group, gi) => (
-        <div key={gi}>
-          {group.label && (
-            <div style={{ paddingLeft: (depth + 1) * 14 + 6, paddingTop: 4, paddingBottom: 2 }}>
-              <span style={{
-                fontSize: 'var(--font-size-xs)',
-                fontWeight: 'var(--font-weight-bold)',
-                color: 'var(--text-tertiary)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}>
-                {group.label}
-              </span>
+      {!collapsed && nestedBlocks.map((group, gi) => {
+        if (group.label) {
+          // Render label as a proper tree node with a dot icon
+          const labelDepth = depth + 1;
+          return (
+            <div key={gi} className="tree-node">
+              <div className="tree-row" style={{ paddingLeft: labelDepth * 20 }}>
+                <span className="tree-chevron-spacer" />
+                <span className="tree-icon" style={{ color: group.label === 'Then' ? 'var(--status-active)' : 'var(--status-error)', width: 16, justifyContent: 'center', marginTop: 4 }}>
+                  <Icon name="circle" size={8} />
+                </span>
+                <div className="tree-info">
+                  <span className="tree-name" style={{
+                    fontSize: 'var(--font-size-xs)',
+                    fontWeight: 'var(--font-weight-bold)',
+                    color: group.label === 'Then' ? 'var(--status-active)' : 'var(--status-error)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}>
+                    {group.label}
+                  </span>
+                </div>
+              </div>
+
+              {group.blocks.map((sub, i) => (
+                <DefinitionBlockTree
+                  key={sub.blockId}
+                  block={sub}
+                  depth={labelDepth + 1}
+                  index={i}
+                  isFirst={i === 0}
+                  isLast={i === group.blocks.length - 1}
+                />
+              ))}
             </div>
-          )}
-          {group.blocks.map((sub, i) => (
-            <DefinitionBlockTree key={sub.blockId} block={sub} depth={depth + 1} index={i} />
-          ))}
-        </div>
-      ))}
+          );
+        }
+
+        // Non-labeled groups (repeat, group, etc.) — render blocks directly
+        return (
+          <div key={gi}>
+            {group.blocks.map((sub, i) => (
+              <DefinitionBlockTree
+                key={sub.blockId}
+                block={sub}
+                depth={depth + 1}
+                index={i}
+                isFirst={i === 0}
+                isLast={i === group.blocks.length - 1}
+              />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

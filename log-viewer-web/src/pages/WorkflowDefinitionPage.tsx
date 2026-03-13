@@ -207,7 +207,7 @@ export function WorkflowDefinitionPage() {
             <h3 className="wfd-section-title">
               Triggers <span className="wfd-count">({workflow.triggers.length})</span>
             </h3>
-            <div className="wfd-tree-content">
+            <div className="wfd-tree-content wfd-triggers">
               {workflow.triggers.map((trigger, i) => (
                 <DefinitionTrigger key={i} trigger={trigger} depth={0} />
               ))}
@@ -220,7 +220,7 @@ export function WorkflowDefinitionPage() {
               <h3 className="wfd-section-title">Execution Guards</h3>
               <div className="wfd-tree-content">
                 {workflow.conditions.map((condition, i) => (
-                  <DefinitionCondition key={i} condition={condition} depth={0} />
+                  <DefinitionCondition key={i} condition={condition} depth={0} isFirst={i === 0} isLast={i === workflow.conditions!.length - 1} />
                 ))}
               </div>
             </div>
@@ -233,7 +233,7 @@ export function WorkflowDefinitionPage() {
             </h3>
             <div className="wfd-tree-content">
               {workflow.blocks.map((block, i) => (
-                <DefinitionBlockTree key={block.blockId} block={block} depth={0} index={i} />
+                <DefinitionBlockTree key={block.blockId} block={block} depth={0} index={i} isFirst={i === 0} isLast={i === workflow.blocks.length - 1} />
               ))}
             </div>
           </div>

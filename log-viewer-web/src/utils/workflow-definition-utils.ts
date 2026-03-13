@@ -140,6 +140,47 @@ export function blockTypeIcon(type: string, kind: string): string {
   return map[type] || 'rectangles-group';
 }
 
+export function formatConditionSummary(
+  condition: unknown,
+  lookupDevice?: (id: string) => { name: string; room?: string } | undefined,
+  lookupChar?: (deviceId: string, charId: string) => { name: string } | undefined,
+): string | undefined {
+  if (!condition || typeof condition !== 'object') return undefined;
+  const c = condition as Record<string, unknown>;
+  const type = c.type as string | undefined;
+  if (!type) return undefined;
+
+  switch (type) {
+    case 'deviceState': {
+      const deviceId = c.deviceId as string | undefined;
+      const charId = c.characteristicId as string | undefined;
+      const device = deviceId && lookupDevice ? lookupDevice(deviceId) : undefined;
+      const char = deviceId && charId && lookupChar ? lookupChar(deviceId, charId) : undefined;
+      const deviceLabel = device?.name || deviceId || '?';
+      const charLabel = char?.name || charId || '?';
+      const comp = c.comparison as { type: string; value?: unknown } | undefined;
+      const compStr = comp ? formatComparisonOperator(comp as ComparisonOperator) : '?';
+      return `${deviceLabel} · ${charLabel} ${compStr}`;
+    }
+    case 'timeCondition': {
+      const mode = c.mode as string;
+      return formatTimeConditionMode(mode, c.startTime as Parameters<typeof formatTimeConditionMode>[1], c.endTime as Parameters<typeof formatTimeConditionMode>[2]);
+    }
+    case 'and': {
+      const subs = c.conditions as unknown[];
+      return subs ? `All of ${subs.length} condition(s)` : undefined;
+    }
+    case 'or': {
+      const subs = c.conditions as unknown[];
+      return subs ? `Any of ${subs.length} condition(s)` : undefined;
+    }
+    case 'not':
+      return 'NOT condition';
+    default:
+      return type;
+  }
+}
+
 export function isBlockingType(type: string): boolean {
   return type === 'delay' || type === 'waitForState';
 }

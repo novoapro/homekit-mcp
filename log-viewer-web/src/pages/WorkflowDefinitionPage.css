@@ -226,6 +226,12 @@
   padding: var(--spacing-xs) 0;
 }
 
+.wfd-tree-content.wfd-triggers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 /* Execution logs button */
 .wfd-exec-logs-btn {
   display: flex;

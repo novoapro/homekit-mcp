@@ -446,7 +446,7 @@ export const LogRow = memo(function LogRow({ log, index }: LogRowProps) {
                   <div className="execution-section-label">Conditions</div>
                   <div className="execution-tree-content">
                     {log.workflowExecution.conditionResults.map((cond, i) => (
-                      <ConditionResultTree key={i} result={cond} depth={0} />
+                      <ConditionResultTree key={i} result={cond} depth={0} isFirst={i === 0} isLast={i === log.workflowExecution.conditionResults!.length - 1} />
                     ))}
                   </div>
                 </>
@@ -455,8 +455,8 @@ export const LogRow = memo(function LogRow({ log, index }: LogRowProps) {
                 <>
                   <div className="execution-section-label">Steps ({log.workflowExecution.blockResults.length})</div>
                   <div className="execution-tree-content">
-                    {log.workflowExecution.blockResults.map((block) => (
-                      <BlockResultTree key={block.id} result={block} depth={0} />
+                    {log.workflowExecution.blockResults.map((block, i) => (
+                      <BlockResultTree key={block.id} result={block} depth={0} isFirst={i === 0} isLast={i === log.workflowExecution.blockResults.length - 1} />
                     ))}
                   </div>
                 </>
@@ -465,14 +465,24 @@ export const LogRow = memo(function LogRow({ log, index }: LogRowProps) {
                 (!log.workflowExecution.conditionResults || log.workflowExecution.conditionResults.length === 0) && (
                   <span className="sub-content">No steps executed.</span>
                 )}
-              <Link
-                className="view-detail-link"
-                to={`/workflows/${log.workflowExecution.workflowId}/${log.workflowExecution.id}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Icon name="arrow-right-circle" size={14} />
-                View full execution details
-              </Link>
+              <div className="workflow-detail-links">
+                <Link
+                  className="view-detail-link"
+                  to={`/workflows/${log.workflowExecution.workflowId}/${log.workflowExecution.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Icon name="arrow-right-circle" size={14} />
+                  View full execution details
+                </Link>
+                <Link
+                  className="view-detail-link"
+                  to={`/workflows/${log.workflowExecution.workflowId}/definition`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Icon name="doc-text" size={14} />
+                  View workflow definition
+                </Link>
+              </div>
             </div>
           ) : (
             <LogDetailPanel

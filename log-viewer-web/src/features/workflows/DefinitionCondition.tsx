@@ -20,6 +20,8 @@ const DEPTH_COLORS = [
 interface DefinitionConditionProps {
   condition: WorkflowConditionDef;
   depth?: number;
+  isLast?: boolean;
+  isFirst?: boolean;
 }
 
 function getChildConditions(condition: WorkflowConditionDef): WorkflowConditionDef[] {
@@ -35,13 +37,13 @@ function isLogicOperator(type: string): boolean {
   return type === 'and' || type === 'or' || type === 'not';
 }
 
-export function DefinitionCondition({ condition, depth = 0 }: DefinitionConditionProps) {
+export function DefinitionCondition({ condition, depth = 0, isLast = true, isFirst = true }: DefinitionConditionProps) {
   const registry = useDeviceRegistry();
   const [collapsed, setCollapsed] = useState(false);
 
   const children = getChildConditions(condition);
   const hasChildren = children.length > 0;
-  const depthRange = Array.from({ length: depth }, (_, i) => i);
+  const lineX = depth * 20 + 25;
 
   const displayName = useMemo(() => {
     switch (condition.type) {
@@ -87,22 +89,30 @@ export function DefinitionCondition({ condition, depth = 0 }: DefinitionConditio
 
   return (
     <div className="tree-node">
+      {!isFirst && (
+        <div
+          className="tree-vline tree-vline--above"
+          style={{ left: `${lineX}px`, '--line-color': DEPTH_COLORS[depth % DEPTH_COLORS.length] } as React.CSSProperties}
+        />
+      )}
+      {!isLast && (
+        <div
+          className="tree-vline tree-vline--below"
+          style={{ left: `${lineX}px`, '--line-color': DEPTH_COLORS[depth % DEPTH_COLORS.length] } as React.CSSProperties}
+        />
+      )}
+
       <div
         className={`tree-row ${hasChildren ? 'collapsible' : ''}`}
+        style={{ paddingLeft: depth * 20 }}
         onClick={() => hasChildren && setCollapsed(v => !v)}
       >
-        {depthRange.map(i => (
-          <div
-            key={i}
-            className="connector-line"
-            style={{ backgroundColor: DEPTH_COLORS[i % DEPTH_COLORS.length] }}
-          />
-        ))}
-
-        {hasChildren && (
+        {hasChildren ? (
           <span className={`tree-chevron ${collapsed ? 'collapsed' : ''}`}>
             <Icon name="chevron-down" size={12} />
           </span>
+        ) : (
+          <span className="tree-chevron-spacer" />
         )}
 
         {isLogicOperator(condition.type) ? (
@@ -114,16 +124,27 @@ export function DefinitionCondition({ condition, depth = 0 }: DefinitionConditio
         )}
 
         <div className="tree-info">
-          <span className="tree-name">{displayName}</span>
-          {detailText && <span className="tree-detail">{detailText}</span>}
-          {collapsed && hasChildren && (
-            <span className="collapsed-hint">{children.length} nested</span>
-          )}
+          <span className="tree-name">
+            {displayName}
+            {collapsed && hasChildren && (
+              <span className="collapsed-hint">{children.length} nested</span>
+            )}
+            {collapsed && detailText && (
+              <span className="tree-detail-inline">{detailText}</span>
+            )}
+          </span>
+          {!collapsed && detailText && <span className="tree-detail">{detailText}</span>}
         </div>
       </div>
 
       {!collapsed && children.map((sub, i) => (
-        <DefinitionCondition key={i} condition={sub} depth={depth + 1} />
+        <DefinitionCondition
+          key={i}
+          condition={sub}
+          depth={depth + 1}
+          isFirst={i === 0}
+          isLast={i === children.length - 1}
+        />
       ))}
     </div>
   );

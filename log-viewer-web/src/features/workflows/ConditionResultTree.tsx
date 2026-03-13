@@ -14,32 +14,41 @@ const DEPTH_COLORS = [
 interface ConditionResultTreeProps {
   result: ConditionResult;
   depth?: number;
+  isLast?: boolean;
+  isFirst?: boolean;
 }
 
-export function ConditionResultTree({ result, depth = 0 }: ConditionResultTreeProps) {
+export function ConditionResultTree({ result, depth = 0, isLast = true, isFirst = true }: ConditionResultTreeProps) {
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = (result.subResults?.length ?? 0) > 0;
-
-  const depthRange = Array.from({ length: depth }, (_, i) => i);
+  const lineX = depth * 20 + 25;
 
   return (
     <div className="tree-node">
+      {!isFirst && (
+        <div
+          className="tree-vline tree-vline--above"
+          style={{ left: `${lineX}px`, '--line-color': DEPTH_COLORS[depth % DEPTH_COLORS.length] } as React.CSSProperties}
+        />
+      )}
+      {!isLast && (
+        <div
+          className="tree-vline tree-vline--below"
+          style={{ left: `${lineX}px`, '--line-color': DEPTH_COLORS[depth % DEPTH_COLORS.length] } as React.CSSProperties}
+        />
+      )}
+
       <div
         className={`tree-row ${hasChildren ? 'collapsible' : ''}`}
+        style={{ paddingLeft: depth * 20 }}
         onClick={() => hasChildren && setCollapsed(v => !v)}
       >
-        {depthRange.map(i => (
-          <div
-            key={i}
-            className="connector-line"
-            style={{ backgroundColor: DEPTH_COLORS[i % DEPTH_COLORS.length] }}
-          />
-        ))}
-
-        {hasChildren && (
+        {hasChildren ? (
           <span className={`tree-chevron ${collapsed ? 'collapsed' : ''}`}>
             <Icon name="chevron-down" size={12} />
           </span>
+        ) : (
+          <span className="tree-chevron-spacer" />
         )}
 
         <span className="tree-icon">
@@ -55,15 +64,23 @@ export function ConditionResultTree({ result, depth = 0 }: ConditionResultTreePr
         )}
 
         <div className="tree-info">
-          <span className="tree-name">{result.conditionDescription}</span>
-          {collapsed && hasChildren && (
-            <span className="collapsed-hint">{result.subResults!.length} nested</span>
-          )}
+          <span className="tree-name">
+            {result.conditionDescription}
+            {collapsed && hasChildren && (
+              <span className="collapsed-hint">{result.subResults!.length} nested</span>
+            )}
+          </span>
         </div>
       </div>
 
       {!collapsed && result.subResults?.map((sub, i) => (
-        <ConditionResultTree key={i} result={sub} depth={depth + 1} />
+        <ConditionResultTree
+          key={i}
+          result={sub}
+          depth={depth + 1}
+          isFirst={i === 0}
+          isLast={i === result.subResults!.length - 1}
+        />
       ))}
     </div>
   );

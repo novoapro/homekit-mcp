@@ -1,5 +1,6 @@
 .tree-node {
   font-size: var(--font-size-sm);
+  position: relative;
 }
 
 .tree-row {
@@ -20,21 +21,34 @@
   }
 }
 
-.connector-line {
-  width: 2px;
-  min-height: 24px;
-  align-self: stretch;
+.tree-vline {
+  position: absolute;
+  width: 1.3px;
+  background: var(--line-color, var(--text-secondary));
   opacity: 0.3;
-  border-radius: 1px;
-  flex-shrink: 0;
-  margin-left: 6px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Line from top of node down to the top edge of the icon */
+.tree-vline--above {
+  top: 0;
+  height: 7px;
+}
+
+/* Line from bottom edge of the icon down to the bottom of the node */
+.tree-vline--below {
+  top: 23px;
+  bottom: 0;
 }
 
 .tree-icon {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  position: relative;
   margin-top: 1px;
+  z-index: 1;
 }
 
 .tree-chevron {
@@ -44,10 +58,17 @@
   color: var(--text-tertiary);
   transition: transform 0.15s ease;
   margin-top: 1px;
+  position: relative;
+  z-index: 1;
 }
 
 .tree-chevron.collapsed {
   transform: rotate(-90deg);
+}
+
+.tree-chevron-spacer {
+  width: 12px;
+  flex-shrink: 0;
 }
 
 .logic-badge {
@@ -69,14 +90,28 @@
   gap: 2px;
 }
 
+.tree-info.tree-row {
+  align-items: flex-start;
+}
+
 .tree-name {
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
 }
 
+
 .tree-detail {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-normal);
+  font-size: var(--font-size-xs);
   line-height: 1.4;
+}
+
+.tree-detail-inline {
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-normal);
+  margin-left: 6px;
+  font-size: var(--font-size-xs);
 }
 
 .tree-error {
@@ -89,6 +124,8 @@
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   font-style: italic;
+  margin-left: 6px;
+  font-weight: var(--font-weight-normal);
 }
 
 .tree-copy-actions {

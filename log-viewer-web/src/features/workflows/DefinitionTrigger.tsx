@@ -10,14 +10,6 @@ import { TRIGGER_TYPE_ICONS } from '@/types/workflow-log';
 import { formatTriggerCondition, formatScheduleType, formatRetriggerPolicy } from '@/utils/workflow-definition-utils';
 import './tree-common.css';
 
-const DEPTH_COLORS = [
-  'var(--depth-0)',
-  'var(--depth-1)',
-  'var(--depth-2)',
-  'var(--depth-3)',
-  'var(--depth-4)',
-];
-
 interface DefinitionTriggerProps {
   trigger: WorkflowTriggerDef;
   depth?: number;
@@ -26,13 +18,12 @@ interface DefinitionTriggerProps {
 export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps) {
   const registry = useDeviceRegistry();
   const { baseUrl } = useConfig();
-  const depthRange = Array.from({ length: depth }, (_, i) => i);
-  const [copied, setCopied] = useState<'token' | 'url' | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const copyToClipboard = useCallback((text: string, which: 'token' | 'url') => {
+  const copyUrl = useCallback((text: string) => {
     navigator.clipboard.writeText(text);
-    setCopied(which);
-    setTimeout(() => setCopied(null), 2000);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }, []);
 
   const triggerIcon = TRIGGER_TYPE_ICONS[trigger.type] || 'bolt-circle-fill';
@@ -95,42 +86,36 @@ export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps
 
   return (
     <div className="tree-node">
-      <div className="tree-row">
-        {depthRange.map(i => (
-          <div
-            key={i}
-            className="connector-line"
-            style={{ backgroundColor: DEPTH_COLORS[i % DEPTH_COLORS.length] }}
-          />
-        ))}
 
+      <div className="tree-row" style={{ paddingLeft: depth * 20 }}>
+        <span className="tree-chevron-spacer" />
         <span className="tree-icon" style={{ color: 'var(--tint-main)' }}>
           <Icon name={triggerIcon} size={16} />
         </span>
 
         <div className="tree-info">
           <span className="tree-name">{displayName}</span>
-          {detailText && <span className="tree-detail">{detailText}</span>}
+        </div>
+      </div>
+
+      {detailText && (
+        <div className="tree-trigger-details" style={{ paddingLeft: depth * 20 + 18, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className="tree-detail">{detailText}</span>
           {trigger.type === 'webhook' && (trigger as WebhookTriggerDef).token && (
-            <div className="tree-copy-actions">
-              <button
-                type="button"
-                className="tree-copy-btn"
-                onClick={() => copyToClipboard((trigger as WebhookTriggerDef).token, 'token')}
-              >
-                <Icon name={copied === 'token' ? 'checkmark' : 'doc-on-doc'} size={12} />
-                {copied === 'token' ? 'Copied' : 'Copy token'}
-              </button>
-              <button
-                type="button"
-                className="tree-copy-btn"
-                onClick={() => copyToClipboard(`${baseUrl}/workflows/webhook/${(trigger as WebhookTriggerDef).token}`, 'url')}
-              >
-                <Icon name={copied === 'url' ? 'checkmark' : 'doc-on-doc'} size={12} />
-                {copied === 'url' ? 'Copied' : 'Copy URL'}
-              </button>
-            </div>
+            <button
+              type="button"
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: copied ? 'var(--status-active)' : 'var(--text-tertiary)', display: 'inline-flex', flexShrink: 0 }}
+              onClick={() => copyUrl(`${baseUrl}/workflows/webhook/${(trigger as WebhookTriggerDef).token}`)}
+              title="Copy webhook URL"
+            >
+              <Icon name={copied ? 'checkmark' : 'doc-on-doc'} size={16} />
+            </button>
           )}
+        </div>
+      )}
+
+      {(retriggerLabel || (trigger.conditions && trigger.conditions.length > 0)) && (
+        <div style={{ paddingLeft: depth * 20 + 18, display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
           {retriggerLabel && (
             <span className="retrigger-badge">
               <Icon name="repeat" size={12} className="retrigger-badge-icon" />
@@ -150,7 +135,7 @@ export function DefinitionTrigger({ trigger, depth = 0 }: DefinitionTriggerProps
             );
           })()}
         </div>
-      </div>
+      )}
     </div>
   );
 }
