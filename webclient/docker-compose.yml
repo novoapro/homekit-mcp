@@ -1,5 +1,5 @@
 services:
-  homekit-log-viewer:
+  compai-home-dashboard:
     build: .
     ports:
       - "4200:80"
