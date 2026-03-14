@@ -29,6 +29,7 @@ class KeychainService {
         if updateStatus == errSecItemNotFound {
             var addQuery = updateQuery
             addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             return addStatus == errSecSuccess
         }

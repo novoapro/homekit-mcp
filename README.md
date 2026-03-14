@@ -1,8 +1,9 @@
 <p align="center">
-  <img src="screenshots/logo-nobg.png" alt="CompAI - Home" width="120" />
+  <img src="design/new/icon_ng@3x.png" alt="CompAI - Home" width="120" />
 </p>
 
 <h1 align="center">CompAI - Home</h1>
+<h3 align="center">AI Companion for Apple HomeKit</h3>
 
 <p align="center">
 A macOS menu bar app that exposes your Apple HomeKit devices through the <a href="https://modelcontextprotocol.io">Model Context Protocol (MCP)</a>. Connect AI assistants like Claude to your smart home — query device states, control accessories, create automations, and receive real-time updates when things change.

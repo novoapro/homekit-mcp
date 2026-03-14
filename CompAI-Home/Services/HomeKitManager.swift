@@ -473,8 +473,13 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
             }
     }
 
+    /// Maximum number of concurrent HomeKit characteristic reads during polling.
+    /// Limits backpressure on the HomeKit daemon and reduces main-thread contention.
+    private static let maxConcurrentReads = 20
+
     /// Reads all readable characteristics and compares against cached values.
     /// Fires the state-change pipeline for any differences (missed delegate callbacks).
+    /// Uses a semaphore to limit concurrent reads and batches main-thread comparisons.
     private func pollForStateChanges() {
         guard !isPolling else {
             AppLogger.homeKit.debug("Skipping poll — previous cycle still in progress")
@@ -485,57 +490,81 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
         isPolling = true
         let accessories = allAccessories
 
-        let group = DispatchGroup()
-        var hasReads = false
+        // Collect all readable characteristics upfront
+        struct PollItem {
+            let accessory: HMAccessory
+            let service: HMService
+            let characteristic: HMCharacteristic
+            let deviceId: String
+            let serviceId: String
+            let charId: String
+        }
+        var items: [PollItem] = []
 
         for accessory in accessories where accessory.isReachable {
             let deviceId = accessory.uniqueIdentifier.uuidString
-
             for service in accessory.services {
                 guard ServiceTypes.isSupported(service.serviceType) else { continue }
                 guard service.serviceType != HMServiceTypeAccessoryInformation else { continue }
-
                 let serviceId = service.uniqueIdentifier.uuidString
-
                 for characteristic in service.characteristics {
                     guard CharacteristicTypes.isSupported(characteristic.characteristicType) else { continue }
                     guard characteristic.properties.contains(HMCharacteristicPropertyReadable) else { continue }
-
-                    hasReads = true
-                    let charId = characteristic.uniqueIdentifier.uuidString
-
-                    group.enter()
-                    characteristic.readValue { [weak self] error in
-                        defer { group.leave() }
-                        guard let self else { return }
-
-                        if let error = error {
-                            AppLogger.homeKit.debug("Poll: failed to read \(characteristic.characteristicType) on \(accessory.name): \(error)")
-                            return
-                        }
-
-                        DispatchQueue.main.async {
-                            self.compareAndEmitIfChanged(
-                                accessory: accessory,
-                                service: service,
-                                characteristic: characteristic,
-                                deviceId: deviceId,
-                                serviceId: serviceId,
-                                charId: charId
-                            )
-                        }
-                    }
+                    items.append(PollItem(
+                        accessory: accessory, service: service, characteristic: characteristic,
+                        deviceId: deviceId, serviceId: serviceId,
+                        charId: characteristic.uniqueIdentifier.uuidString
+                    ))
                 }
             }
         }
 
-        guard hasReads else {
+        guard !items.isEmpty else {
             isPolling = false
             return
         }
 
+        let semaphore = DispatchSemaphore(value: Self.maxConcurrentReads)
+        let group = DispatchGroup()
+        let pollQueue = DispatchQueue(label: "com.mnplab.compai-home.poll", qos: .utility)
+
+        // Collect changed items and dispatch to main thread in a single batch
+        let changedLock = NSLock()
+        var changedItems: [PollItem] = []
+
+        for item in items {
+            group.enter()
+            pollQueue.async {
+                semaphore.wait()
+                item.characteristic.readValue { [weak self] error in
+                    defer {
+                        semaphore.signal()
+                        group.leave()
+                    }
+                    guard self != nil else { return }
+
+                    if error != nil { return }
+
+                    changedLock.lock()
+                    changedItems.append(item)
+                    changedLock.unlock()
+                }
+            }
+        }
+
         group.notify(queue: .main) { [weak self] in
-            self?.isPolling = false
+            guard let self else { return }
+            for item in changedItems {
+                self.compareAndEmitIfChanged(
+                    accessory: item.accessory,
+                    service: item.service,
+                    characteristic: item.characteristic,
+                    deviceId: item.deviceId,
+                    serviceId: item.serviceId,
+                    charId: item.charId
+                )
+            }
+            self.isPolling = false
         }
     }
 

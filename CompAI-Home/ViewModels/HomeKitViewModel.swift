@@ -54,6 +54,14 @@ class HomeKitViewModel: ObservableObject {
 
     @Published var filteredDevicesByRoom: [(roomName: String, devices: [DeviceModel])] = []
 
+    struct BulkActionState {
+        var allEnabled = false
+        var noneEnabled = true
+        var allObserved = false
+        var noneObserved = true
+    }
+    @Published var bulkActionState = BulkActionState()
+
     // Scenes
     @Published var scenes: [SceneModel] = []
     @Published var filteredScenes: [SceneModel] = []
@@ -139,6 +147,16 @@ class HomeKitViewModel: ObservableObject {
         .receive(on: DispatchQueue.main) // Update UI on main thread
         .sink { [weak self] results in
             self?.filteredDevicesByRoom = results
+            // Recompute bulk action state once when filtered list changes
+            if let self {
+                let devices = results.flatMap(\.devices)
+                self.bulkActionState = BulkActionState(
+                    allEnabled: !devices.isEmpty && devices.allSatisfy { self.isEnabled(for: $0) },
+                    noneEnabled: !devices.contains { self.isEnabled(for: $0) },
+                    allObserved: !devices.isEmpty && devices.allSatisfy { self.isObserved(for: $0) },
+                    noneObserved: !devices.contains { self.isObserved(for: $0) }
+                )
+            }
             self?.isUpdating = false
         }
         .store(in: &cancellables)

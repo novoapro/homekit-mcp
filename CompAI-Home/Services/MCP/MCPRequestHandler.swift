@@ -466,7 +466,8 @@ final class MCPRequestHandler: Sendable {
         return toolResult(text: lines.joined(separator: "\n"), id: id)
     }
 
-    private func handleGetAutomationSchema(id: JSONRPCId?) -> JSONRPCResponse {
+    /// Cached automation schema JSON string — built once, reused on every call.
+    private static let cachedAutomationSchemaJSON: String? = {
         let schema: [String: Any] = [
             "description": "Schema for creating and updating automations via create_automation and update_automation tools.",
             "topLevelFields": [
@@ -763,10 +764,16 @@ final class MCPRequestHandler: Sendable {
             ]
         ]
 
-        // Encode the schema as formatted JSON
         if let jsonData = try? JSONSerialization.data(withJSONObject: schema, options: [.prettyPrinted, .sortedKeys]),
            let jsonString = String(data: jsonData, encoding: .utf8) {
-            return toolResult(text: jsonString, id: id)
+            return jsonString
+        }
+        return nil
+    }()
+
+    private func handleGetAutomationSchema(id: JSONRPCId?) -> JSONRPCResponse {
+        if let cached = Self.cachedAutomationSchemaJSON {
+            return toolResult(text: cached, id: id)
         }
         return toolResult(text: "Failed to encode automation schema", isError: true, id: id)
     }

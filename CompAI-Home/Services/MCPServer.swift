@@ -154,7 +154,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
         let tracker = connectionTracker
 
-        // Broadcast new state-change log entries
+        // Broadcast new log entries + automation execution logs in a single subscriber
         loggingService.logEntrySubject
             .receive(on: DispatchQueue.global(qos: .utility))
             .sink { [weak self] entry in
@@ -173,25 +173,15 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                     } catch {
                         AppLogger.server.error("Failed to encode log for WS broadcast: \(error)")
                     }
+                    // Also broadcast as typed automation log if applicable
+                    if let execLog = entry.automationExecution {
+                        self?.broadcastAutomationLog(execLog, type: "automation_log", tracker: tracker)
+                    }
                 }
             }
             .store(in: &wsCancellables)
 
-        // Broadcast new automation execution logs
-        loggingService.logEntrySubject
-            .filter { $0.category == .automationExecution || $0.category == .automationError }
-            .compactMap(\.automationExecution)
-            .receive(on: DispatchQueue.global(qos: .utility))
-            .sink { [weak self] entry in
-                guard self != nil else { return }
-                Task {
-                    guard await tracker.wsConnectionCount > 0 else { return }
-                    self?.broadcastAutomationLog(entry, type: "automation_log", tracker: tracker)
-                }
-            }
-            .store(in: &wsCancellables)
-
-        // Broadcast updated automation execution logs
+        // Broadcast updated automation execution logs (separate subject)
         loggingService.logUpdatedSubject
             .filter { $0.category == .automationExecution || $0.category == .automationError }
             .compactMap(\.automationExecution)
@@ -677,6 +667,10 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         struct RenameBody: Codable { let name: String? }
         let body = try req.content.decode(RenameBody.self)
 
+        if let name = body.name, name.count > 255 {
+            throw Abort(.badRequest, reason: "Name must be 255 characters or fewer.")
+        }
+
         await registry?.setServiceCustomName(stableServiceId: serviceId, customName: body.name)
 
         let responseData = try JSONEncoder().encode(["success": true])
@@ -742,8 +736,8 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
         // Pagination
         let total = logs.count
-        let offset = req.query[Int.self, at: "offset"] ?? 0
-        let limit = req.query[Int.self, at: "limit"] ?? 50
+        let offset = max(req.query[Int.self, at: "offset"] ?? 0, 0)
+        let limit = min(max(req.query[Int.self, at: "limit"] ?? 50, 1), 500)
         let paginatedLogs = Array(logs.dropFirst(offset).prefix(limit))
 
         // Build response with pagination metadata
@@ -1093,7 +1087,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             throw Abort(.badRequest, reason: "Invalid automation ID")
         }
 
-        let limit = req.query[Int.self, at: "limit"] ?? 50
+        let limit = min(max(req.query[Int.self, at: "limit"] ?? 50, 1), 500)
         var logs = await loggingService.getLogs(forAutomationId: automationId).compactMap(\.automationExecution)
         logs = Array(logs.prefix(limit))
 

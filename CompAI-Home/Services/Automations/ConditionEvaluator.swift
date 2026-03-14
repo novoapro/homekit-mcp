@@ -2,7 +2,7 @@ import Foundation
 
 /// Evaluates `AutomationCondition` guard expressions against current device state.
 /// Used by the engine for pre-execution guards, conditional blocks, and repeatWhile blocks.
-struct ConditionEvaluator {
+class ConditionEvaluator {
     private let homeKitManager: HomeKitManager
     private let storage: StorageService?
     private let loggingService: LoggingService?
@@ -71,7 +71,18 @@ struct ConditionEvaluator {
     }
 
     /// Evaluate all conditions (AND semantics). Returns individual results and overall pass/fail.
+    /// Pre-fetches all needed device states in a single MainActor hop to avoid per-condition round-trips.
     func evaluateAll(_ conditions: [AutomationCondition]) async -> (allPassed: Bool, results: [ConditionResult]) {
+        // Batch-fetch all device states needed by any condition in one MainActor call
+        let deviceIds = Self.collectDeviceIds(from: conditions)
+        if !deviceIds.isEmpty {
+            prefetchedDeviceStates = await MainActor.run {
+                Dictionary(uniqueKeysWithValues: deviceIds.compactMap { id in
+                    homeKitManager.getDeviceState(id: id).map { (id, $0) }
+                })
+            }
+        }
+
         var results: [ConditionResult] = []
         var allPassed = true
         for condition in conditions {
@@ -81,7 +92,34 @@ struct ConditionEvaluator {
                 allPassed = false
             }
         }
+        prefetchedDeviceStates = nil
         return (allPassed, results)
+    }
+
+    /// Pre-fetched device states for the current evaluation batch.
+    /// Set by `evaluateAll` before evaluating conditions, cleared after.
+    private var prefetchedDeviceStates: [String: DeviceModel]?
+
+    /// Recursively collects all device IDs referenced by deviceState conditions.
+    private static func collectDeviceIds(from conditions: [AutomationCondition]) -> Set<String> {
+        var ids = Set<String>()
+        for condition in conditions {
+            collectDeviceIds(from: condition, into: &ids)
+        }
+        return ids
+    }
+
+    private static func collectDeviceIds(from condition: AutomationCondition, into ids: inout Set<String>) {
+        switch condition {
+        case .deviceState(let c):
+            ids.insert(c.deviceId)
+        case .and(let children), .or(let children):
+            for child in children { collectDeviceIds(from: child, into: &ids) }
+        case .not(let inner):
+            collectDeviceIds(from: inner, into: &ids)
+        default:
+            break
+        }
     }
 
     /// Evaluate a `ComparisonOperator` against a known value.
@@ -143,7 +181,15 @@ struct ConditionEvaluator {
             ?? condition.characteristicId
         let displayName = CharacteristicTypes.displayName(for: resolvedType)
 
-        guard let device = await MainActor.run(body: { homeKitManager.getDeviceState(id: condition.deviceId) }) else {
+        // Use prefetched state if available (batch path), otherwise fall back to single fetch
+        let device: DeviceModel?
+        if let cached = prefetchedDeviceStates?[condition.deviceId] {
+            device = cached
+        } else {
+            device = await MainActor.run(body: { homeKitManager.getDeviceState(id: condition.deviceId) })
+        }
+
+        guard let device else {
             await logOrphan(
                 location: "condition",
                 detail: "\(displayName): device not found"

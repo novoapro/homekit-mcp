@@ -68,9 +68,9 @@ struct DeviceListView: View {
                                 .textCase(nil)
                                 .listRowInsets(EdgeInsets())
                             ) {
-                                ForEach(Array(group.devices.enumerated()), id: \.element.id) { index, device in
-                                    let isFirst = index == 0
-                                    let isLast = index == group.devices.count - 1
+                                ForEach(group.devices) { device in
+                                    let isFirst = device.id == group.devices.first?.id
+                                    let isLast = device.id == group.devices.last?.id
 
                                     VStack(spacing: 0) {
                                         DeviceRow(device: device, viewModel: viewModel)
@@ -159,12 +159,11 @@ struct DeviceListView: View {
                             }
                         }
 
-                        // Device-level bulk actions
-                        let devices = viewModel.filteredDevicesByRoom.flatMap(\.devices)
-                        let allEnabled = devices.allSatisfy { viewModel.isEnabled(for: $0) }
-                        let noneEnabled = !devices.contains { viewModel.isEnabled(for: $0) }
-                        let allObserved = devices.allSatisfy { viewModel.isObserved(for: $0) }
-                        let noneObserved = !devices.contains { viewModel.isObserved(for: $0) }
+                        // Device-level bulk actions (pre-computed in ViewModel)
+                        let allEnabled = viewModel.bulkActionState.allEnabled
+                        let noneEnabled = viewModel.bulkActionState.noneEnabled
+                        let allObserved = viewModel.bulkActionState.allObserved
+                        let noneObserved = viewModel.bulkActionState.noneObserved
 
                         Section("Devices") {
                             Button {

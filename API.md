@@ -114,15 +114,15 @@ All messages are JSON objects with a `type` field.
 |---|---|---|
 | `connected` | Sent on successful connection | `{"type":"connected","connectionId":"<UUID>"}` |
 | `log` | New state-change log entry | `{"type":"log","data":{...StateChangeLog...}}` |
-| `automation_log` | New automation execution started | `{"type":"automation_log","data":{...WorkflowExecutionLog...}}` |
-| `automation_log_updated` | Existing automation execution updated (completed/failed) | `{"type":"automation_log_updated","data":{...WorkflowExecutionLog...}}` |
-| `workflows_updated` | automation definitions changed (created/updated/deleted/enabled/disabled) | `{"type":"workflows_updated","data":[{...automation...}]}` |
+| `automation_log` | New automation execution started | `{"type":"automation_log","data":{...AutomationExecutionLog...}}` |
+| `automation_log_updated` | Existing automation execution updated (completed/failed) | `{"type":"automation_log_updated","data":{...AutomationExecutionLog...}}` |
+| `automations_updated` | automation definitions changed (created/updated/deleted/enabled/disabled) | `{"type":"automations_updated","data":[{...automation...}]}` |
 | `devices_updated` | Structural device/scene change (added/removed/renamed/reachability) | `{"type":"devices_updated"}` |
 | `characteristic_updated` | Single characteristic value changed (only for `observed` characteristics) | `{"type":"characteristic_updated","data":{"deviceId":"...","serviceId":"...","characteristicId":"...","characteristicType":"...","value":...,"timestamp":"..."}}` |
 | `logs_cleared` | All logs have been cleared on the server | `{"type":"logs_cleared"}` |
 | `pong` | Response to client ping | `{"type":"pong"}` |
 
-The `data` field in `log` messages has the same shape as items in the `GET /logs` response. The `data` field in `automation_log` / `automation_log_updated` messages has the same shape as items in the `GET /automations/:id/logs` response. The `data` field in `workflows_updated` messages is an array with the same shape as the `GET /automations` response. The `data` field in `characteristic_updated` messages contains: `deviceId` (stable registry ID), `serviceId` (stable registry ID), `characteristicId` (stable registry ID), `characteristicType` (HomeKit type string), `value` (the new value), and `timestamp` (ISO 8601). This event is only sent for characteristics marked as `observed` in the device registry, and is batched with a 100ms window.
+The `data` field in `log` messages has the same shape as items in the `GET /logs` response. The `data` field in `automation_log` / `automation_log_updated` messages has the same shape as items in the `GET /automations/:id/logs` response. The `data` field in `automations_updated` messages is an array with the same shape as the `GET /automations` response. The `data` field in `characteristic_updated` messages contains: `deviceId` (stable registry ID), `serviceId` (stable registry ID), `characteristicId` (stable registry ID), `characteristicType` (HomeKit type string), `value` (the new value), and `timestamp` (ISO 8601). This event is only sent for characteristics marked as `observed` in the device registry, and is batched with a 100ms window.
 
 #### Client → Server
 
@@ -150,7 +150,7 @@ ws.onmessage = (event) => {
     case 'automation_log_updated':
       console.log('automation updated:', msg.data);
       break;
-    case 'workflows_updated':
+    case 'automations_updated':
       console.log('automations changed:', msg.data);
       break;
   }
@@ -275,7 +275,7 @@ Requires: **REST API enabled**
 
 | Method | Path | Description | Response |
 |---|---|---|---|
-| `GET` | `/automation-runtime` | Get automation runtime information (sun events) | `WorkflowRuntimeResponse` |
+| `GET` | `/automation-runtime` | Get automation runtime information (sun events) | `AutomationRuntimeResponse` |
 
 **Response (200):**
 
@@ -303,16 +303,16 @@ Requires: **REST API enabled** + **automations enabled**
 | Method | Path | Description | Status | Response |
 |---|---|---|---|---|
 | `GET` | `/automations` | List all automations | 200 | `automation[]` |
-| `GET` | `/automations/:workflowId` | Get a single automation | 200 | `automation` |
+| `GET` | `/automations/:automationId` | Get a single automation | 200 | `automation` |
 | `POST` | `/automations` | Create an automation | 201 | `automation` |
-| `PUT` | `/automations/:workflowId` | Update an automation (partial) | 200 | `automation` |
-| `DELETE` | `/automations/:workflowId` | Delete an automation | 200 | `{"deleted": true}` |
-| `POST` | `/automations/:workflowId/trigger` | Trigger an automation | 202 | `TriggerResult` |
-| `GET` | `/automations/:workflowId/logs` | Get execution history | 200 | `WorkflowExecutionLog[]` |
+| `PUT` | `/automations/:automationId` | Update an automation (partial) | 200 | `automation` |
+| `DELETE` | `/automations/:automationId` | Delete an automation | 200 | `{"deleted": true}` |
+| `POST` | `/automations/:automationId/trigger` | Trigger an automation | 202 | `TriggerResult` |
+| `GET` | `/automations/:automationId/logs` | Get execution history | 200 | `AutomationExecutionLog[]` |
 | `POST` | `/automations/generate` | Generate an automation using AI | 201 | `GenerateResult` |
-| `POST` | `/automations/:workflowId/improve` | Improve an automation using AI (preview only) | 200 | `automation` |
+| `POST` | `/automations/:automationId/improve` | Improve an automation using AI (preview only) | 200 | `automation` |
 
-**GET /automations/:workflowId/logs query params:**
+**GET /automations/:automationId/logs query params:**
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
@@ -322,7 +322,7 @@ Requires: **REST API enabled** + **automations enabled**
 
 Send a full `automation` JSON body. The following fields are auto-generated and should be omitted: `id`, `createdAt`, `updatedAt`, `metadata`. Defaults: `isEnabled = true`, `continueOnError = false`, `retriggerPolicy = "ignoreNew"`.
 
-**PUT /automations/:workflowId — Update**
+**PUT /automations/:automationId — Update**
 
 Send a partial JSON body. Only included top-level fields are updated; omitted fields are preserved. Arrays (`triggers`, `conditions`, `blocks`) are replaced wholesale when provided.
 
@@ -418,9 +418,9 @@ Requires: **REST API enabled** + **automations enabled** + **AI enabled** (with 
 
 | Method | Path | Description | Status | Response |
 |---|---|---|---|---|
-| `POST` | `/automations/:workflowId/improve` | Improve an existing automation using AI | 200 | `automation` |
+| `POST` | `/automations/:automationId/improve` | Improve an existing automation using AI | 200 | `automation` |
 
-Analyzes the existing automation structure, fixes labels/titles that don't match their configuration, and applies the requested improvements. The response is a **preview only** — the automation is **not saved** until you apply it with `PUT /automations/:workflowId`.
+Analyzes the existing automation structure, fixes labels/titles that don't match their configuration, and applies the requested improvements. The response is a **preview only** — the automation is **not saved** until you apply it with `PUT /automations/:automationId`.
 
 **Request body:**
 
@@ -436,9 +436,9 @@ Analyzes the existing automation structure, fixes labels/titles that don't match
 
 **Success response (200):**
 
-Returns the full improved `automation` JSON (same schema as `GET /automations/:workflowId`). The automation retains its original `id`, `createdAt`, and `metadata`. The `updatedAt` field is set to the current time.
+Returns the full improved `automation` JSON (same schema as `GET /automations/:automationId`). The automation retains its original `id`, `createdAt`, and `metadata`. The `updatedAt` field is set to the current time.
 
-**To apply the improvements**, send the response body (or relevant fields) to `PUT /automations/:workflowId`.
+**To apply the improvements**, send the response body (or relevant fields) to `PUT /automations/:automationId`.
 
 **Error responses:**
 
@@ -1224,12 +1224,12 @@ All blocks accept an optional `name` field.
 
 Exits the current scope (group, repeat, conditional). At top level, terminates the entire automation.
 
-##### executeWorkflow
+##### executeAutomation
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `type` | `"executeWorkflow"` | yes | |
-| `targetWorkflowId` | string (UUID) | yes | automation to execute |
+| `type` | `"executeAutomation"` | yes | |
+| `targetAutomationId` | string (UUID) | yes | automation to execute |
 | `executionMode` | string | yes | `"inline"`, `"parallel"`, or `"delegate"` |
 
 ---
@@ -1301,15 +1301,15 @@ Returned by automation trigger endpoints. Encoded as flat JSON.
 | `ignored` | 409 | Already running, trigger ignored |
 | `not_found` | 404 | automation not found |
 | `disabled` | 503 | automations feature disabled |
-| `workflow_disabled` | 503 | Specific automation is disabled |
+| `automation_disabled` | 503 | Specific automation is disabled |
 
 **JSON shape:**
 
 ```json
 {
   "status": "scheduled",
-  "workflowId": "...",
-  "workflowName": "...",
+  "automationId": "...",
+  "automationName": "...",
   "message": "automation 'Morning Routine' execution scheduled."
 }
 ```
@@ -1375,7 +1375,7 @@ Same device fields as `state_change` (including `unit`), plus:
 
 | Field | Type | Description |
 |---|---|---|
-| `workflowExecution` | WorkflowExecutionLog | Full automation execution data |
+| `automationExecution` | AutomationExecutionLog | Full automation execution data |
 
 **`scene_execution`** / **`scene_error`** — Scene executed/failed
 
@@ -1432,15 +1432,15 @@ Same device fields as `state_change` (including `unit`), plus:
 | `ai_interaction` | AI automation operation succeeded |
 | `ai_interaction_error` | AI automation operation failed |
 
-### WorkflowExecutionLog
+### AutomationExecutionLog
 
 Embedded in `StateChangeLog` entries with `automation_execution` or `automation_error` category. Also returned directly by `GET /automations/:id/logs`.
 
 | Field | Type | Nullable | Description |
 |---|---|---|---|
 | `id` | UUID | no | Execution log ID |
-| `workflowId` | UUID | no | Parent automation ID |
-| `workflowName` | string | no | automation name at time of execution |
+| `automationId` | UUID | no | Parent automation ID |
+| `automationName` | string | no | automation name at time of execution |
 | `triggeredAt` | string (ISO 8601) | no | When the execution was triggered |
 | `completedAt` | string (ISO 8601) | yes | When the execution finished (null if still running) |
 | `triggerEvent` | TriggerEvent | yes | What triggered the execution |
@@ -1488,7 +1488,7 @@ Embedded in `StateChangeLog` entries with `automation_execution` or `automation_
 | `id` | UUID | no | Block result ID |
 | `blockIndex` | integer | no | Position in the block list |
 | `blockKind` | string | no | `"action"` or `"flowControl"` |
-| `blockType` | string | no | Block type: `controlDevice`, `delay`, `conditional`, `repeat`, `repeatWhile`, `group`, `return`, `webhook`, `log`, `runScene`, `waitForState`, `executeWorkflow` |
+| `blockType` | string | no | Block type: `controlDevice`, `delay`, `conditional`, `repeat`, `repeatWhile`, `group`, `return`, `webhook`, `log`, `runScene`, `waitForState`, `executeAutomation` |
 | `blockName` | string | yes | Optional block display name |
 | `status` | ExecutionStatus | no | Block execution status |
 | `startedAt` | string (ISO 8601) | no | When block execution started |

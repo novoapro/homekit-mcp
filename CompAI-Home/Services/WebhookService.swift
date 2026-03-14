@@ -7,6 +7,7 @@ actor WebhookService: WebhookServiceProtocol {
     private let loggingService: LoggingService
     private let keychainService: KeychainService
     private let maxRetries = 3
+    private var cachedSecretData: Data?
 
     /// Observable status published on the main actor for UI consumption.
     nonisolated let statusSubject = CurrentValueSubject<WebhookStatus, Never>(.idle)
@@ -256,9 +257,13 @@ actor WebhookService: WebhookServiceProtocol {
         let body = try JSONEncoder.iso8601.encode(payload)
         request.httpBody = body
 
-        // Sign the payload with HMAC-SHA256
-        let secret = keychainService.getOrCreateWebhookSecret()
-        if let secretData = secret.data(using: .utf8) {
+        // Sign the payload with HMAC-SHA256 (secret cached to avoid keychain I/O per send)
+        let secretData = cachedSecretData ?? {
+            let data = keychainService.getOrCreateWebhookSecret().data(using: .utf8)
+            cachedSecretData = data
+            return data
+        }()
+        if let secretData {
             let signature = hmacSHA256(data: body, key: secretData)
             request.addValue("sha256=\(signature)", forHTTPHeaderField: "X-Signature-256")
         }

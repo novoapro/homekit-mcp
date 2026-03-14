@@ -74,6 +74,7 @@ targets:
     entitlements:
       path: CompAI-Home/Resources/CompAI-Home.entitlements
       properties:
+        com.apple.security.app-sandbox: true
         com.apple.developer.applesignin:
           - Default
         com.apple.developer.homekit: true

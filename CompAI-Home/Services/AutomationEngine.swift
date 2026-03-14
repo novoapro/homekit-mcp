@@ -50,6 +50,10 @@ actor AutomationEngine: AutomationEngineProtocol {
     /// Waiters for `waitForState` blocks — keyed by device+characteristic.
     private var stateWaiters: [String: [StateWaiter]] = [:]
 
+    /// Set of device IDs that have at least one enabled `deviceStateChange` trigger.
+    /// Used to skip processing state changes for devices with no matching triggers.
+    private var triggerDeviceIds: Set<String> = []
+
     /// Retains the Combine subscription to HomeKitManager's stateChangePublisher.
     /// Stored as AnyCancellable so it lives as long as the engine.
     nonisolated private let cancellableBag = CancellableBag()
@@ -77,12 +81,49 @@ actor AutomationEngine: AutomationEngineProtocol {
     /// HomeKitManager publishes → AutomationEngine.processStateChange() is called.
     /// No reference to AutomationEngine is stored in HomeKitManager.
     nonisolated func subscribeToStateChanges(from publisher: PassthroughSubject<StateChange, Never>) {
-        let cancellable = publisher
+        // Subscribe to state changes, but only spawn a Task when the device has a known trigger
+        let stateChangeCancellable = publisher
             .sink { [weak self] change in
                 guard let self else { return }
-                Task { await self.processStateChange(change) }
+                Task { await self.processStateChangeIfTriggered(change) }
             }
-        cancellableBag.store(cancellable)
+        cancellableBag.store(stateChangeCancellable)
+
+        // Rebuild trigger device index whenever automations change
+        let automationsCancellable = automationStorageService.automationsSubject
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Task { await self.rebuildTriggerDeviceIndex() }
+            }
+        cancellableBag.store(automationsCancellable)
+
+        // Build initial index
+        Task { await rebuildTriggerDeviceIndex() }
+    }
+
+    /// Rebuilds the set of device IDs that have at least one enabled deviceStateChange trigger.
+    private func rebuildTriggerDeviceIndex() async {
+        let automations = await automationStorageService.getEnabledAutomations()
+        var deviceIds = Set<String>()
+        for automation in automations {
+            for trigger in automation.triggers {
+                if case .deviceStateChange(let t) = trigger {
+                    deviceIds.insert(t.deviceId)
+                }
+            }
+        }
+        triggerDeviceIds = deviceIds
+    }
+
+    /// Notifies waitForState waiters for every state change, but only runs
+    /// full trigger evaluation when the device has a known automation trigger.
+    private func processStateChangeIfTriggered(_ change: StateChange) async {
+        // Always notify waitForState waiters — they may be waiting on any device
+        await notifyStateWaiters(change)
+
+        // Only run full automation evaluation if this device has triggers
+        guard triggerDeviceIds.contains(change.deviceId) else { return }
+        await processStateChange(change)
     }
 
     func registerEvaluator(_ evaluator: TriggerEvaluator) {
@@ -114,11 +155,9 @@ actor AutomationEngine: AutomationEngineProtocol {
     // MARK: - State Change Processing
 
     /// Main entry — called whenever HomeKitManager publishes a state change.
+    /// Note: notifyStateWaiters is called by processStateChangeIfTriggered before this.
     func processStateChange(_ change: StateChange) async {
         guard storage.readAutomationsEnabled() else { return }
-
-        // Notify any waitForState waiters first
-        await notifyStateWaiters(change)
 
         let automations = await automationStorageService.getEnabledAutomations()
         let context = TriggerContext.stateChange(change)

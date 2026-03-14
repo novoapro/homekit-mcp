@@ -97,6 +97,7 @@ class LogViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] logs in
                 self?.rawLogs = logs
+                self?.recomputeFilterOptions()
                 self?.updateView()
             }
             .store(in: &cancellables)
@@ -134,6 +135,7 @@ class LogViewModel: ObservableObject {
             let existingLogs = await loggingService.getLogs()
             await MainActor.run {
                 self.rawLogs = existingLogs
+                self.recomputeFilterOptions()
                 self.updateView()
             }
         }
@@ -143,6 +145,7 @@ class LogViewModel: ObservableObject {
         isRefreshing = true
         let freshLogs = await loggingService.getLogs()
         rawLogs = freshLogs
+        recomputeFilterOptions()
         updateView()
         isRefreshing = false
     }
@@ -153,30 +156,28 @@ class LogViewModel: ObservableObject {
 
         self.groupedLogs = grouped
         self.filteredLogCount = filtered.count
+    }
 
-        // Update cached filter option lists
+    /// Recomputes available device/service filter options. Only called when rawLogs changes,
+    /// not on every search keystroke or filter toggle.
+    private func recomputeFilterOptions() {
         self.availableDevices = computeAvailableDevices()
         self.availableServices = computeAvailableServices()
     }
 
     private func computeAvailableDevices() -> [String] {
-        let filtered = rawLogs.filter { log in
-            guard !selectedCategories.isEmpty else { return true }
-            let allowedCategories = selectedCategories.flatMap { $0.logCategories ?? [] }
-            return allowedCategories.contains(log.category)
+        guard !selectedCategories.isEmpty else {
+            return Array(Set(rawLogs.map(\.deviceName))).sorted()
         }
-        return Array(Set(filtered.map(\.deviceName))).sorted()
+        let allowed = Set(selectedCategories.flatMap { $0.logCategories ?? [] })
+        return Array(Set(rawLogs.filter { allowed.contains($0.category) }.map(\.deviceName))).sorted()
     }
 
     private func computeAvailableServices() -> [String] {
+        let allowed = selectedCategories.isEmpty ? nil : Set(selectedCategories.flatMap { $0.logCategories ?? [] })
         let filtered = rawLogs.filter { log in
-            if !selectedCategories.isEmpty {
-                let allowedCategories = selectedCategories.flatMap { $0.logCategories ?? [] }
-                guard allowedCategories.contains(log.category) else { return false }
-            }
-            if !selectedDevices.isEmpty {
-                guard selectedDevices.contains(log.deviceName) else { return false }
-            }
+            if let allowed { guard allowed.contains(log.category) else { return false } }
+            if !selectedDevices.isEmpty { guard selectedDevices.contains(log.deviceName) else { return false } }
             return true
         }
         return Array(Set(filtered.compactMap(\.serviceName))).sorted()

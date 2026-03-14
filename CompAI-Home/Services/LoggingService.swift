@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 actor LoggingService: LoggingServiceProtocol {
-    /// Ring buffer: append to end (O(1)), trim from start when full, reverse on read.
+    /// Stored newest-first: insert at index 0, trim from end when full.
     private var logs: [StateChangeLog] = []
     private let storage: any StorageServiceProtocol
     private let fileURL: URL
@@ -25,7 +25,7 @@ actor LoggingService: LoggingServiceProtocol {
            var saved = try? JSONDecoder.iso8601.decode([StateChangeLog].self, from: data) {
             // Trim to current cache size in case user reduced it
             if saved.count > limit {
-                saved = Array(saved.suffix(limit))
+                saved = Array(saved.prefix(limit))
             }
             self.logs = saved
         }
@@ -36,18 +36,18 @@ actor LoggingService: LoggingServiceProtocol {
     }
 
     /// Updates an existing log entry by ID (e.g., when a running automation completes).
-    /// If not found, appends as a new entry.
+    /// Moves the entry to the top (newest position) since it's the latest update.
+    /// If not found, inserts as a new entry at the top.
     func updateEntry(_ entry: StateChangeLog) {
         let truncated = entry.truncatingLargeFields()
         if let index = logs.firstIndex(where: { $0.id == truncated.id }) {
-            logs[index] = truncated
-        } else {
-            logs.append(truncated)
-            if logs.count > maxLogs {
-                logs.removeFirst()
-            }
+            logs.remove(at: index)
         }
-        logsSubject.send(logs.reversed())
+        logs.insert(truncated, at: 0)
+        if logs.count > maxLogs {
+            logs.removeLast()
+        }
+        logsSubject.send(logs)
         logUpdatedSubject.send(truncated)
         debouncedSave()
     }
@@ -55,29 +55,29 @@ actor LoggingService: LoggingServiceProtocol {
     /// Removes a log entry by its ID (e.g., to suppress a "running" entry for a skipped automation).
     func removeEntry(id: UUID) {
         logs.removeAll { $0.id == id }
-        logsSubject.send(logs.reversed())
+        logsSubject.send(logs)
         debouncedSave()
     }
 
-    /// O(1) append; trims oldest entry when the buffer is full.
+    /// Inserts newest entry at the front; trims oldest from the end when full.
     private func appendEntry(_ entry: StateChangeLog) {
-        logs.append(entry)
+        logs.insert(entry, at: 0)
         if logs.count > maxLogs {
-            logs.removeFirst()  // O(n) but rare — only when buffer is full
+            logs.removeLast()
         }
-        logsSubject.send(logs.reversed())
+        logsSubject.send(logs)
         logEntrySubject.send(entry)
         debouncedSave()
     }
 
-    /// Returns logs in newest-first order (reversed once on read, not on every insert).
+    /// Returns logs in newest-first order (already stored this way).
     func getLogs() -> [StateChangeLog] {
-        return logs.reversed()
+        return logs
     }
 
     /// Returns automation execution logs for a specific automation, newest-first.
     func getLogs(forAutomationId id: UUID) -> [StateChangeLog] {
-        logs.reversed().filter {
+        logs.filter {
             ($0.category == .automationExecution || $0.category == .automationError) &&
             $0.automationExecution?.automationId == id
         }
@@ -105,7 +105,7 @@ actor LoggingService: LoggingServiceProtocol {
             changed = true
         }
         if changed {
-            logsSubject.send(logs.reversed())
+            logsSubject.send(logs)
             saveNow()
         }
     }
@@ -120,7 +120,7 @@ actor LoggingService: LoggingServiceProtocol {
     /// Clears logs matching any of the given categories.
     func clearLogs(forCategories categories: Set<LogCategory>) {
         logs.removeAll { categories.contains($0.category) }
-        logsSubject.send(logs.reversed())
+        logsSubject.send(logs)
         logsClearedSubject.send()
         debouncedSave()
     }
@@ -131,7 +131,7 @@ actor LoggingService: LoggingServiceProtocol {
             ($0.category == .automationExecution || $0.category == .automationError) &&
             $0.automationExecution?.automationId == id
         }
-        logsSubject.send(logs.reversed())
+        logsSubject.send(logs)
         logsClearedSubject.send()
         debouncedSave()
     }

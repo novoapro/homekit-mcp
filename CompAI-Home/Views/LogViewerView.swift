@@ -256,7 +256,7 @@ struct LogViewerView: View {
                 Divider()
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(viewModel.availableDevices, id: \.self) { device in
                             Button {
                                 if viewModel.selectedDevices.contains(device) {
@@ -335,7 +335,7 @@ struct LogViewerView: View {
                 Divider()
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(viewModel.availableServices, id: \.self) { service in
                             Button {
                                 if viewModel.selectedServices.contains(service) {
