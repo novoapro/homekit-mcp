@@ -134,7 +134,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
             case .guardFailed(let condResults):
                 // Log trigger guard failure using the same mechanism as execution guards
-                if storage.readLogSkippedWorkflows() {
+                if storage.readLoggingEnabled() && storage.readWorkflowLoggingEnabled() && storage.readLogSkippedWorkflows() {
                     let charName = CharacteristicTypes.displayName(for: change.characteristicType)
                     let triggerDesc = "\(change.deviceName) \(charName) changed"
                     var execLog = WorkflowExecutionLog(
@@ -338,7 +338,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         if let conditions = triggerConditions, !conditions.isEmpty {
             let (allPassed, condResults) = await conditionEvaluator.evaluateAll(conditions)
             if !allPassed {
-                if storage.readLogSkippedWorkflows() {
+                if storage.readLoggingEnabled() && storage.readWorkflowLoggingEnabled() && storage.readLogSkippedWorkflows() {
                     var execLog = WorkflowExecutionLog(
                         workflowId: workflow.id,
                         workflowName: workflow.name,
@@ -634,7 +634,7 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 let failedDescriptions = condResults.filter { !$0.passed }.map { $0.conditionDescription }
                 execLog.errorMessage = "Execution guard not met: \(failedDescriptions.joined(separator: "; "))"
                 execLog.completedAt = Date()
-                if storage.readLogSkippedWorkflows() {
+                if storage.readLoggingEnabled() && storage.readWorkflowLoggingEnabled() && storage.readLogSkippedWorkflows() {
                     // Log the skipped execution as a completed entry (never "running")
                     await executionLogService.logEntry(execLog.toStateChangeLog())
                     await workflowStorageService.updateMetadata(
@@ -650,7 +650,9 @@ actor WorkflowEngine: WorkflowEngineProtocol {
 
         // Execution guards passed (or none) — now the workflow is truly running
         executionToWorkflow[execLog.id] = workflow.id
-        await executionLogService.logEntry(execLog.toStateChangeLog())
+        if storage.readLoggingEnabled() && storage.readWorkflowLoggingEnabled() {
+            await executionLogService.logEntry(execLog.toStateChangeLog())
+        }
 
         // Create a reference box so the @Sendable closure can mutate the log
         class LogBox {
@@ -672,7 +674,9 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 // Block not yet in the array — append it so the UI can show it immediately
                 logBox.execLog.blockResults.append(updated)
             }
-            await self.executionLogService.updateEntry(logBox.execLog.toStateChangeLog())
+            if self.storage.readLoggingEnabled() && storage.readWorkflowLoggingEnabled() {
+                await self.executionLogService.updateEntry(logBox.execLog.toStateChangeLog())
+            }
         }
 
         do {
@@ -694,7 +698,9 @@ actor WorkflowEngine: WorkflowEngineProtocol {
                 // but we append it here if it wasn't already in the top-level list.
                 if !logBox.execLog.blockResults.contains(where: { $0.id == result.id }) {
                     logBox.execLog.blockResults.append(result)
-                    await executionLogService.updateEntry(logBox.execLog.toStateChangeLog())
+                    if storage.readLoggingEnabled() && storage.readWorkflowLoggingEnabled() {
+                        await executionLogService.updateEntry(logBox.execLog.toStateChangeLog())
+                    }
                 }
 
                 // Cancellation always stops immediately, regardless of continueOnError
@@ -749,7 +755,9 @@ actor WorkflowEngine: WorkflowEngineProtocol {
         executionToWorkflow.removeValue(forKey: execLog.id)
 
         // Update the existing running log entry with the final result
-        await executionLogService.updateEntry(execLog.toStateChangeLog())
+        if storage.readLoggingEnabled() && storage.readWorkflowLoggingEnabled() {
+            await executionLogService.updateEntry(execLog.toStateChangeLog())
+        }
 
         // Update workflow metadata
         await workflowStorageService.updateMetadata(

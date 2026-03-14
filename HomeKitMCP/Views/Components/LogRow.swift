@@ -2,8 +2,6 @@ import SwiftUI
 
 struct LogRow: View {
     let log: StateChangeLog
-    let detailedLogsEnabled: Bool
-
     @State private var isExpanded = false
 
     private var hasDetailedData: Bool {
@@ -54,7 +52,7 @@ struct LogRow: View {
                 headerRow
                 contentSection
 
-                if detailedLogsEnabled && hasDetailedData && isExpanded {
+                if hasDetailedData && isExpanded {
                     detailSection
                 }
             }
@@ -66,7 +64,7 @@ struct LogRow: View {
                 .frame(minWidth: 50)
 
             // Column 4: Chevron
-            if detailedLogsEnabled && hasDetailedData {
+            if hasDetailedData {
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundColor(Color(.systemGray2))
@@ -77,7 +75,7 @@ struct LogRow: View {
             }
         }
         .padding(.vertical, 8)
-        .modifier(ExpandableTapModifier(isExpandable: detailedLogsEnabled && hasDetailedData, isExpanded: $isExpanded))
+        .modifier(ExpandableTapModifier(isExpandable: hasDetailedData, isExpanded: $isExpanded))
         .contextMenu {
             Button {
                 UIPasteboard.general.string = "\(log.deviceName) — \(log.characteristicType) — \(log.timestamp)"
@@ -614,7 +612,7 @@ struct LogRow: View {
 #Preview {
     List {
         Section(header: Text("Device State Change")) {
-            LogRow(log: PreviewData.sampleLogs[0], detailedLogsEnabled: false)
+            LogRow(log: PreviewData.sampleLogs[0])
                 .listRowBackground(Theme.contentBackground)
             NavigationLink {
                 Text("Workflow Detail View")
@@ -623,15 +621,15 @@ struct LogRow: View {
             }
             .buttonStyle(.plain)
             .listRowBackground(Theme.contentBackground)
-            LogRow(log: PreviewData.sampleLogs[1], detailedLogsEnabled: true)
+            LogRow(log: PreviewData.sampleLogs[1])
                 .listRowBackground(Theme.contentBackground)
-            LogRow(log: PreviewData.sampleLogs[2], detailedLogsEnabled: true)
+            LogRow(log: PreviewData.sampleLogs[2])
                 .listRowBackground(Theme.contentBackground)
-            LogRow(log: PreviewData.sampleLogs[3], detailedLogsEnabled: false)
+            LogRow(log: PreviewData.sampleLogs[3])
                 .listRowBackground(Theme.contentBackground)
-            LogRow(log: PreviewData.sampleLogs[4], detailedLogsEnabled: false)
+            LogRow(log: PreviewData.sampleLogs[4])
                 .listRowBackground(Theme.contentBackground)
-            LogRow(log: PreviewData.sampleLogs[5], detailedLogsEnabled: false)
+            LogRow(log: PreviewData.sampleLogs[5])
                 .listRowBackground(Theme.contentBackground)
 
             NavigationLink {

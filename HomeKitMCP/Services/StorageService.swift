@@ -63,8 +63,29 @@ class StorageService: ObservableObject, StorageServiceProtocol {
     @Published var useServiceTypeAsName: Bool {
         didSet { defaults.set(useServiceTypeAsName, forKey: Keys.useServiceTypeAsName) }
     }
-    @Published var detailedLogsEnabled: Bool {
-        didSet { defaults.set(detailedLogsEnabled, forKey: Keys.detailedLogsEnabled) }
+    @Published var loggingEnabled: Bool {
+        didSet { defaults.set(loggingEnabled, forKey: Keys.loggingEnabled) }
+    }
+    @Published var mcpLoggingEnabled: Bool {
+        didSet { defaults.set(mcpLoggingEnabled, forKey: Keys.mcpLoggingEnabled) }
+    }
+    @Published var restLoggingEnabled: Bool {
+        didSet { defaults.set(restLoggingEnabled, forKey: Keys.restLoggingEnabled) }
+    }
+    @Published var webhookLoggingEnabled: Bool {
+        didSet { defaults.set(webhookLoggingEnabled, forKey: Keys.webhookLoggingEnabled) }
+    }
+    @Published var workflowLoggingEnabled: Bool {
+        didSet { defaults.set(workflowLoggingEnabled, forKey: Keys.workflowLoggingEnabled) }
+    }
+    @Published var mcpDetailedLogsEnabled: Bool {
+        didSet { defaults.set(mcpDetailedLogsEnabled, forKey: Keys.mcpDetailedLogsEnabled) }
+    }
+    @Published var restDetailedLogsEnabled: Bool {
+        didSet { defaults.set(restDetailedLogsEnabled, forKey: Keys.restDetailedLogsEnabled) }
+    }
+    @Published var webhookDetailedLogsEnabled: Bool {
+        didSet { defaults.set(webhookDetailedLogsEnabled, forKey: Keys.webhookDetailedLogsEnabled) }
     }
     @Published var aiEnabled: Bool {
         didSet { defaults.set(aiEnabled, forKey: Keys.aiEnabled) }
@@ -165,7 +186,14 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             Keys.restApiEnabled: true,
             Keys.hideRoomNameInTheApp: true,
             Keys.useServiceTypeAsName: false,
-            Keys.detailedLogsEnabled: false,
+            Keys.loggingEnabled: true,
+            Keys.mcpLoggingEnabled: true,
+            Keys.restLoggingEnabled: true,
+            Keys.webhookLoggingEnabled: true,
+            Keys.workflowLoggingEnabled: true,
+            Keys.mcpDetailedLogsEnabled: false,
+            Keys.restDetailedLogsEnabled: false,
+            Keys.webhookDetailedLogsEnabled: false,
             Keys.aiEnabled: false,
             Keys.aiProvider: AIProvider.claude.rawValue,
             Keys.aiModelId: "",
@@ -203,6 +231,22 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             defaults.removeObject(forKey: Keys.hideSkippedWorkflowLogs)
         }
 
+        // Migrate detailedLogsEnabled → per-category detailed toggles
+        let legacyDetailedKey = "detailedLogsEnabled"
+        if defaults.object(forKey: legacyDetailedKey) != nil {
+            let oldValue = defaults.bool(forKey: legacyDetailedKey)
+            if defaults.object(forKey: Keys.mcpDetailedLogsEnabled) == nil {
+                defaults.set(oldValue, forKey: Keys.mcpDetailedLogsEnabled)
+            }
+            if defaults.object(forKey: Keys.restDetailedLogsEnabled) == nil {
+                defaults.set(oldValue, forKey: Keys.restDetailedLogsEnabled)
+            }
+            if defaults.object(forKey: Keys.webhookDetailedLogsEnabled) == nil {
+                defaults.set(oldValue, forKey: Keys.webhookDetailedLogsEnabled)
+            }
+            defaults.removeObject(forKey: legacyDetailedKey)
+        }
+
         self.webhookURL = keychainService.read(key: KeychainService.Keys.webhookURL)
         self.mcpServerPort = defaults.integer(forKey: Keys.mcpServerPort)
         self.webhookEnabled = defaults.bool(forKey: Keys.webhookEnabled)
@@ -211,7 +255,14 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         self.restApiEnabled = defaults.bool(forKey: Keys.restApiEnabled)
         self.hideRoomNameInTheApp = defaults.bool(forKey: Keys.hideRoomNameInTheApp)
         self.useServiceTypeAsName = defaults.bool(forKey: Keys.useServiceTypeAsName)
-        self.detailedLogsEnabled = defaults.bool(forKey: Keys.detailedLogsEnabled)
+        self.loggingEnabled = defaults.bool(forKey: Keys.loggingEnabled)
+        self.mcpLoggingEnabled = defaults.bool(forKey: Keys.mcpLoggingEnabled)
+        self.restLoggingEnabled = defaults.bool(forKey: Keys.restLoggingEnabled)
+        self.webhookLoggingEnabled = defaults.bool(forKey: Keys.webhookLoggingEnabled)
+        self.workflowLoggingEnabled = defaults.bool(forKey: Keys.workflowLoggingEnabled)
+        self.mcpDetailedLogsEnabled = defaults.bool(forKey: Keys.mcpDetailedLogsEnabled)
+        self.restDetailedLogsEnabled = defaults.bool(forKey: Keys.restDetailedLogsEnabled)
+        self.webhookDetailedLogsEnabled = defaults.bool(forKey: Keys.webhookDetailedLogsEnabled)
         self.aiEnabled = defaults.bool(forKey: Keys.aiEnabled)
         self.aiProvider = AIProvider(rawValue: defaults.string(forKey: Keys.aiProvider) ?? "") ?? .claude
         self.aiModelId = defaults.string(forKey: Keys.aiModelId) ?? ""
@@ -278,8 +329,36 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         UserDefaults.standard.bool(forKey: Keys.webhookEnabled)
     }
 
-    nonisolated func readDetailedLogsEnabled() -> Bool {
-        UserDefaults.standard.bool(forKey: Keys.detailedLogsEnabled)
+    nonisolated func readLoggingEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.loggingEnabled)
+    }
+
+    nonisolated func readMcpLoggingEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.mcpLoggingEnabled)
+    }
+
+    nonisolated func readRestLoggingEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.restLoggingEnabled)
+    }
+
+    nonisolated func readWebhookLoggingEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.webhookLoggingEnabled)
+    }
+
+    nonisolated func readWorkflowLoggingEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.workflowLoggingEnabled)
+    }
+
+    nonisolated func readMcpDetailedLogsEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.mcpDetailedLogsEnabled)
+    }
+
+    nonisolated func readRestDetailedLogsEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.restDetailedLogsEnabled)
+    }
+
+    nonisolated func readWebhookDetailedLogsEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.webhookDetailedLogsEnabled)
     }
 
     nonisolated func readAIEnabled() -> Bool {
@@ -400,7 +479,14 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         static let restApiEnabled = "restApiEnabled"
         static let hideRoomNameInTheApp = "hideRoomNameInTheApp"
         static let useServiceTypeAsName = "useServiceTypeAsName"
-        static let detailedLogsEnabled = "detailedLogsEnabled"
+        static let loggingEnabled = "loggingEnabled"
+        static let mcpLoggingEnabled = "mcpLoggingEnabled"
+        static let restLoggingEnabled = "restLoggingEnabled"
+        static let webhookLoggingEnabled = "webhookLoggingEnabled"
+        static let workflowLoggingEnabled = "workflowLoggingEnabled"
+        static let mcpDetailedLogsEnabled = "mcpDetailedLogsEnabled"
+        static let restDetailedLogsEnabled = "restDetailedLogsEnabled"
+        static let webhookDetailedLogsEnabled = "webhookDetailedLogsEnabled"
         static let aiEnabled = "aiEnabled"
         static let aiProvider = "aiProvider"
         static let aiModelId = "aiModelId"

@@ -1472,10 +1472,12 @@ final class MCPRequestHandler: Sendable {
     private func logMCPCall(method: String, request: String, response: String,
                             fullRequest: JSONRPCRequest? = nil,
                             fullResponse: JSONRPCResponse? = nil) async {
+        guard storage.readLoggingEnabled(), storage.readMcpLoggingEnabled() else { return }
+
         var detailedReq: String?
         var detailedResp: String?
 
-        if storage.readDetailedLogsEnabled() {
+        if storage.readMcpDetailedLogsEnabled() {
             if let fullRequest, let data = try? JSONEncoder.iso8601.encode(fullRequest) {
                 detailedReq = String(data: data, encoding: .utf8)
             }

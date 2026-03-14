@@ -1542,10 +1542,11 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     private func logRESTCall(method: String, path: String, statusCode: UInt,
                              resultSummary: String, req: Request? = nil,
                              responseBody: String? = nil) {
+        guard storage.readLoggingEnabled(), storage.readRestLoggingEnabled() else { return }
         Task {
             var detailedReq: String?
             var detailedResp: String?
-            if storage.readDetailedLogsEnabled() {
+            if storage.readRestDetailedLogsEnabled() {
                 if let req {
                     let clientIP = req.headers.first(name: "X-Forwarded-For") ?? req.remoteAddress?.ipAddress ?? "unknown"
                     let userAgent = req.headers.first(name: .userAgent) ?? "unknown"

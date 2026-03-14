@@ -53,11 +53,11 @@ struct LogViewerView: View {
                                     NavigationLink {
                                         OrphanedDevicesView(registryService: registry, homeKitManager: hkManager, workflowStorageService: wfStorage)
                                     } label: {
-                                        LogRow(log: log, detailedLogsEnabled: viewModel.detailedLogsEnabled)
+                                        LogRow(log: log)
                                     }
                                     .listRowBackground(Theme.contentBackground)
                                 } else {
-                                    LogRow(log: log, detailedLogsEnabled: viewModel.detailedLogsEnabled)
+                                    LogRow(log: log)
                                         .listRowBackground(Theme.contentBackground)
                                 }
                             }

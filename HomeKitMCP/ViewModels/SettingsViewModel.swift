@@ -31,10 +31,29 @@ class SettingsViewModel: ObservableObject {
             storage.useServiceTypeAsName = useServiceTypeAsName
         }
     }
-    @Published var detailedLogsEnabled: Bool {
-        didSet {
-            storage.detailedLogsEnabled = detailedLogsEnabled
-        }
+    @Published var loggingEnabled: Bool {
+        didSet { storage.loggingEnabled = loggingEnabled }
+    }
+    @Published var mcpLoggingEnabled: Bool {
+        didSet { storage.mcpLoggingEnabled = mcpLoggingEnabled }
+    }
+    @Published var restLoggingEnabled: Bool {
+        didSet { storage.restLoggingEnabled = restLoggingEnabled }
+    }
+    @Published var webhookLoggingEnabled: Bool {
+        didSet { storage.webhookLoggingEnabled = webhookLoggingEnabled }
+    }
+    @Published var workflowLoggingEnabled: Bool {
+        didSet { storage.workflowLoggingEnabled = workflowLoggingEnabled }
+    }
+    @Published var mcpDetailedLogsEnabled: Bool {
+        didSet { storage.mcpDetailedLogsEnabled = mcpDetailedLogsEnabled }
+    }
+    @Published var restDetailedLogsEnabled: Bool {
+        didSet { storage.restDetailedLogsEnabled = restDetailedLogsEnabled }
+    }
+    @Published var webhookDetailedLogsEnabled: Bool {
+        didSet { storage.webhookDetailedLogsEnabled = webhookDetailedLogsEnabled }
     }
     @Published var pollingEnabled: Bool {
         didSet { storage.pollingEnabled = pollingEnabled }
@@ -174,7 +193,14 @@ class SettingsViewModel: ObservableObject {
         self.webhookEnabled = storage.webhookEnabled
         self.hideRoomNameInTheApp = storage.hideRoomNameInTheApp
         self.useServiceTypeAsName = storage.useServiceTypeAsName
-        self.detailedLogsEnabled = storage.detailedLogsEnabled
+        self.loggingEnabled = storage.loggingEnabled
+        self.mcpLoggingEnabled = storage.mcpLoggingEnabled
+        self.restLoggingEnabled = storage.restLoggingEnabled
+        self.webhookLoggingEnabled = storage.webhookLoggingEnabled
+        self.workflowLoggingEnabled = storage.workflowLoggingEnabled
+        self.mcpDetailedLogsEnabled = storage.mcpDetailedLogsEnabled
+        self.restDetailedLogsEnabled = storage.restDetailedLogsEnabled
+        self.webhookDetailedLogsEnabled = storage.webhookDetailedLogsEnabled
         self.pollingEnabled = storage.pollingEnabled
         self.pollingInterval = storage.pollingInterval
         self.workflowsEnabled = storage.workflowsEnabled

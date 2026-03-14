@@ -78,31 +78,8 @@ actor WebhookService: WebhookServiceProtocol {
 
             statusSubject.send(.lastSuccess(date: Date()))
 
-            let logEntry = StateChangeLog.webhookCall(
-                deviceId: payload.deviceId,
-                deviceName: deviceName,
-                roomName: roomName,
-                serviceId: payload.serviceId,
-                serviceName: payload.serviceName,
-                characteristicType: payload.characteristicType,
-                oldValue: payload.oldValue,
-                newValue: payload.newValue,
-                unit: CharacteristicTypes.unitForCharacteristicType(payload.characteristicType),
-                summary: "POST \(deviceName) (\(payload.characteristicName))",
-                result: "HTTP \(httpResponse.statusCode) OK",
-                detailedRequest: detailedPayloadJSON(payload)
-            )
-            await loggingService.logEntry(logEntry)
-        } catch {
-            if attempt < maxRetries {
-                let delay = pow(2.0, Double(attempt))
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                await send(to: url, payload: payload, attempt: attempt + 1, deviceName: deviceName, roomName: roomName)
-            } else {
-                let errorDesc = error.localizedDescription
-                statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
-
-                let logEntry = StateChangeLog.webhookError(
+            if storage.readLoggingEnabled() && storage.readWebhookLoggingEnabled() {
+                let logEntry = StateChangeLog.webhookCall(
                     deviceId: payload.deviceId,
                     deviceName: deviceName,
                     roomName: roomName,
@@ -113,11 +90,38 @@ actor WebhookService: WebhookServiceProtocol {
                     newValue: payload.newValue,
                     unit: CharacteristicTypes.unitForCharacteristicType(payload.characteristicType),
                     summary: "POST \(deviceName) (\(payload.characteristicName))",
-                    result: errorDesc,
-                    errorDetails: "Failed after \(maxRetries) retries: \(errorDesc)",
+                    result: "HTTP \(httpResponse.statusCode) OK",
                     detailedRequest: detailedPayloadJSON(payload)
                 )
                 await loggingService.logEntry(logEntry)
+            }
+        } catch {
+            if attempt < maxRetries {
+                let delay = pow(2.0, Double(attempt))
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                await send(to: url, payload: payload, attempt: attempt + 1, deviceName: deviceName, roomName: roomName)
+            } else {
+                let errorDesc = error.localizedDescription
+                statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
+
+                if storage.readLoggingEnabled() && storage.readWebhookLoggingEnabled() {
+                    let logEntry = StateChangeLog.webhookError(
+                        deviceId: payload.deviceId,
+                        deviceName: deviceName,
+                        roomName: roomName,
+                        serviceId: payload.serviceId,
+                        serviceName: payload.serviceName,
+                        characteristicType: payload.characteristicType,
+                        oldValue: payload.oldValue,
+                        newValue: payload.newValue,
+                        unit: CharacteristicTypes.unitForCharacteristicType(payload.characteristicType),
+                        summary: "POST \(deviceName) (\(payload.characteristicName))",
+                        result: errorDesc,
+                        errorDetails: "Failed after \(maxRetries) retries: \(errorDesc)",
+                        detailedRequest: detailedPayloadJSON(payload)
+                    )
+                    await loggingService.logEntry(logEntry)
+                }
             }
         }
     }
@@ -133,6 +137,42 @@ actor WebhookService: WebhookServiceProtocol {
                 let errorDesc = "HTTP \(statusCode)"
                 statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
 
+                if storage.readLoggingEnabled() && storage.readWebhookLoggingEnabled() {
+                    let logEntry = StateChangeLog.webhookError(
+                        deviceId: "test",
+                        deviceName: "Test Device",
+                        characteristicType: "test",
+                        summary: "POST Test Device (Test)",
+                        result: errorDesc,
+                        errorDetails: "Test webhook failed: \(errorDesc)",
+                        detailedRequest: detailedPayloadJSON(payload)
+                    )
+                    await loggingService.logEntry(logEntry)
+                }
+
+                return false
+            }
+
+            statusSubject.send(.lastSuccess(date: Date()))
+
+            if storage.readLoggingEnabled() && storage.readWebhookLoggingEnabled() {
+                let logEntry = StateChangeLog.webhookCall(
+                    deviceId: "test",
+                    deviceName: "Test Device",
+                    characteristicType: "test",
+                    summary: "POST Test Device (Test)",
+                    result: "HTTP \(httpResponse.statusCode) OK",
+                    detailedRequest: detailedPayloadJSON(payload)
+                )
+                await loggingService.logEntry(logEntry)
+            }
+
+            return true
+        } catch {
+            let errorDesc = error.localizedDescription
+            statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
+
+            if storage.readLoggingEnabled() && storage.readWebhookLoggingEnabled() {
                 let logEntry = StateChangeLog.webhookError(
                     deviceId: "test",
                     deviceName: "Test Device",
@@ -143,45 +183,15 @@ actor WebhookService: WebhookServiceProtocol {
                     detailedRequest: detailedPayloadJSON(payload)
                 )
                 await loggingService.logEntry(logEntry)
-
-                return false
             }
-
-            statusSubject.send(.lastSuccess(date: Date()))
-
-            let logEntry = StateChangeLog.webhookCall(
-                deviceId: "test",
-                deviceName: "Test Device",
-                characteristicType: "test",
-                summary: "POST Test Device (Test)",
-                result: "HTTP \(httpResponse.statusCode) OK",
-                detailedRequest: detailedPayloadJSON(payload)
-            )
-            await loggingService.logEntry(logEntry)
-
-            return true
-        } catch {
-            let errorDesc = error.localizedDescription
-            statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
-
-            let logEntry = StateChangeLog.webhookError(
-                deviceId: "test",
-                deviceName: "Test Device",
-                characteristicType: "test",
-                summary: "POST Test Device (Test)",
-                result: errorDesc,
-                errorDetails: "Test webhook failed: \(errorDesc)",
-                detailedRequest: detailedPayloadJSON(payload)
-            )
-            await loggingService.logEntry(logEntry)
 
             return false
         }
     }
 
-    /// Returns JSON-encoded payload string only when detailed logs are enabled.
+    /// Returns JSON-encoded payload string only when detailed webhook logs are enabled.
     private func detailedPayloadJSON(_ payload: WebhookPayload) -> String? {
-        guard storage.readDetailedLogsEnabled(),
+        guard storage.readWebhookDetailedLogsEnabled(),
               let data = try? JSONEncoder.iso8601.encode(payload) else { return nil }
         return String(data: data, encoding: .utf8)
     }

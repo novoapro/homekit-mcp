@@ -24,7 +24,15 @@ struct BackupSettings: Codable {
     let webhookEnabled: Bool
     let mcpServerEnabled: Bool
     let hideRoomNameInTheApp: Bool
-    let detailedLogsEnabled: Bool
+    let loggingEnabled: Bool?
+    let mcpLoggingEnabled: Bool?
+    let restLoggingEnabled: Bool?
+    let webhookLoggingEnabled: Bool?
+    let workflowLoggingEnabled: Bool?
+    let mcpDetailedLogsEnabled: Bool?
+    let restDetailedLogsEnabled: Bool?
+    let webhookDetailedLogsEnabled: Bool?
+    let detailedLogsEnabled: Bool?  // legacy, for backward-compatible restore
     let aiEnabled: Bool
     let aiProvider: String
     let aiModelId: String

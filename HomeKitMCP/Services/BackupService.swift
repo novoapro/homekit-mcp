@@ -41,7 +41,15 @@ class BackupService: ObservableObject, BackupServiceProtocol {
             webhookEnabled: storage.webhookEnabled,
             mcpServerEnabled: storage.mcpServerEnabled,
             hideRoomNameInTheApp: storage.hideRoomNameInTheApp,
-            detailedLogsEnabled: storage.detailedLogsEnabled,
+            loggingEnabled: storage.loggingEnabled,
+            mcpLoggingEnabled: storage.mcpLoggingEnabled,
+            restLoggingEnabled: storage.restLoggingEnabled,
+            webhookLoggingEnabled: storage.webhookLoggingEnabled,
+            workflowLoggingEnabled: storage.workflowLoggingEnabled,
+            mcpDetailedLogsEnabled: storage.mcpDetailedLogsEnabled,
+            restDetailedLogsEnabled: storage.restDetailedLogsEnabled,
+            webhookDetailedLogsEnabled: storage.webhookDetailedLogsEnabled,
+            detailedLogsEnabled: nil,
             aiEnabled: storage.aiEnabled,
             aiProvider: storage.aiProvider.rawValue,
             aiModelId: storage.aiModelId,
@@ -116,7 +124,16 @@ class BackupService: ObservableObject, BackupServiceProtocol {
         storage.webhookEnabled = s.webhookEnabled
         storage.mcpServerEnabled = s.mcpServerEnabled
         storage.hideRoomNameInTheApp = s.hideRoomNameInTheApp
-        storage.detailedLogsEnabled = s.detailedLogsEnabled
+        // Restore per-category logging settings (with legacy fallback)
+        let legacyDetailed = s.detailedLogsEnabled ?? false
+        storage.loggingEnabled = s.loggingEnabled ?? true
+        storage.mcpLoggingEnabled = s.mcpLoggingEnabled ?? true
+        storage.restLoggingEnabled = s.restLoggingEnabled ?? true
+        storage.webhookLoggingEnabled = s.webhookLoggingEnabled ?? true
+        storage.workflowLoggingEnabled = s.workflowLoggingEnabled ?? true
+        storage.mcpDetailedLogsEnabled = s.mcpDetailedLogsEnabled ?? legacyDetailed
+        storage.restDetailedLogsEnabled = s.restDetailedLogsEnabled ?? legacyDetailed
+        storage.webhookDetailedLogsEnabled = s.webhookDetailedLogsEnabled ?? legacyDetailed
         storage.aiEnabled = s.aiEnabled
         storage.aiProvider = AIProvider(rawValue: s.aiProvider) ?? .claude
         storage.aiModelId = s.aiModelId

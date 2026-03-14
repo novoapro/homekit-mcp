@@ -511,7 +511,14 @@ class MockStorageService: StorageServiceProtocol {
     func readLogCacheSize() -> Int { readLogCacheSizeResult }
     func readWebhookURL() -> String? { nil }
     func readWebhookEnabled() -> Bool { false }
-    func readDetailedLogsEnabled() -> Bool { false }
+    func readLoggingEnabled() -> Bool { true }
+    func readMcpLoggingEnabled() -> Bool { true }
+    func readRestLoggingEnabled() -> Bool { true }
+    func readWebhookLoggingEnabled() -> Bool { true }
+    func readWorkflowLoggingEnabled() -> Bool { true }
+    func readMcpDetailedLogsEnabled() -> Bool { false }
+    func readRestDetailedLogsEnabled() -> Bool { false }
+    func readWebhookDetailedLogsEnabled() -> Bool { false }
     func readWebhookPrivateIPAllowlist() -> [String] { [] }
     func readSunEventLatitude() -> Double { 0 }
     func readSunEventLongitude() -> Double { 0 }

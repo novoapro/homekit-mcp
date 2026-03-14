@@ -11,7 +11,14 @@ protocol StorageServiceProtocol: AnyObject {
     var mcpProtocolEnabled: Bool { get set }
     var restApiEnabled: Bool { get set }
     var hideRoomNameInTheApp: Bool { get set }
-    var detailedLogsEnabled: Bool { get set }
+    var loggingEnabled: Bool { get set }
+    var mcpLoggingEnabled: Bool { get set }
+    var restLoggingEnabled: Bool { get set }
+    var webhookLoggingEnabled: Bool { get set }
+    var workflowLoggingEnabled: Bool { get set }
+    var mcpDetailedLogsEnabled: Bool { get set }
+    var restDetailedLogsEnabled: Bool { get set }
+    var webhookDetailedLogsEnabled: Bool { get set }
     var aiEnabled: Bool { get set }
     var aiProvider: AIProvider { get set }
     var aiModelId: String { get set }
@@ -43,7 +50,14 @@ protocol StorageServiceProtocol: AnyObject {
     nonisolated func readHideRoomName() -> Bool
     nonisolated func readWebhookURL() -> String?
     nonisolated func readWebhookEnabled() -> Bool
-    nonisolated func readDetailedLogsEnabled() -> Bool
+    nonisolated func readLoggingEnabled() -> Bool
+    nonisolated func readMcpLoggingEnabled() -> Bool
+    nonisolated func readRestLoggingEnabled() -> Bool
+    nonisolated func readWebhookLoggingEnabled() -> Bool
+    nonisolated func readWorkflowLoggingEnabled() -> Bool
+    nonisolated func readMcpDetailedLogsEnabled() -> Bool
+    nonisolated func readRestDetailedLogsEnabled() -> Bool
+    nonisolated func readWebhookDetailedLogsEnabled() -> Bool
     nonisolated func readAIEnabled() -> Bool
     nonisolated func readAIProvider() -> AIProvider
     nonisolated func readAIModelId() -> String

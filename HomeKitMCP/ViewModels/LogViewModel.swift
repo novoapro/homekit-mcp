@@ -88,10 +88,6 @@ class LogViewModel: ObservableObject {
     private let storage: StorageService
     private var cancellables = Set<AnyCancellable>()
 
-    var detailedLogsEnabled: Bool {
-        storage.readDetailedLogsEnabled()
-    }
-
     init(loggingService: LoggingService, storage: StorageService) {
         self.loggingService = loggingService
         self.storage = storage

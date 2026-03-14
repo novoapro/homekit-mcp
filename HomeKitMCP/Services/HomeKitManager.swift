@@ -630,7 +630,7 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
             )
 
             if isObserved {
-                if self.storage.readDeviceStateLoggingEnabled() {
+                if self.storage.readLoggingEnabled() && self.storage.readDeviceStateLoggingEnabled() {
                     await self.loggingService.logEntry(logEntry)
                 }
 
@@ -1051,7 +1051,7 @@ extension HomeKitManager: HMAccessoryDelegate {
             )
 
             if isObserved {
-                if self.storage.readDeviceStateLoggingEnabled() {
+                if self.storage.readLoggingEnabled() && self.storage.readDeviceStateLoggingEnabled() {
                     await loggingService.logEntry(logEntry)
                 }
 
