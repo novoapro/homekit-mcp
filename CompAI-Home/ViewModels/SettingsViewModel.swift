@@ -164,7 +164,10 @@ class SettingsViewModel: ObservableObject {
     let deviceRegistryService: DeviceRegistryService
     let homeKitManager: HomeKitManager
     let automationStorageService: AutomationStorageService
+    let subscriptionService: SubscriptionService
     private var cancellables = Set<AnyCancellable>()
+
+    var isProUser: Bool { subscriptionService.currentTier == .pro }
 
     init(
         storage: StorageService,
@@ -177,7 +180,8 @@ class SettingsViewModel: ObservableObject {
         appleSignInService: AppleSignInService,
         deviceRegistryService: DeviceRegistryService,
         homeKitManager: HomeKitManager,
-        automationStorageService: AutomationStorageService
+        automationStorageService: AutomationStorageService,
+        subscriptionService: SubscriptionService
     ) {
         self.storage = storage
         self.webhookService = webhookService
@@ -190,6 +194,7 @@ class SettingsViewModel: ObservableObject {
         self.deviceRegistryService = deviceRegistryService
         self.homeKitManager = homeKitManager
         self.automationStorageService = automationStorageService
+        self.subscriptionService = subscriptionService
         self.webhookEnabled = storage.webhookEnabled
         self.hideRoomNameInTheApp = storage.hideRoomNameInTheApp
         self.useServiceTypeAsName = storage.useServiceTypeAsName

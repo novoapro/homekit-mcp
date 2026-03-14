@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { NavLink } from 'react-router';
 import { Icon } from './Icon';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useApi } from '@/hooks/useApi';
 import type { SunEvents } from '@/lib/api';
 
@@ -20,6 +21,7 @@ function formatSunTime(isoString: string | null): string {
 
 export function Sidebar({ isOpen, collapsed, onClose, onToggleCollapse }: SidebarProps) {
   const { isDarkMode, toggle: toggleTheme } = useTheme();
+  const { isPro } = useSubscription();
   const api = useApi();
   const [sunEvents, setSunEvents] = useState<SunEvents | null>(null);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -121,7 +123,7 @@ export function Sidebar({ isOpen, collapsed, onClose, onToggleCollapse }: Sideba
           </NavLink>
           <NavLink to="/automations" className={navItemClass} onClick={handleNavClick}>
             <Icon name="play-circle-fill" size={20} />
-            <span className="sidebar-nav-label">Automation+</span>
+            <span className="sidebar-nav-label">Automation+{!isPro && <span className="pro-badge">PRO</span>}</span>
           </NavLink>
           <NavLink to="/logs" className={navItemClass} onClick={handleNavClick}>
             <Icon name="bolt-circle-fill" size={20} />

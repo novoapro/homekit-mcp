@@ -531,12 +531,13 @@ enum PreviewData {
         let backupService = BackupService(storage: storage, keychainService: keychainService, automationStorageService: automationStorage, homeKitManager: manager, loggingService: loggingService, deviceRegistryService: registryService)
         let cloudBackupService = CloudBackupService(backupService: backupService, storage: storage, automationStorageService: automationStorage)
         let appleSignInService = AppleSignInService(keychainService: keychainService)
+        let subscriptionService = SubscriptionService()
         return SettingsViewModel(
             storage: storage, webhookService: webhookService, mcpServer: mcpServer,
             keychainService: keychainService, aiAutomationService: aiAutomationService,
             backupService: backupService, cloudBackupService: cloudBackupService, appleSignInService: appleSignInService,
             deviceRegistryService: registryService, homeKitManager: manager,
-            automationStorageService: automationStorage
+            automationStorageService: automationStorage, subscriptionService: subscriptionService
         )
     }
 

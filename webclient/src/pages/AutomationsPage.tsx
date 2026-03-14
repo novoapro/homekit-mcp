@@ -10,6 +10,8 @@ import { AutomationCard } from '@/features/automations/AutomationCard';
 import { useApi } from '@/hooks/useApi';
 import { useConfig } from '@/contexts/ConfigContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
+import { SubscriptionRequiredError } from '@/lib/api';
 import type { Automation } from '@/types/automation-log';
 import './AutomationsPage.css';
 
@@ -17,11 +19,13 @@ export function AutomationsPage() {
   const api = useApi();
   const ws = useWebSocket();
   const { config } = useConfig();
+  const { isPro } = useSubscription();
   const navigate = useNavigate();
 
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [requiresSubscription, setRequiresSubscription] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   useSetTopBar('Automation+', automations.length > 0 ? automations.length : null, isLoading);
 
@@ -36,7 +40,11 @@ export function AutomationsPage() {
       const wfs = await api.getAutomations();
       setAutomations(wfs);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load automations');
+      if (err instanceof SubscriptionRequiredError) {
+        setRequiresSubscription(true);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load automations');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -197,6 +205,44 @@ export function AutomationsPage() {
   }, [selectedIds, api, exitSelectionMode, loadAutomations]);
 
   const selectedCount = selectedIds.size;
+
+  if (requiresSubscription || (!isPro && !isLoading && !error)) {
+    return (
+      <div className="auto-list-page">
+        <div className="auto-page-header">
+          <h1 className="auto-page-title">Automations</h1>
+        </div>
+        <div style={{ maxWidth: 500, margin: '60px auto', textAlign: 'center', padding: '0 20px' }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 56, height: 56, borderRadius: 14,
+            backgroundColor: 'rgba(255, 204, 0, 0.15)', marginBottom: 16,
+          }}>
+            <Icon name="crown-fill" size={28} style={{ color: '#FFCC00' }} />
+          </div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 8px' }}>
+            Automations require Pro
+          </h2>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 20px', lineHeight: 1.5 }}>
+            Create powerful automations with triggers, conditions, and actions.
+            Upgrade to Pro in the CompAI - Home macOS app.
+          </p>
+          <a
+            href="/upgrade"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '10px 24px', borderRadius: 10,
+              background: 'rgba(255, 204, 0, 0.15)', color: '#FFCC00',
+              fontWeight: 600, fontSize: 14, textDecoration: 'none',
+            }}
+          >
+            <Icon name="crown-fill" size={16} />
+            Learn More
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auto-list-page">

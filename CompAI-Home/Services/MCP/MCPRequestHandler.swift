@@ -11,10 +11,12 @@ final class MCPRequestHandler: Sendable {
     private let automationEngine: AutomationEngine
     private let registry: DeviceRegistryService?
     private let aiAutomationService: AIAutomationService?
+    private let subscriptionService: SubscriptionService?
 
     init(homeKitManager: HomeKitManager, loggingService: LoggingService, storage: StorageService,
          automationStorageService: AutomationStorageService, automationEngine: AutomationEngine,
-         registry: DeviceRegistryService? = nil, aiAutomationService: AIAutomationService? = nil) {
+         registry: DeviceRegistryService? = nil, aiAutomationService: AIAutomationService? = nil,
+         subscriptionService: SubscriptionService? = nil) {
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
         self.storage = storage
@@ -22,6 +24,7 @@ final class MCPRequestHandler: Sendable {
         self.automationEngine = automationEngine
         self.registry = registry
         self.aiAutomationService = aiAutomationService
+        self.subscriptionService = subscriptionService
     }
 
     func handle(_ request: JSONRPCRequest) async -> JSONRPCResponse {
@@ -244,6 +247,16 @@ final class MCPRequestHandler: Sendable {
         if Self.automationToolNames.contains(toolName) && !storage.readAutomationsEnabled() {
             return toolResult(
                 text: "Automations are disabled. Enable them in Settings to use automation tools.",
+                isError: true,
+                id: id
+            )
+        }
+
+        // Block automation tools when Pro subscription is required
+        if Self.automationToolNames.contains(toolName),
+           let sub = subscriptionService, sub.readCurrentTier() != .pro {
+            return toolResult(
+                text: "Automations require a CompAI - Home Pro subscription. Subscribe in Settings > Subscription.",
                 isError: true,
                 id: id
             )

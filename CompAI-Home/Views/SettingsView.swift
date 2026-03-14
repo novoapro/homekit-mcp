@@ -4,12 +4,17 @@ struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var storage: StorageService
     @ObservedObject private var appleSignInService: AppleSignInService
+    @ObservedObject private var subscriptionService: SubscriptionService
+    @Binding var navigateToSubscription: Bool
     @State private var unresolvedCount = 0
+    @State private var showAccount = false
 
-    init(viewModel: SettingsViewModel) {
+    init(viewModel: SettingsViewModel, navigateToSubscription: Binding<Bool> = .constant(false)) {
         self.viewModel = viewModel
         self.storage = viewModel.storage
         self.appleSignInService = viewModel.appleSignInService
+        self.subscriptionService = viewModel.subscriptionService
+        self._navigateToSubscription = navigateToSubscription
     }
 
     var body: some View {
@@ -123,15 +128,15 @@ struct SettingsView: View {
                     )
                 }
 
-                // Account
-                NavigationLink {
+                // Account & Subscription
+                NavigationLink(isActive: $showAccount) {
                     AccountSettingsView(viewModel: viewModel)
                 } label: {
                     settingsRow(
-                        icon: "person.crop.circle",
-                        iconColor: .blue,
+                        icon: subscriptionService.currentTier == .pro ? "crown.fill" : "person.crop.circle",
+                        iconColor: subscriptionService.currentTier == .pro ? .yellow : .blue,
                         title: "Account",
-                        badge: accountBadge
+                        badge: subscriptionBadge
                     )
                 }
             }
@@ -158,6 +163,12 @@ struct SettingsView: View {
             let devices = await viewModel.deviceRegistryService.unresolvedDevices()
             let scenes = await viewModel.deviceRegistryService.unresolvedScenes()
             unresolvedCount = devices.count + scenes.count
+        }
+        .onChange(of: navigateToSubscription) { navigate in
+            if navigate {
+                showAccount = true
+                navigateToSubscription = false
+            }
         }
     }
 
@@ -208,6 +219,14 @@ struct SettingsView: View {
             return StatusBadge(text: "Signed In", color: Theme.Status.active)
         }
         return nil
+    }
+
+    private var subscriptionBadge: StatusBadge {
+        if subscriptionService.currentTier == .pro {
+            return StatusBadge(text: "Pro", color: Theme.Status.active)
+        } else {
+            return StatusBadge(text: "Free", color: Theme.Status.inactive)
+        }
     }
 
     private var aboutBadge: StatusBadge {

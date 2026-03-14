@@ -73,6 +73,27 @@ vapor/vapor 4.89.0+
 - `NSHomeKitUsageDescription` in Info.plist
 - `LSUIElement = true` in Info.plist (hides Dock icon)
 
+### Subscription Testing
+
+The app uses StoreKit 2 auto-renewable subscriptions to gate Pro features (automations, AI, web dashboard). Since `make dev` doesn't connect to StoreKit sandbox, use the debug override to switch tiers:
+
+```bash
+# Enable Pro tier
+defaults write com.mnplab.compai-home subscription.debugOverrideTier pro
+
+# Switch back to Free tier
+defaults delete com.mnplab.compai-home subscription.debugOverrideTier
+```
+
+Restart the app after changing. The override is `#if DEBUG` only and stripped from release builds.
+
+To test the actual purchase flow (product listing, payment sheet, restore purchases), use Xcode:
+
+1. Open `CompAI-Home.xcodeproj` in Xcode
+2. Edit scheme → Run → Options → set **StoreKit Configuration** to `CompAI-Home-StoreKit.storekit`
+3. Run with Cmd+R
+4. Use **Debug → StoreKit → Manage Transactions** to delete/expire/refund transactions for repeated testing
+
 
 **Very Important:**
 Everytime you complete a task that changes in any way the model that we expose through the MCP server, you need to update the documentation at `API.md` file to reflect the changes.

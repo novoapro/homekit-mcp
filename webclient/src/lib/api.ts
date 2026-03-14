@@ -14,6 +14,18 @@ export interface AutomationRuntime {
   sunEvents: SunEvents;
 }
 
+export interface SubscriptionStatus {
+  tier: 'free' | 'pro';
+  isPro: boolean;
+}
+
+export class SubscriptionRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SubscriptionRequiredError';
+  }
+}
+
 export interface ApiClient {
   checkHealth(): Promise<boolean>;
   getLogs(params?: LogQueryParams): Promise<PaginatedLogsResponse>;
@@ -29,6 +41,7 @@ export interface ApiClient {
   getDevices(): Promise<RESTDevice[]>;
   getScenes(): Promise<RESTScene[]>;
   getAutomationRuntime(): Promise<AutomationRuntime>;
+  getSubscriptionStatus(): Promise<SubscriptionStatus>;
 }
 
 const DEFAULT_TIMEOUT = 15_000;
@@ -83,6 +96,10 @@ export function createApiClient(baseUrl: string, bearerToken: string): ApiClient
     const res = await fetchWithTimeout(`${baseUrl}${path}`, { ...options, headers }, timeoutMs);
 
     if (!res.ok) {
+      if (res.status === 402) {
+        const reason = await parseError(res);
+        throw new SubscriptionRequiredError(reason);
+      }
       throw new Error(await parseError(res));
     }
 
@@ -100,6 +117,10 @@ export function createApiClient(baseUrl: string, bearerToken: string): ApiClient
     const res = await fetchWithTimeout(`${baseUrl}${path}`, { ...options, headers });
 
     if (!res.ok) {
+      if (res.status === 402) {
+        const reason = await parseError(res);
+        throw new SubscriptionRequiredError(reason);
+      }
       throw new Error(await parseError(res));
     }
   }
@@ -193,6 +214,10 @@ export function createApiClient(baseUrl: string, bearerToken: string): ApiClient
 
     async getAutomationRuntime() {
       return requestJson<AutomationRuntime>('/automation-runtime');
+    },
+
+    async getSubscriptionStatus() {
+      return requestJson<SubscriptionStatus>('/subscription/status');
     },
   };
 }

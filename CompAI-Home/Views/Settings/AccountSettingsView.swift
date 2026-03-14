@@ -6,6 +6,7 @@ struct AccountSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var appleSignInService: AppleSignInService
     @ObservedObject private var cloudBackupService: CloudBackupService
+    @ObservedObject private var subscriptionService: SubscriptionService
 
     @State private var showingSignOutConfirmation = false
     @State private var showingCloudBackupSuccess = false
@@ -24,6 +25,7 @@ struct AccountSettingsView: View {
         self.viewModel = viewModel
         self.appleSignInService = viewModel.appleSignInService
         self.cloudBackupService = viewModel.cloudBackupService
+        self.subscriptionService = viewModel.subscriptionService
     }
 
     var body: some View {
@@ -84,6 +86,33 @@ struct AccountSettingsView: View {
                 } else {
                     Text("Sign in with Apple to enable iCloud backup and restore.")
                 }
+            }
+
+            // Subscription
+            Section {
+                NavigationLink {
+                    SubscriptionSettingsView(subscriptionService: subscriptionService)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "crown.fill")
+                            .font(.body)
+                            .foregroundColor(.white)
+                            .frame(width: 28, height: 28)
+                            .background(.yellow, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+                        Text("Subscription")
+                            .foregroundColor(Theme.Text.primary)
+
+                        Spacer()
+
+                        Text(subscriptionService.currentTier == .pro ? "Pro" : "Free")
+                            .font(.subheadline)
+                            .foregroundColor(subscriptionService.currentTier == .pro ? Theme.Status.active : Theme.Text.secondary)
+                    }
+                    .padding(.vertical, 2)
+                }
+            } header: {
+                Label("Subscription", systemImage: "crown")
             }
 
             // iCloud Backup section (only when signed in)

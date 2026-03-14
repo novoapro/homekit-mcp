@@ -19,6 +19,7 @@ type LogHandler = (log: StateChangeLog) => void;
 type AutomationLogHandler = (event: { type: 'new' | 'updated'; data: AutomationExecutionLog }) => void;
 type AutomationsUpdatedHandler = (automations: Automation[]) => void;
 type CharacteristicUpdatedHandler = (event: CharacteristicUpdateEvent) => void;
+export type SubscriptionChangedHandler = (data: { tier: string; isPro: boolean }) => void;
 type VoidHandler = () => void;
 
 interface WebSocketContextValue {
@@ -32,6 +33,7 @@ interface WebSocketContextValue {
   onDevicesUpdated: (handler: VoidHandler) => () => void;
   onCharacteristicUpdated: (handler: CharacteristicUpdatedHandler) => () => void;
   onLogsCleared: (handler: VoidHandler) => () => void;
+  onSubscriptionChanged: (handler: SubscriptionChangedHandler) => () => void;
   onReconnected: (handler: VoidHandler) => () => void;
 }
 
@@ -59,6 +61,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const devicesUpdatedHandlers = useRef(new Set<VoidHandler>());
   const characteristicUpdatedHandlers = useRef(new Set<CharacteristicUpdatedHandler>());
   const logsClearedHandlers = useRef(new Set<VoidHandler>());
+  const subscriptionChangedHandlers = useRef(new Set<SubscriptionChangedHandler>());
   const reconnectedHandlers = useRef(new Set<VoidHandler>());
 
   // Stable config ref for use inside WebSocket callbacks
@@ -170,6 +173,9 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             break;
           case 'logs_cleared':
             logsClearedHandlers.current.forEach(h => h());
+            break;
+          case 'subscription_changed':
+            subscriptionChangedHandlers.current.forEach(h => h(msg.data as { tier: string; isPro: boolean }));
             break;
         }
       } catch (err) {
@@ -316,6 +322,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const onDevicesUpdated = useCallback((h: VoidHandler) => subscribe(devicesUpdatedHandlers, h), [subscribe]);
   const onCharacteristicUpdated = useCallback((h: CharacteristicUpdatedHandler) => subscribe(characteristicUpdatedHandlers, h), [subscribe]);
   const onLogsCleared = useCallback((h: VoidHandler) => subscribe(logsClearedHandlers, h), [subscribe]);
+  const onSubscriptionChanged = useCallback((h: SubscriptionChangedHandler) => subscribe(subscriptionChangedHandlers, h), [subscribe]);
   const onReconnected = useCallback((h: VoidHandler) => subscribe(reconnectedHandlers, h), [subscribe]);
 
   const value = useMemo<WebSocketContextValue>(
@@ -330,9 +337,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       onDevicesUpdated,
       onCharacteristicUpdated,
       onLogsCleared,
+      onSubscriptionChanged,
       onReconnected,
     }),
-    [connectionState, reconnect, disconnect, onLog, onAutomationLog, onAutomationsUpdated, onDevicesUpdated, onCharacteristicUpdated, onLogsCleared, onReconnected],
+    [connectionState, reconnect, disconnect, onLog, onAutomationLog, onAutomationsUpdated, onDevicesUpdated, onCharacteristicUpdated, onLogsCleared, onSubscriptionChanged, onReconnected],
   );
 
   return (

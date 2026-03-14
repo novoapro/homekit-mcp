@@ -134,5 +134,6 @@ class MenuBarController {
 
 extension Notification.Name {
     static let menuBarQuitRequested = Notification.Name("menuBarQuitRequested")
+    static let navigateToSubscription = Notification.Name("navigateToSubscription")
 }
 #endif

@@ -155,6 +155,40 @@ make test-web
 cd webclient && npm run test:watch
 ```
 
+## Subscription Testing
+
+The app uses StoreKit 2 auto-renewable subscriptions to gate Pro features (automations, AI assistant, web dashboard). Two approaches are available for testing:
+
+### Debug Override (for `make dev`)
+
+Since `make dev` runs outside Xcode's debugger, StoreKit sandbox products aren't available. Use the debug override to switch tiers:
+
+```bash
+# Enable Pro tier
+defaults write com.mnplab.compai-home subscription.debugOverrideTier pro
+
+# Switch back to Free tier
+defaults delete com.mnplab.compai-home subscription.debugOverrideTier
+```
+
+Restart the app after changing. This override is `#if DEBUG` only and stripped from release builds.
+
+### StoreKit Configuration (for Xcode)
+
+To test the actual purchase flow (product listing, payment sheet, restore purchases):
+
+1. Open `CompAI-Home.xcodeproj` in Xcode
+2. Edit scheme → Run → Options → set **StoreKit Configuration** to `CompAI-Home-StoreKit.storekit`
+3. Run with **Cmd+R**
+4. Use **Debug → StoreKit → Manage Transactions** to delete, expire, or refund transactions for repeated testing
+
+The StoreKit configuration defines two products:
+
+| Product ID | Type | Price |
+|------------|------|-------|
+| `com.mnplab.compai_home.pro.monthly` | Monthly auto-renewable | $4.99 |
+| `com.mnplab.compai_home.pro.yearly` | Yearly auto-renewable | $39.99 |
+
 ## CI/CD
 
 GitHub Actions runs automatically on every push and PR to `main`:
@@ -624,6 +658,3 @@ graph TD
 - **Smart Home**: Apple HomeKit framework
 - **Web Dashboard**: React 19, TypeScript, Vite, Tailwind CSS v4
 
-## License
-
-MIT — see [LICENSE](LICENSE).

@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ConfigProvider } from '@/contexts/ConfigContext';
 import { WebSocketProvider } from '@/contexts/WebSocketContext';
 import { DeviceRegistryProvider } from '@/contexts/DeviceRegistryContext';
+import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
 import { TopBarProvider } from '@/contexts/TopBarContext';
 import { RefreshProvider } from '@/contexts/RefreshContext';
 import { App } from '@/App';
@@ -19,11 +20,13 @@ createRoot(document.getElementById('root')!).render(
           <ConfigProvider>
             <WebSocketProvider>
               <DeviceRegistryProvider>
-                <TopBarProvider>
-                  <RefreshProvider>
-                    <App />
-                  </RefreshProvider>
-                </TopBarProvider>
+                <SubscriptionProvider>
+                  <TopBarProvider>
+                    <RefreshProvider>
+                      <App />
+                    </RefreshProvider>
+                  </TopBarProvider>
+                </SubscriptionProvider>
               </DeviceRegistryProvider>
             </WebSocketProvider>
           </ConfigProvider>

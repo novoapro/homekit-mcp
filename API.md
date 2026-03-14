@@ -11,6 +11,7 @@
   - [Scenes](#scenes)
   - [Logs](#logs)
   - [automations](#automations)
+  - [Subscription](#subscription)
   - [Webhook Trigger](#webhook-trigger)
 - [MCP Protocol (JSON-RPC 2.0)](#mcp-protocol-json-rpc-20)
   - [Streamable HTTP Transport](#streamable-http-transport)
@@ -57,6 +58,7 @@ Each API surface is independently toggleable in the app settings:
 | automations enabled | automation REST endpoints and MCP automation tools |
 | Log Access enabled | `GET /logs` endpoint and `get_logs` MCP tool |
 | WebSocket enabled | `GET /ws` WebSocket endpoint for real-time push |
+| Pro subscription | Automation and AI endpoints (returns 402 when not subscribed) |
 
 When a feature is disabled, its endpoints return **404 Not Found**.
 
@@ -120,6 +122,7 @@ All messages are JSON objects with a `type` field.
 | `devices_updated` | Structural device/scene change (added/removed/renamed/reachability) | `{"type":"devices_updated"}` |
 | `characteristic_updated` | Single characteristic value changed (only for `observed` characteristics) | `{"type":"characteristic_updated","data":{"deviceId":"...","serviceId":"...","characteristicId":"...","characteristicType":"...","value":...,"timestamp":"..."}}` |
 | `logs_cleared` | All logs have been cleared on the server | `{"type":"logs_cleared"}` |
+| `subscription_changed` | Subscription tier changed (purchased/expired/restored) | `{"type":"subscription_changed","data":{"tier":"pro","isPro":true}}` |
 | `pong` | Response to client ping | `{"type":"pong"}` |
 
 The `data` field in `log` messages has the same shape as items in the `GET /logs` response. The `data` field in `automation_log` / `automation_log_updated` messages has the same shape as items in the `GET /automations/:id/logs` response. The `data` field in `automations_updated` messages is an array with the same shape as the `GET /automations` response. The `data` field in `characteristic_updated` messages contains: `deviceId` (stable registry ID), `serviceId` (stable registry ID), `characteristicId` (stable registry ID), `characteristicType` (HomeKit type string), `value` (the new value), and `timestamp` (ISO 8601). This event is only sent for characteristics marked as `observed` in the device registry, and is batched with a 100ms window.
@@ -346,6 +349,36 @@ See [automation](#automation) in Data Models for the full schema.
 ```
 
 Valid values: `"celsius"`, `"fahrenheit"`. Returns **400** for invalid values.
+
+---
+
+### Subscription
+
+| Method | Path | Description | Response |
+|---|---|---|---|
+| `GET` | `/subscription/status` | Get current subscription tier | `{"tier": "free", "isPro": false}` |
+
+Returns the user's subscription status. Always accessible (no feature-flag guard beyond bearer token auth).
+
+**Response:**
+
+```json
+{
+  "tier": "free",
+  "isPro": false
+}
+```
+
+`tier` is either `"free"` or `"pro"`. `isPro` is a convenience boolean.
+
+**Subscription gating:** Automation endpoints (`/automations/*`) and AI endpoints (`/automations/generate`, `/automations/:id/improve`) return **402 Payment Required** when the user does not have a Pro subscription. The response body includes:
+
+```json
+{
+  "error": true,
+  "reason": "This feature requires a CompAI - Home Pro subscription."
+}
+```
 
 ---
 
@@ -1510,6 +1543,7 @@ Embedded in `StateChangeLog` entries with `automation_execution` or `automation_
 | 202 | Accepted (automation triggers, MCP notifications) |
 | 400 | Bad request (invalid params, malformed JSON) |
 | 401 | Unauthorized (missing/invalid Bearer token) |
+| 402 | Payment required (Pro subscription needed for this feature) |
 | 404 | Not found (resource missing or feature disabled) |
 | 405 | Method not allowed |
 | 409 | Conflict (trigger ignored — automation already running) |

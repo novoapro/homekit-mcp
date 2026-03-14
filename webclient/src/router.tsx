@@ -10,6 +10,7 @@ const AutomationExecutionListPage = lazy(() => import('@/pages/AutomationExecuti
 const AutomationExecutionDetailPage = lazy(() => import('@/pages/AutomationExecutionDetailPage').then(m => ({ default: m.AutomationExecutionDetailPage })));
 const AutomationEditorPage = lazy(() => import('@/features/automations/editor/AutomationEditorPage').then(m => ({ default: m.AutomationEditorPage })));
 const DevicesPage = lazy(() => import('@/pages/DevicesPage').then(m => ({ default: m.DevicesPage })));
+const UpgradePage = lazy(() => import('@/pages/UpgradePage').then(m => ({ default: m.UpgradePage })));
 
 function LoadingFallback() {
   return (
@@ -64,6 +65,7 @@ export function AppRoutes() {
           path="/automations/:automationId"
           element={<ConfigGuard><AutomationExecutionListPage /></ConfigGuard>}
         />
+        <Route path="/upgrade" element={<ConfigGuard><UpgradePage /></ConfigGuard>} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/automations" replace />} />
       </Routes>

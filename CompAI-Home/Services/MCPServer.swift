@@ -27,6 +27,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     private let keychainService: KeychainService
     private let registry: DeviceRegistryService?
     private let aiAutomationService: AIAutomationService?
+    private let subscriptionService: SubscriptionService?
     private var wsCancellables = Set<AnyCancellable>()
     private var serverTask: Task<Void, Never>?
 
@@ -39,6 +40,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         keychainService: KeychainService,
         registry: DeviceRegistryService? = nil,
         aiAutomationService: AIAutomationService? = nil,
+        subscriptionService: SubscriptionService? = nil,
         port: Int = 3000,
         handler: MCPRequestHandler? = nil
     ) {
@@ -51,6 +53,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         self.keychainService = keychainService
         self.registry = registry
         self.aiAutomationService = aiAutomationService
+        self.subscriptionService = subscriptionService
         self.handler = handler ?? MCPRequestHandler(
             homeKitManager: homeKitManager,
             loggingService: loggingService,
@@ -58,7 +61,8 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             automationStorageService: automationStorageService,
             automationEngine: automationEngine,
             registry: registry,
-            aiAutomationService: aiAutomationService
+            aiAutomationService: aiAutomationService,
+            subscriptionService: subscriptionService
         )
     }
 
@@ -239,6 +243,20 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                     Task {
                         guard await tracker.wsConnectionCount > 0 else { return }
                         await tracker.broadcastToWS("{\"type\":\"devices_updated\"}")
+                    }
+                }
+                .store(in: &wsCancellables)
+        }
+
+        // Broadcast subscription tier changes
+        if let subscriptionService {
+            subscriptionService.tierChangedSubject
+                .receive(on: DispatchQueue.global(qos: .utility))
+                .sink { tier in
+                    Task {
+                        guard await tracker.wsConnectionCount > 0 else { return }
+                        let msg = "{\"type\":\"subscription_changed\",\"data\":{\"tier\":\"\(tier.rawValue)\",\"isPro\":\(tier == .pro)}}"
+                        await tracker.broadcastToWS(msg)
                     }
                 }
                 .store(in: &wsCancellables)
@@ -488,62 +506,71 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             return self.handleGetAutomationRuntime()
         }
 
-        // Automation REST Endpoints
+        // Automation REST Endpoints (Pro subscription required)
         protected.on(.GET, "automations") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
+            try self.guardProSubscription()
             return try await self.handleRestGetAutomations(req)
         }
 
         protected.on(.GET, "automations", ":automationId") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
+            try self.guardProSubscription()
             return try await self.handleRestGetAutomation(req)
         }
 
         protected.on(.POST, "automations", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
+            try self.guardProSubscription()
             return try await self.handleRestCreateAutomation(req)
         }
 
         protected.on(.PUT, "automations", ":automationId", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
+            try self.guardProSubscription()
             return try await self.handleRestUpdateAutomation(req)
         }
 
         protected.on(.DELETE, "automations", ":automationId") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
+            try self.guardProSubscription()
             return try await self.handleRestDeleteAutomation(req)
         }
 
         protected.on(.POST, "automations", ":automationId", "trigger", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
+            try self.guardProSubscription()
             return try await self.handleRestTriggerAutomation(req)
         }
 
         protected.on(.GET, "automations", ":automationId", "logs") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
+            try self.guardProSubscription()
             return try await self.handleRestGetAutomationLogs(req)
         }
 
-        // AI Automation Generation
+        // AI Automation Generation (Pro subscription required)
         protected.on(.POST, "automations", "generate", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
+            try self.guardProSubscription()
             try self.guardAutomationsEnabled()
             try self.guardAIEnabled()
             return try await self.handleRestGenerateAutomation(req)
         }
 
-        // AI Automation Improvement (returns improved automation without persisting)
+        // AI Automation Improvement (Pro subscription required)
         protected.on(.POST, "automations", ":automationId", "improve", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
+            try self.guardProSubscription()
             try self.guardAutomationsEnabled()
             try self.guardAIEnabled()
             return try await self.handleRestImproveAutomation(req)
@@ -580,6 +607,17 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             let responseBody = try JSONSerialization.data(withJSONObject: ["unit": body.unit])
             return Response(status: .ok, headers: ["Content-Type": "application/json"], body: .init(data: responseBody))
         }
+
+        // Subscription status
+        protected.on(.GET, "subscription", "status") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            let tier = self.subscriptionService?.readCurrentTier() ?? .free
+            let body = try JSONSerialization.data(withJSONObject: [
+                "tier": tier.rawValue,
+                "isPro": tier == .pro
+            ] as [String: Any])
+            return Response(status: .ok, headers: ["Content-Type": "application/json"], body: .init(data: body))
+        }
     }
     
     // MARK: - REST Helpers
@@ -611,6 +649,12 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     private func guardAIEnabled() throws {
         guard storage.readAIEnabled() else {
             throw Abort(.notFound, reason: "AI features are not enabled. Enable them in the app settings.")
+        }
+    }
+
+    private func guardProSubscription() throws {
+        guard let sub = subscriptionService, sub.readCurrentTier() == .pro else {
+            throw Abort(.paymentRequired, reason: "This feature requires a CompAI - Home Pro subscription.")
         }
     }
 

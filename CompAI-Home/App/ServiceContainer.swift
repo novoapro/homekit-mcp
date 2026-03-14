@@ -10,6 +10,7 @@ final class ServiceContainer {
     // MARK: - Infrastructure
 
     let keychainService = KeychainService()
+    let subscriptionService = SubscriptionService()
 
     lazy var storageService: StorageService = StorageService(keychainService: keychainService)
 
@@ -58,6 +59,7 @@ final class ServiceContainer {
         keychainService: keychainService,
         registry: deviceRegistryService,
         aiAutomationService: aiAutomationService,
+        subscriptionService: subscriptionService,
         port: storageService.mcpServerPort
     )
 
@@ -112,7 +114,8 @@ final class ServiceContainer {
         appleSignInService: appleSignInService,
         deviceRegistryService: deviceRegistryService,
         homeKitManager: homeKitManager,
-        automationStorageService: automationStorageService
+        automationStorageService: automationStorageService,
+        subscriptionService: subscriptionService
     )
 
     lazy var automationViewModel: AutomationViewModel = AutomationViewModel(
@@ -134,6 +137,7 @@ final class ServiceContainer {
     func wireServices() {
         homeKitManager.deviceRegistryService = deviceRegistryService
         automationEngine.subscribeToStateChanges(from: homeKitManager.stateChangePublisher)
+        subscriptionService.start()
         // Touch automationSyncService to initialize it (sets up Combine subscriptions)
         _ = automationSyncService
 

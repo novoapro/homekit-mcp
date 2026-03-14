@@ -154,6 +154,7 @@ struct ContentView: View {
     @EnvironmentObject var automationViewModel: AutomationViewModel
 
     @State private var selection: SidebarSelection? = .nav(.devices)
+    @State private var navigateToSubscription = false
 
     var body: some View {
         NavigationSplitView {
@@ -166,6 +167,10 @@ struct ContentView: View {
             if !enabled && selection == .nav(.automations) {
                 selection = .nav(.devices)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToSubscription)) { _ in
+            navigateToSubscription = true
+            selection = .nav(.settings)
         }
         // Keyboard shortcuts for sidebar navigation (Cmd+1/2/3/4, Cmd+, for Settings)
         .background {
@@ -257,7 +262,8 @@ struct ContentView: View {
                 AutomationListView(
                     viewModel: automationViewModel,
                     aiAutomationService: settingsViewModel.aiAutomationService,
-                    aiEnabled: settingsViewModel.aiEnabled && settingsViewModel.aiApiKeyConfigured
+                    aiEnabled: settingsViewModel.aiEnabled && settingsViewModel.aiApiKeyConfigured,
+                    subscriptionService: settingsViewModel.subscriptionService
                 )
             }
         case .nav(.logs):
@@ -274,7 +280,7 @@ struct ContentView: View {
             }
         case .nav(.settings):
             NavigationStack {
-                SettingsView(viewModel: settingsViewModel)
+                SettingsView(viewModel: settingsViewModel, navigateToSubscription: $navigateToSubscription)
             }
         case .category(let category):
             NavigationStack {

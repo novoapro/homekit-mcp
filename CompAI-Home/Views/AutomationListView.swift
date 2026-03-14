@@ -4,11 +4,39 @@ struct AutomationListView: View {
     @ObservedObject var viewModel: AutomationViewModel
     var aiAutomationService: AIAutomationService?
     var aiEnabled: Bool = false
+    @ObservedObject var subscriptionService: SubscriptionService
 
     @State private var showingEditor = false
     @State private var showingAIBuilder = false
 
+    private var isPro: Bool { subscriptionService.currentTier == .pro }
+
     var body: some View {
+        if !isPro {
+            proUpgradeContent
+        } else {
+            automationContent
+        }
+    }
+
+    private var proUpgradeContent: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                ProUpgradePrompt(
+                    featureName: "Automations",
+                    description: "Create powerful automations with device state triggers, schedules, sunrise/sunset events, and webhook triggers. Go to Settings → Subscription to subscribe.",
+                    onSubscribe: {
+                        NotificationCenter.default.post(name: .navigateToSubscription, object: nil)
+                    }
+                )
+                .padding()
+            }
+        }
+        .background(Theme.mainBackground)
+        .navigationTitle("Automations")
+    }
+
+    private var automationContent: some View {
         VStack(spacing: 0) {
             List {
                 if viewModel.automations.isEmpty {
@@ -161,6 +189,6 @@ struct AutomationListView: View {
 
 #Preview {
     NavigationStack {
-        AutomationListView(viewModel: PreviewData.automationViewModel)
+        AutomationListView(viewModel: PreviewData.automationViewModel, subscriptionService: SubscriptionService())
     }
 }
