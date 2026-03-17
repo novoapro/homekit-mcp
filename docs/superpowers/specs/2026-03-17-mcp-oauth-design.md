@@ -26,7 +26,7 @@ This avoids the complexity of a full authorization code grant while remaining MC
 | `lastUsedAt` | Date? | Last successful token exchange |
 | `isRevoked` | Bool | Revocation status |
 
-### OAuthToken (in-memory + file-persisted)
+### OAuthToken (in-memory, persisted to JSON file)
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -35,6 +35,8 @@ This avoids the complexity of a full authorization code grant while remaining MC
 | `credentialId` | UUID | Links to issuing credential |
 | `expiresAt` | Date | Access token expiry |
 | `scopes` | Set\<String\> | Initially `["*"]`, extensible later |
+
+**Token persistence:** Tokens are held in an in-memory dictionary for fast lookup. The full token set is written to a JSON file in Application Support (alongside existing log data) on every mutation (issue, refresh, revoke). On app launch, tokens are loaded from this file. Authorization codes are ephemeral (in-memory only, 60s TTL) and not persisted — an app restart invalidates any pending auth codes.
 
 ## OAuth Endpoints
 
@@ -56,11 +58,16 @@ Returns OAuth server metadata per RFC 8414:
 }
 ```
 
-### 2. Authorization — `POST /oauth/authorize`
+### 2. Authorization — `GET /oauth/authorize`
 
-Since credentials are pre-authorized, this endpoint validates the request and immediately returns an authorization code. No redirect, no consent screen.
+Since credentials are pre-authorized, this endpoint validates the request and immediately redirects back with an authorization code. No consent screen.
 
-**Request parameters:**
+Standard OAuth 2.1 authorization code flow: the client opens this URL (typically in a browser or embedded webview), and the server responds with a `302` redirect. Since all registered clients are pre-authorized, the redirect happens immediately — no user interaction required.
+
+Note: `client_id` alone (without secret) is sufficient at this step, which is standard OAuth behavior. The `client_secret` is validated at the token endpoint. Since this is a localhost server, the risk of unauthorized auth code requests is minimal.
+
+**Query parameters:**
+- `response_type` (required) — must be `code`
 - `client_id` (required) — must match a registered, non-revoked credential
 - `code_challenge` (required) — PKCE S256 challenge
 - `code_challenge_method` (required) — must be `S256`
@@ -68,12 +75,15 @@ Since credentials are pre-authorized, this endpoint validates the request and im
 - `state` (optional) — returned unchanged
 - `scope` (optional) — defaults to `*`
 
-**Success response:**
-Returns the authorization code directly (or via redirect if `redirect_uri` is provided), along with `state` if supplied. The authorization code is single-use and expires in 60 seconds.
+**Success response:** `302 Found` redirect to `redirect_uri` with query parameters:
+- `code` — single-use authorization code (expires in 60 seconds)
+- `state` — echoed back if provided
+
+Example: `Location: http://localhost:1234/callback?code=abc123&state=xyz`
 
 **Error responses:**
-- `400` — missing/invalid parameters
-- `401` — unknown or revoked `client_id`
+- `302` redirect with `error=invalid_request` — missing/invalid parameters
+- `302` redirect with `error=unauthorized_client` — unknown or revoked `client_id`
 
 ### 3. Token — `POST /oauth/token`
 
@@ -145,7 +155,7 @@ When a credential is revoked via Settings:
 
 ### Active Session Tracking
 
-An in-memory map of `accessToken → connection` maintained by the server. Updated on connection open/close. On revocation, iterate matching entries and force-close connections.
+An in-memory map of `accessToken → connection` maintained by the server. Updated on connection open/close. On revocation, iterate matching entries and force-close connections. When a token is refreshed, the old access token's entry is removed from the map and the new access token is registered in its place.
 
 ### Token Lifecycle
 
