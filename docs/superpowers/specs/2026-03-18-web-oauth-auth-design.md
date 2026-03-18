@@ -17,12 +17,22 @@ Switching methods **clears** the other method's stored values from localStorage.
 
 1. User enters client ID + client secret in Settings → Save
 2. Web app generates a PKCE code verifier + challenge (S256)
-3. Web app calls `GET /oauth/authorize?response_type=code&client_id=...&code_challenge=...&code_challenge_method=S256&redirect_uri=...` — since the server auto-grants, this returns a 302 with the auth code. The web app uses `fetch` with `redirect: 'manual'` to extract the code from the `Location` header without following the redirect.
-4. Web app calls `POST /oauth/token` with `grant_type=authorization_code`, code, client_id, client_secret, code_verifier
+3. Web app calls `GET /oauth/authorize` with `Accept: application/json` header. The server detects this header and returns the auth code as a JSON body `{ "code": "...", "state": "..." }` instead of a 302 redirect. (Note: `fetch` with `redirect: 'manual'` returns an opaque redirect response where the `Location` header is inaccessible — this is a browser security restriction, so the server must support JSON responses for programmatic clients.) The `redirect_uri` parameter is set to `urn:ietf:wg:oauth:2.0:oob` (out-of-band, since no actual redirect occurs).
+4. Web app calls `POST /oauth/token` with `grant_type=authorization_code`, code, client_id, client_secret, code_verifier, redirect_uri (`urn:ietf:wg:oauth:2.0:oob`)
 5. Receives access_token (1hr) + refresh_token (30 days)
 6. All subsequent API calls use `Authorization: Bearer <access_token>`
-7. On 401 response: automatically attempt refresh via `POST /oauth/token` with `grant_type=refresh_token`
-8. On refresh failure: clear tokens, surface error to UI (user needs to re-enter credentials or check them)
+7. On 401 response: automatically attempt refresh via `POST /oauth/token` with `grant_type=refresh_token`. If multiple requests hit 401 simultaneously, queue them behind a single in-flight refresh to avoid N parallel refresh calls.
+8. On refresh failure: clear tokens and show an error toast in the UI prompting the user to check their OAuth credentials in Settings.
+
+### Server-Side Change Required
+
+The `/oauth/authorize` endpoint must be updated to support `Accept: application/json`. When this header is present, instead of returning a 302 redirect, return:
+
+```json
+{ "code": "<authorization_code>", "state": "<state_if_provided>" }
+```
+
+All other behavior (client validation, PKCE challenge storage, code TTL) remains the same.
 
 ## Token Storage
 
@@ -69,9 +79,12 @@ Replace the single Bearer Token input with a conditional section:
 
 ## WebSocket Authentication
 
-WebSocket currently uses `?token=<bearer_token>` query param. For OAuth mode:
-- After obtaining the access token, use it as the WebSocket token param: `?token=<access_token>`
-- On WebSocket disconnect due to token expiry: refresh token, reconnect with new access token
+WebSocket currently uses `?token=<bearer_token>` query param from `ConfigContext`. For OAuth mode:
+
+- The API client exposes a `getAccessToken(): Promise<string | null>` method that returns the current valid access token (refreshing if needed)
+- `WebSocketContext` calls `getAccessToken()` when connecting, using the result as `?token=<access_token>`
+- On WebSocket disconnect (e.g., token expiry causes server to close connection): call `getAccessToken()` to refresh, then reconnect with the new token
+- The API client instance is shared via a new `AuthContext` provider that wraps both the API client and the token accessor, so both `WebSocketContext` and page components can access it
 
 ## PKCE in the Browser
 
