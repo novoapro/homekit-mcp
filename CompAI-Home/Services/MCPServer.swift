@@ -28,6 +28,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     private let registry: DeviceRegistryService?
     private let aiAutomationService: AIAutomationService?
     private let subscriptionService: SubscriptionService?
+    private let oauthService: OAuthService
     private var wsCancellables = Set<AnyCancellable>()
     private var serverTask: Task<Void, Never>?
 
@@ -41,6 +42,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         registry: DeviceRegistryService? = nil,
         aiAutomationService: AIAutomationService? = nil,
         subscriptionService: SubscriptionService? = nil,
+        oauthService: OAuthService,
         port: Int = 3000,
         handler: MCPRequestHandler? = nil
     ) {
@@ -54,6 +56,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         self.registry = registry
         self.aiAutomationService = aiAutomationService
         self.subscriptionService = subscriptionService
+        self.oauthService = oauthService
         self.handler = handler ?? MCPRequestHandler(
             homeKitManager: homeKitManager,
             loggingService: loggingService,
@@ -334,7 +337,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
 
     private func configureRoutes(_ app: Application) {
         let validTokens = keychainService.getValidTokenStrings()
-        let authMiddleware = BearerAuthMiddleware(validTokens: validTokens)
+        let authMiddleware = BearerAuthMiddleware(validTokens: validTokens, oauthService: oauthService)
 
         // CORS middleware — app-level so OPTIONS preflight requests get proper headers.
         if storage.readCorsEnabled() {
@@ -373,8 +376,15 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                 }
 
                 // Validate bearer token from query parameter
-                guard let token = req.query[String.self, at: "token"],
-                      validTokens.contains(token) else {
+                let wsToken = req.query[String.self, at: "token"]
+                let isValidBearerToken = wsToken.map { validTokens.contains($0) } ?? false
+                let isValidOAuthToken: Bool
+                if let t = wsToken {
+                    isValidOAuthToken = await self.oauthService.validateAccessToken(t) != nil
+                } else {
+                    isValidOAuthToken = false
+                }
+                guard isValidBearerToken || isValidOAuthToken else {
                     try? await ws.close(code: .policyViolation)
                     return
                 }
@@ -409,6 +419,146 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                 await tracker.removeWSConnection(id: connectionId)
                 self.updateClientCount()
                 AppLogger.server.info("WebSocket client disconnected: \(connectionId)")
+            }
+        }
+
+        // MARK: - OAuth 2.1 Endpoints (unauthenticated)
+
+        app.on(.GET, ".well-known", "oauth-authorization-server") { [weak self] req -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            let host = req.headers.first(name: .host) ?? "localhost:\(self.port)"
+            let baseURL = "http://\(host)"
+            let metadata: [String: Any] = [
+                "issuer": baseURL,
+                "authorization_endpoint": "\(baseURL)/oauth/authorize",
+                "token_endpoint": "\(baseURL)/oauth/token",
+                "grant_types_supported": ["authorization_code", "refresh_token"],
+                "code_challenge_methods_supported": ["S256"],
+                "token_endpoint_auth_methods_supported": ["client_secret_post"],
+                "response_types_supported": ["code"]
+            ]
+            let data = try JSONSerialization.data(withJSONObject: metadata)
+            var headers = HTTPHeaders()
+            headers.add(name: .contentType, value: "application/json")
+            return Response(status: .ok, headers: headers, body: .init(data: data))
+        }
+
+        app.on(.GET, "oauth", "authorize") { [weak self] req -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+
+            guard let responseType = req.query[String.self, at: "response_type"],
+                  responseType == "code",
+                  let clientId = req.query[String.self, at: "client_id"],
+                  let codeChallenge = req.query[String.self, at: "code_challenge"],
+                  let codeChallengeMethod = req.query[String.self, at: "code_challenge_method"],
+                  codeChallengeMethod == "S256",
+                  let redirectURI = req.query[String.self, at: "redirect_uri"] else {
+                if let redirectURI = req.query[String.self, at: "redirect_uri"] {
+                    let state = req.query[String.self, at: "state"]
+                    guard var components = URLComponents(string: redirectURI) else {
+                        return Response(status: .badRequest, body: .init(string: "{\"error\":\"invalid_request\",\"error_description\":\"Invalid redirect_uri\"}"))
+                    }
+                    components.queryItems = [
+                        URLQueryItem(name: "error", value: "invalid_request"),
+                        URLQueryItem(name: "error_description", value: "Missing or invalid required parameters")
+                    ]
+                    if let state { components.queryItems?.append(URLQueryItem(name: "state", value: state)) }
+                    return Response(status: .found, headers: ["Location": components.string!])
+                }
+                return Response(status: .badRequest, body: .init(string: "{\"error\":\"invalid_request\",\"error_description\":\"Missing or invalid required parameters\"}"))
+            }
+
+            let state = req.query[String.self, at: "state"]
+            let scope = req.query[String.self, at: "scope"] ?? "*"
+            let scopes = Set(scope.split(separator: " ").map(String.init))
+
+            guard let authCode = await self.oauthService.createAuthorizationCode(
+                clientId: clientId,
+                codeChallenge: codeChallenge,
+                redirectURI: redirectURI,
+                scopes: scopes,
+                state: state
+            ) else {
+                guard var components = URLComponents(string: redirectURI) else {
+                    return Response(status: .badRequest, body: .init(string: "{\"error\":\"invalid_request\",\"error_description\":\"Invalid redirect_uri\"}"))
+                }
+                components.queryItems = [
+                    URLQueryItem(name: "error", value: "unauthorized_client"),
+                    URLQueryItem(name: "error_description", value: "Unknown or revoked client")
+                ]
+                if let state { components.queryItems?.append(URLQueryItem(name: "state", value: state)) }
+                return Response(status: .found, headers: ["Location": components.string!])
+            }
+
+            guard var components = URLComponents(string: redirectURI) else {
+                return Response(status: .badRequest, body: .init(string: "{\"error\":\"invalid_request\",\"error_description\":\"Invalid redirect_uri\"}"))
+            }
+            components.queryItems = [URLQueryItem(name: "code", value: authCode.code)]
+            if let state { components.queryItems?.append(URLQueryItem(name: "state", value: state)) }
+            return Response(status: .found, headers: ["Location": components.string!])
+        }
+
+        app.on(.POST, "oauth", "token", body: .collect(maxSize: "16kb")) { [weak self] req -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+
+            struct TokenRequest: Content {
+                let grant_type: String
+                let code: String?
+                let client_id: String?
+                let client_secret: String?
+                let code_verifier: String?
+                let redirect_uri: String?
+                let refresh_token: String?
+            }
+
+            let tokenReq: TokenRequest
+            do {
+                tokenReq = try req.content.decode(TokenRequest.self)
+            } catch {
+                return Response(status: .badRequest, body: .init(string: "{\"error\":\"invalid_request\",\"error_description\":\"Malformed request body\"}"))
+            }
+
+            switch tokenReq.grant_type {
+            case "authorization_code":
+                guard let code = tokenReq.code,
+                      let clientId = tokenReq.client_id,
+                      let clientSecret = tokenReq.client_secret,
+                      let codeVerifier = tokenReq.code_verifier,
+                      let redirectURI = tokenReq.redirect_uri else {
+                    return Response(status: .badRequest, body: .init(string: "{\"error\":\"invalid_request\",\"error_description\":\"Missing required parameters\"}"))
+                }
+
+                guard let token = await self.oauthService.exchangeAuthorizationCode(
+                    code: code,
+                    clientId: clientId,
+                    clientSecret: clientSecret,
+                    codeVerifier: codeVerifier,
+                    redirectURI: redirectURI
+                ) else {
+                    return Response(status: .badRequest, body: .init(string: "{\"error\":\"invalid_grant\",\"error_description\":\"Invalid or expired authorization code\"}"))
+                }
+
+                return self.tokenResponse(token)
+
+            case "refresh_token":
+                guard let refreshToken = tokenReq.refresh_token,
+                      let clientId = tokenReq.client_id,
+                      let clientSecret = tokenReq.client_secret else {
+                    return Response(status: .badRequest, body: .init(string: "{\"error\":\"invalid_request\",\"error_description\":\"Missing required parameters\"}"))
+                }
+
+                guard let token = await self.oauthService.refreshAccessToken(
+                    refreshToken: refreshToken,
+                    clientId: clientId,
+                    clientSecret: clientSecret
+                ) else {
+                    return Response(status: .badRequest, body: .init(string: "{\"error\":\"invalid_grant\",\"error_description\":\"Invalid or expired refresh token\"}"))
+                }
+
+                return self.tokenResponse(token)
+
+            default:
+                return Response(status: .badRequest, body: .init(string: "{\"error\":\"unsupported_grant_type\"}"))
             }
         }
 
@@ -1623,14 +1773,33 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             await loggingService.logEntry(entry)
         }
     }
+
+    // MARK: - OAuth Helpers
+
+    private func tokenResponse(_ token: OAuthToken) -> Response {
+        let body: [String: Any] = [
+            "access_token": token.accessToken,
+            "token_type": "bearer",
+            "expires_in": Int(token.expiresAt.timeIntervalSinceNow),
+            "refresh_token": token.refreshToken
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: body) else {
+            return Response(status: .internalServerError)
+        }
+        var headers = HTTPHeaders()
+        headers.add(name: .contentType, value: "application/json")
+        headers.add(name: .cacheControl, value: "no-store")
+        return Response(status: .ok, headers: headers, body: .init(data: data))
+    }
 }
 
 // MARK: - Bearer Auth Middleware
 
 /// Vapor middleware that validates `Authorization: Bearer <token>` on every request.
-/// Accepts any token present in the `validTokens` set (multi-client support).
+/// Accepts any token present in the `validTokens` set (multi-client support) or a valid OAuth access token.
 private struct BearerAuthMiddleware: AsyncMiddleware {
     let validTokens: Set<String>
+    let oauthService: OAuthService
 
     func respond(to request: Request, chainingTo next: any AsyncResponder) async throws -> Response {
         guard let authHeader = request.headers.first(name: .authorization) else {
@@ -1643,12 +1812,25 @@ private struct BearerAuthMiddleware: AsyncMiddleware {
         }
 
         let token = String(authHeader.dropFirst(prefix.count))
-        guard validTokens.contains(token) else {
-            return Response(status: .unauthorized, body: .init(string: "{\"error\":\"Invalid API token\"}"))
+
+        // Check static Bearer tokens first
+        if validTokens.contains(token) {
+            return try await next.respond(to: request)
         }
 
-        return try await next.respond(to: request)
+        // Check OAuth access tokens
+        if await oauthService.validateAccessToken(token) != nil {
+            request.storage[OAuthAccessTokenKey.self] = token
+            return try await next.respond(to: request)
+        }
+
+        return Response(status: .unauthorized, body: .init(string: "{\"error\":\"Invalid API token\"}"))
     }
+}
+
+/// Request storage key for tracking which OAuth token authenticated the request.
+private struct OAuthAccessTokenKey: StorageKey {
+    typealias Value = String
 }
 
 // MARK: - Connection Tracker
