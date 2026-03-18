@@ -154,16 +154,39 @@ export function SettingsPage() {
               OAuth
             </button>
           </div>
-          {pendingAuthSwitch && (
-            <div className="status-message" style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <span>
-                Switch to <strong>{pendingAuthSwitch === 'oauth' ? 'OAuth' : 'Bearer Token'}</strong>?
-                Your current {localState.authMethod === 'oauth' ? 'OAuth credentials' : 'Bearer token'} will be cleared.
-              </span>
-              <div style={{ display: 'flex', gap: 8 }}>
+        </div>
+
+        {pendingAuthSwitch && (
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 1000,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+            }}
+            onClick={() => setPendingAuthSwitch(null)}
+          >
+            <div
+              style={{
+                background: 'var(--color-bg-primary, #1c1c1e)',
+                borderRadius: 12, padding: 24, maxWidth: 400, width: '90%',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>Switch Authentication Method?</h3>
+              <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--color-text-secondary)' }}>
+                Switching to <strong>{pendingAuthSwitch === 'oauth' ? 'OAuth' : 'Bearer Token'}</strong> will
+                clear your current {localState.authMethod === 'oauth' ? 'OAuth client ID and secret' : 'Bearer token'}.
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setPendingAuthSwitch(null)}
+                >
+                  Cancel
+                </button>
                 <button
                   className="btn btn-primary"
-                  style={{ fontSize: 12, padding: '4px 12px' }}
                   onClick={() => {
                     if (pendingAuthSwitch === 'oauth') {
                       setLocalState(prev => ({ ...prev, authMethod: 'oauth', bearerToken: '' }));
@@ -175,17 +198,10 @@ export function SettingsPage() {
                 >
                   Switch
                 </button>
-                <button
-                  className="btn btn-secondary"
-                  style={{ fontSize: 12, padding: '4px 12px' }}
-                  onClick={() => setPendingAuthSwitch(null)}
-                >
-                  Cancel
-                </button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {localState.authMethod === 'bearer' ? (
           <div className="form-group">
