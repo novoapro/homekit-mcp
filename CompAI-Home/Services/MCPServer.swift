@@ -103,6 +103,15 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                     self.lastError = nil
                 }
 
+                // Wire OAuth token revocation to connection termination
+                Task {
+                    await self.oauthService.setOnTokensRevoked { [weak self] accessTokens in
+                        guard let self else { return }
+                        await self.connectionTracker.revokeTokenConnections(accessTokens)
+                        self.updateClientCount()
+                    }
+                }
+
                 do {
                     // startup() blocks while the server runs — it only returns on shutdown or error
                     try await app.startup()
@@ -398,6 +407,9 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                 let tracker = self.connectionTracker
 
                 await tracker.addWSConnection(id: connectionId, ws: ws)
+                if isValidOAuthToken, let oauthToken = wsToken {
+                    await tracker.associateToken(oauthToken, withWS: connectionId)
+                }
                 self.updateClientCount()
 
                 AppLogger.server.info("WebSocket client connected: \(connectionId)")
@@ -416,6 +428,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                 // Wait for close — this suspends until the WebSocket disconnects
                 try? await ws.onClose.get()
 
+                await tracker.dissociateWS(id: connectionId)
                 await tracker.removeWSConnection(id: connectionId)
                 self.updateClientCount()
                 AppLogger.server.info("WebSocket client disconnected: \(connectionId)")
@@ -1840,6 +1853,57 @@ private struct OAuthAccessTokenKey: StorageKey {
 private actor ConnectionTracker {
     private var sseConnections: [UUID: any AsyncBodyStreamWriter] = [:]
     private var wsConnections: [UUID: WebSocket] = [:]
+
+    // OAuth token → connection mapping for revocation
+    private var tokenToSSE: [String: Set<UUID>] = [:]
+    private var tokenToWS: [String: Set<UUID>] = [:]
+
+    func associateToken(_ token: String, withSSE id: UUID) {
+        tokenToSSE[token, default: []].insert(id)
+    }
+
+    func associateToken(_ token: String, withWS id: UUID) {
+        tokenToWS[token, default: []].insert(id)
+    }
+
+    func revokeTokenConnections(_ accessTokens: Set<String>) {
+        for token in accessTokens {
+            if let sseIds = tokenToSSE.removeValue(forKey: token) {
+                for id in sseIds {
+                    sseConnections.removeValue(forKey: id)
+                }
+            }
+            if let wsIds = tokenToWS.removeValue(forKey: token) {
+                for id in wsIds {
+                    if let ws = wsConnections.removeValue(forKey: id) {
+                        try? ws.close(code: .policyViolation).wait()
+                    }
+                }
+            }
+        }
+    }
+
+    func dissociateSSE(id: UUID) {
+        for (token, var ids) in tokenToSSE {
+            ids.remove(id)
+            if ids.isEmpty {
+                tokenToSSE.removeValue(forKey: token)
+            } else {
+                tokenToSSE[token] = ids
+            }
+        }
+    }
+
+    func dissociateWS(id: UUID) {
+        for (token, var ids) in tokenToWS {
+            ids.remove(id)
+            if ids.isEmpty {
+                tokenToWS.removeValue(forKey: token)
+            } else {
+                tokenToWS[token] = ids
+            }
+        }
+    }
 
     private struct SessionInfo {
         let createdAt: Date
