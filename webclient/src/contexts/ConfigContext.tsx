@@ -31,6 +31,9 @@ function envDefaults(): ConfigState {
     pollingInterval: 300,
     websocketEnabled: true,
     useHTTPS: import.meta.env.VITE_DEFAULT_USE_HTTPS === 'true',
+    authMethod: 'bearer' as const,
+    oauthClientId: '',
+    oauthClientSecret: '',
   };
 }
 
@@ -45,6 +48,9 @@ function loadConfig(): ConfigState {
     pollingInterval: loadNumber('pollingInterval', defaults.pollingInterval),
     websocketEnabled: loadBool('websocketEnabled', defaults.websocketEnabled),
     useHTTPS: loadBool('useHTTPS', defaults.useHTTPS),
+    authMethod: (loadString('authMethod', defaults.authMethod) as 'bearer' | 'oauth'),
+    oauthClientId: loadString('oauthClientId', defaults.oauthClientId),
+    oauthClientSecret: loadString('oauthClientSecret', defaults.oauthClientSecret),
   };
 }
 
@@ -55,6 +61,9 @@ export interface ConfigState {
   pollingInterval: number;
   websocketEnabled: boolean;
   useHTTPS: boolean;
+  authMethod: 'bearer' | 'oauth';
+  oauthClientId: string;
+  oauthClientSecret: string;
 }
 
 interface ConfigContextValue {
@@ -71,7 +80,9 @@ const ConfigContext = createContext<ConfigContextValue | null>(null);
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfigState] = useState<ConfigState>(loadConfig);
 
-  const isConfigured = !!config.bearerToken;
+  const isConfigured = config.authMethod === 'oauth'
+    ? !!(config.oauthClientId && config.oauthClientSecret)
+    : !!config.bearerToken;
   const httpProtocol = config.useHTTPS ? 'https' : 'http';
   const baseUrl = `${httpProtocol}://${config.serverAddress}:${config.serverPort}`;
 
@@ -88,10 +99,13 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(`${STORAGE_PREFIX}:pollingInterval`, String(s.pollingInterval));
     localStorage.setItem(`${STORAGE_PREFIX}:websocketEnabled`, String(s.websocketEnabled));
     localStorage.setItem(`${STORAGE_PREFIX}:useHTTPS`, String(s.useHTTPS));
+    localStorage.setItem(`${STORAGE_PREFIX}:authMethod`, s.authMethod);
+    localStorage.setItem(`${STORAGE_PREFIX}:oauthClientId`, s.oauthClientId);
+    localStorage.setItem(`${STORAGE_PREFIX}:oauthClientSecret`, s.oauthClientSecret);
   }, [config]);
 
   const reset = useCallback(() => {
-    const keys = ['serverAddress', 'serverPort', 'bearerToken', 'pollingInterval', 'websocketEnabled', 'useHTTPS'];
+    const keys = ['serverAddress', 'serverPort', 'bearerToken', 'pollingInterval', 'websocketEnabled', 'useHTTPS', 'authMethod', 'oauthClientId', 'oauthClientSecret'];
     keys.forEach(k => localStorage.removeItem(`${STORAGE_PREFIX}:${k}`));
     localStorage.removeItem(SAVED_KEY);
     setConfigState(envDefaults());
