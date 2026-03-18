@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ConfigProvider } from '@/contexts/ConfigContext';
+import { AuthProvider } from '@/contexts/AuthContext';
 import { WebSocketProvider } from '@/contexts/WebSocketContext';
 import { DeviceRegistryProvider } from '@/contexts/DeviceRegistryContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
@@ -18,6 +19,7 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <ThemeProvider>
           <ConfigProvider>
+            <AuthProvider>
             <WebSocketProvider>
               <DeviceRegistryProvider>
                 <SubscriptionProvider>
@@ -29,6 +31,7 @@ createRoot(document.getElementById('root')!).render(
                 </SubscriptionProvider>
               </DeviceRegistryProvider>
             </WebSocketProvider>
+            </AuthProvider>
           </ConfigProvider>
         </ThemeProvider>
       </BrowserRouter>
