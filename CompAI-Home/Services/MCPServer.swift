@@ -781,6 +781,71 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             ] as [String: Any])
             return Response(status: .ok, headers: ["Content-Type": "application/json"], body: .init(data: body))
         }
+
+        // MARK: - OAuth Credential Management (REST)
+
+        protected.on(.GET, "oauth", "credentials") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            let credentials = self.keychainService.getOAuthCredentials().map { cred -> [String: Any?] in
+                [
+                    "id": cred.id.uuidString,
+                    "clientId": cred.clientId,
+                    "name": cred.name,
+                    "createdAt": ISO8601DateFormatter().string(from: cred.createdAt),
+                    "lastUsedAt": cred.lastUsedAt.map { ISO8601DateFormatter().string(from: $0) },
+                    "isRevoked": cred.isRevoked
+                ]
+            }
+            let data = try JSONSerialization.data(withJSONObject: credentials)
+            return Response(status: .ok, headers: ["content-type": "application/json"], body: .init(data: data))
+        }
+
+        protected.on(.POST, "oauth", "credentials", body: .collect(maxSize: "16kb")) { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            struct CreateRequest: Content { let name: String }
+            let body = try req.content.decode(CreateRequest.self)
+            let credential = self.keychainService.addOAuthCredential(name: body.name)
+            let response: [String: Any] = [
+                "id": credential.id.uuidString,
+                "clientId": credential.clientId,
+                "clientSecret": credential.clientSecret,
+                "name": credential.name,
+                "createdAt": ISO8601DateFormatter().string(from: credential.createdAt),
+                "tokenEndpoint": "http://localhost:\(self.port)/oauth/token",
+                "authorizationEndpoint": "http://localhost:\(self.port)/oauth/authorize"
+            ]
+            let data = try JSONSerialization.data(withJSONObject: response)
+            return Response(status: .created, headers: ["content-type": "application/json"], body: .init(data: data))
+        }
+
+        protected.on(.POST, "oauth", "credentials", ":credentialId", "revoke") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            guard let idStr = req.parameters.get("credentialId"), let id = UUID(uuidString: idStr) else {
+                throw Abort(.badRequest, reason: "Invalid credential ID")
+            }
+            var credentials = self.keychainService.getOAuthCredentials()
+            guard let index = credentials.firstIndex(where: { $0.id == id }) else {
+                throw Abort(.notFound, reason: "Credential not found")
+            }
+            credentials[index].isRevoked = true
+            self.keychainService.updateOAuthCredential(credentials[index])
+            await self.oauthService.revokeCredential(id: id)
+            return Response(status: .ok, body: .init(string: "{\"status\":\"revoked\"}"))
+        }
+
+        protected.on(.DELETE, "oauth", "credentials", ":credentialId") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            guard let idStr = req.parameters.get("credentialId"), let id = UUID(uuidString: idStr) else {
+                throw Abort(.badRequest, reason: "Invalid credential ID")
+            }
+            await self.oauthService.revokeCredential(id: id)
+            self.keychainService.deleteOAuthCredential(id: id)
+            return Response(status: .ok, body: .init(string: "{\"status\":\"deleted\"}"))
+        }
     }
     
     // MARK: - REST Helpers
