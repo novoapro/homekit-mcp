@@ -188,11 +188,18 @@ export function SettingsPage() {
                 <button
                   className="btn btn-primary"
                   onClick={() => {
+                    const updated = { ...localState };
                     if (pendingAuthSwitch === 'oauth') {
-                      setLocalState(prev => ({ ...prev, authMethod: 'oauth', bearerToken: '' }));
+                      updated.authMethod = 'oauth';
+                      updated.bearerToken = '';
                     } else {
-                      setLocalState(prev => ({ ...prev, authMethod: 'bearer', oauthClientId: '', oauthClientSecret: '' }));
+                      updated.authMethod = 'bearer';
+                      updated.oauthClientId = '';
+                      updated.oauthClientSecret = '';
                     }
+                    setLocalState(updated);
+                    setConfig(updated);
+                    save(updated);
                     setPendingAuthSwitch(null);
                   }}
                 >
