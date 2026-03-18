@@ -178,6 +178,9 @@ struct ServerSettingsView: View {
                     : "Each client needs a unique Bearer token.")
             }
 
+            // MARK: - OAuth Credentials
+            OAuthCredentialsView(viewModel: viewModel)
+
             if viewModel.storage.mcpServerEnabled {
                 Section {
                     Toggle("MCP Protocol", isOn: Binding(
