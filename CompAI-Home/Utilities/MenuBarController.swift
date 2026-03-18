@@ -131,9 +131,11 @@ class MenuBarController {
         NotificationCenter.default.post(name: .menuBarQuitRequested, object: nil)
     }
 }
+#endif
+
+import Foundation
 
 extension Notification.Name {
     static let menuBarQuitRequested = Notification.Name("menuBarQuitRequested")
     static let navigateToSubscription = Notification.Name("navigateToSubscription")
 }
-#endif
