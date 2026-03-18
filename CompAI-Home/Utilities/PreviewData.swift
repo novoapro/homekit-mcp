@@ -521,10 +521,11 @@ enum PreviewData {
         let manager = HomeKitManager(loggingService: loggingService, webhookService: webhookService, storage: storage)
         let automationStorage = AutomationStorageService()
         let automationEngine = AutomationEngine(storageService: automationStorage, homeKitManager: manager, loggingService: loggingService, executionLogService: loggingService, storage: storage)
+        let oauthService = OAuthService(keychainService: keychainService)
         let mcpServer = MCPServer(
             homeKitManager: manager, loggingService: loggingService, storage: storage,
             automationStorageService: automationStorage, automationEngine: automationEngine,
-            keychainService: keychainService
+            keychainService: keychainService, oauthService: oauthService
         )
         let aiAutomationService = AIAutomationService(storage: storage, homeKitManager: manager, keychainService: keychainService, loggingService: loggingService)
         let registryService = DeviceRegistryService()
@@ -537,7 +538,8 @@ enum PreviewData {
             keychainService: keychainService, aiAutomationService: aiAutomationService,
             backupService: backupService, cloudBackupService: cloudBackupService, appleSignInService: appleSignInService,
             deviceRegistryService: registryService, homeKitManager: manager,
-            automationStorageService: automationStorage, subscriptionService: subscriptionService
+            automationStorageService: automationStorage, subscriptionService: subscriptionService,
+            oauthService: oauthService
         )
     }
 
