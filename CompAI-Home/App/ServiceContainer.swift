@@ -11,6 +11,7 @@ final class ServiceContainer {
 
     let keychainService = KeychainService()
     let subscriptionService = SubscriptionService()
+    lazy var oauthService: OAuthService = OAuthService(keychainService: keychainService)
 
     lazy var storageService: StorageService = StorageService(keychainService: keychainService)
 
@@ -60,6 +61,7 @@ final class ServiceContainer {
         registry: deviceRegistryService,
         aiAutomationService: aiAutomationService,
         subscriptionService: subscriptionService,
+        oauthService: oauthService,
         port: storageService.mcpServerPort
     )
 
@@ -115,7 +117,8 @@ final class ServiceContainer {
         deviceRegistryService: deviceRegistryService,
         homeKitManager: homeKitManager,
         automationStorageService: automationStorageService,
-        subscriptionService: subscriptionService
+        subscriptionService: subscriptionService,
+        oauthService: oauthService
     )
 
     lazy var automationViewModel: AutomationViewModel = AutomationViewModel(
