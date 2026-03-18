@@ -34,3 +34,7 @@ CompAI-Home 2026-*/
 
 # Claude Code
 .claude/
+
+# Worktrees & Superpowers
+.worktrees/
+.superpowers/
