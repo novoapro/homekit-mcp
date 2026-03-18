@@ -4,6 +4,13 @@
 
 - [Overview](#overview)
 - [Authentication](#authentication)
+  - [Bearer Tokens](#bearer-tokens)
+  - [OAuth 2.1 (PKCE)](#oauth-21-pkce)
+- [OAuth 2.1 Endpoints](#oauth-21-endpoints)
+  - [Discovery](#discovery)
+  - [Authorization](#authorization)
+  - [Token](#token)
+  - [Credential Management](#credential-management)
 - [WebSocket (Real-time Updates)](#websocket-real-time-updates)
 - [REST API](#rest-api)
   - [Health](#health)
@@ -74,13 +81,30 @@ CORS is optionally enabled in settings. When active:
 
 ## Authentication
 
-All endpoints except `GET /health` require a Bearer token.
+All endpoints except `GET /health` and the OAuth 2.1 endpoints (`/.well-known/oauth-authorization-server`, `GET /oauth/authorize`, `POST /oauth/token`) require authentication.
+
+Two authentication methods are supported and can be used interchangeably:
+
+### Bearer Tokens
+
+Static tokens managed in the app's Settings (stored in Keychain). Multiple tokens are supported for multi-client access.
 
 ```
 Authorization: Bearer <token>
 ```
 
-Tokens are managed in the app's settings (stored in Keychain). Multiple tokens are supported for multi-client access.
+### OAuth 2.1 (PKCE)
+
+Dynamic tokens obtained via the OAuth 2.1 authorization code flow with PKCE (S256), per MCP spec 2025-03-26. Access tokens are issued as Bearer tokens and used identically to static tokens on all requests.
+
+**Token lifetimes:**
+
+| Token type | Lifetime |
+|---|---|
+| Access token | 1 hour |
+| Refresh token | 30 days |
+
+See [OAuth 2.1 Endpoints](#oauth-21-endpoints) for the full flow.
 
 **Error responses for invalid auth:**
 
@@ -89,6 +113,319 @@ Tokens are managed in the app's settings (stored in Keychain). Multiple tokens a
 | Missing header | 401 | `{"error": "Missing Authorization header"}` |
 | Wrong scheme | 401 | `{"error": "Invalid Authorization scheme. Use Bearer."}` |
 | Invalid token | 401 | `{"error": "Invalid API token"}` |
+
+---
+
+## OAuth 2.1 Endpoints
+
+These endpoints implement OAuth 2.1 with PKCE (S256) as required by the MCP specification (version 2025-03-26). They enable third-party clients (e.g. AI assistants, automations platforms) to obtain short-lived access tokens without handling static API keys.
+
+### Discovery
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/.well-known/oauth-authorization-server` | None | OAuth 2.0 Authorization Server Metadata (RFC 8414) |
+
+Returns server metadata JSON describing the supported endpoints and capabilities. No authentication required.
+
+**Response (200):**
+
+```json
+{
+  "issuer": "http://127.0.0.1:3000",
+  "authorization_endpoint": "http://127.0.0.1:3000/oauth/authorize",
+  "token_endpoint": "http://127.0.0.1:3000/oauth/token",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code", "refresh_token"],
+  "code_challenge_methods_supported": ["S256"],
+  "token_endpoint_auth_methods_supported": ["client_secret_post", "none"]
+}
+```
+
+---
+
+### Authorization
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/oauth/authorize` | None | Initiate authorization code flow |
+
+Begins the OAuth 2.1 authorization code flow. The server presents a consent screen (or approves automatically for trusted clients). On approval, redirects to `redirect_uri` with a one-time authorization code.
+
+**Query parameters:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `response_type` | string | yes | Must be `code` |
+| `client_id` | string | yes | Registered OAuth client ID |
+| `code_challenge` | string | yes | PKCE code challenge (base64url-encoded SHA-256 of the verifier) |
+| `code_challenge_method` | string | yes | Must be `S256` |
+| `redirect_uri` | string | yes | Callback URL. Must match the registered redirect URI for the client. |
+| `state` | string | no | Opaque value for CSRF protection. Returned unchanged in the redirect. |
+| `scope` | string | no | Requested scope. Defaults to `*` (all permissions). |
+
+**Success — 302 redirect to `redirect_uri`:**
+
+```
+https://your-app.example.com/callback?code=AUTH_CODE&state=ORIGINAL_STATE
+```
+
+**Error — 302 redirect to `redirect_uri`:**
+
+```
+https://your-app.example.com/callback?error=access_denied&state=ORIGINAL_STATE
+```
+
+**Error — 400 JSON (when redirect_uri is missing or invalid):**
+
+```json
+{
+  "error": "invalid_request",
+  "error_description": "redirect_uri is required"
+}
+```
+
+**Standard OAuth error codes:**
+
+| Code | Description |
+|---|---|
+| `invalid_request` | Missing or invalid parameter |
+| `unauthorized_client` | Client not authorized to use this flow |
+| `access_denied` | User denied authorization |
+| `unsupported_response_type` | `response_type` is not `code` |
+| `invalid_scope` | Requested scope is invalid |
+| `server_error` | Unexpected server error |
+
+---
+
+### Token
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/oauth/token` | None | Exchange authorization code or refresh token |
+
+Exchanges an authorization code for tokens, or refreshes an existing access token. No authentication required — the client is authenticated by its `client_id`/`client_secret` and the PKCE verifier.
+
+**Content-Type:** `application/x-www-form-urlencoded` or `application/json`
+
+**Request body — Authorization code grant:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `grant_type` | string | yes | `authorization_code` |
+| `code` | string | yes | Authorization code received from `/oauth/authorize` |
+| `client_id` | string | yes | OAuth client ID |
+| `client_secret` | string | no | Client secret (required for confidential clients) |
+| `code_verifier` | string | yes | PKCE code verifier (plain text, 43–128 chars) |
+| `redirect_uri` | string | yes | Must match the value used in the authorization request |
+
+```bash
+curl -X POST http://localhost:3000/oauth/token \
+  -d "grant_type=authorization_code" \
+  -d "code=AUTH_CODE" \
+  -d "client_id=my-client" \
+  -d "code_verifier=VERIFIER_STRING" \
+  -d "redirect_uri=https://your-app.example.com/callback"
+```
+
+**Request body — Refresh token grant:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `grant_type` | string | yes | `refresh_token` |
+| `refresh_token` | string | yes | Previously issued refresh token |
+| `client_id` | string | yes | OAuth client ID |
+| `client_secret` | string | no | Client secret (required for confidential clients) |
+
+```bash
+curl -X POST http://localhost:3000/oauth/token \
+  -d "grant_type=refresh_token" \
+  -d "refresh_token=REFRESH_TOKEN" \
+  -d "client_id=my-client"
+```
+
+**Success response (200):**
+
+```json
+{
+  "access_token": "eyJ...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "rt_..."
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `access_token` | string | Bearer token for API requests. Valid for 1 hour. |
+| `token_type` | string | Always `Bearer` |
+| `expires_in` | integer | Seconds until the access token expires (3600) |
+| `refresh_token` | string | Token for obtaining new access tokens. Valid for 30 days. |
+
+**Error response (400):**
+
+```json
+{
+  "error": "invalid_grant",
+  "error_description": "Authorization code has expired or already been used"
+}
+```
+
+**Standard token error codes:**
+
+| Code | HTTP | Description |
+|---|---|---|
+| `invalid_request` | 400 | Missing or malformed parameter |
+| `invalid_client` | 401 | Unknown or unauthorized client |
+| `invalid_grant` | 400 | Code expired, already used, or verifier mismatch |
+| `unsupported_grant_type` | 400 | `grant_type` is not `authorization_code` or `refresh_token` |
+| `invalid_scope` | 400 | Requested scope is invalid |
+
+---
+
+### Credential Management
+
+Requires: **Bearer auth** (static token or OAuth access token)
+
+Manage OAuth credentials (client registrations). These endpoints allow creating, listing, revoking, and deleting OAuth client credentials.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/oauth/credentials` | Bearer | List all OAuth credentials |
+| `POST` | `/oauth/credentials` | Bearer | Create a new OAuth credential |
+| `POST` | `/oauth/credentials/:id/revoke` | Bearer | Revoke a credential (invalidate all tokens) |
+| `DELETE` | `/oauth/credentials/:id` | Bearer | Delete a credential permanently |
+
+---
+
+#### GET /oauth/credentials
+
+List all registered OAuth credentials.
+
+```bash
+curl http://localhost:3000/oauth/credentials \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response (200):**
+
+```json
+[
+  {
+    "id": "cred-uuid",
+    "clientId": "my-client",
+    "name": "Claude Desktop",
+    "createdAt": "2026-03-18T10:00:00Z",
+    "lastUsedAt": "2026-03-18T12:30:00Z",
+    "isRevoked": false
+  }
+]
+```
+
+| Field | Type | Nullable | Description |
+|---|---|---|---|
+| `id` | string | no | Credential UUID |
+| `clientId` | string | no | OAuth client identifier |
+| `name` | string | no | Human-readable label |
+| `createdAt` | string (ISO 8601) | no | When the credential was created |
+| `lastUsedAt` | string (ISO 8601) | yes | When this credential last exchanged a token |
+| `isRevoked` | boolean | no | Whether the credential has been revoked |
+
+---
+
+#### POST /oauth/credentials
+
+Create a new OAuth credential (client registration).
+
+**Request body (JSON):**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | Human-readable label for the credential |
+| `redirectUris` | string[] | yes | Allowed redirect URIs for the authorization flow |
+| `clientSecret` | string | no | Client secret. Omit for public clients (PKCE-only). |
+
+```bash
+curl -X POST http://localhost:3000/oauth/credentials \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Claude Desktop",
+    "redirectUris": ["https://claude.ai/oauth/callback"]
+  }'
+```
+
+**Response (201):**
+
+```json
+{
+  "id": "cred-uuid",
+  "clientId": "my-client-id",
+  "clientSecret": "cs_...",
+  "name": "Claude Desktop",
+  "redirectUris": ["https://claude.ai/oauth/callback"],
+  "createdAt": "2026-03-18T10:00:00Z"
+}
+```
+
+> **Note:** `clientSecret` is returned only on creation and cannot be retrieved later. Store it securely.
+
+**Error responses:**
+
+| Status | Reason |
+|---|---|
+| 400 | Missing required field (`name` or `redirectUris`) |
+| 400 | `redirectUris` is empty or contains invalid URIs |
+
+---
+
+#### POST /oauth/credentials/:id/revoke
+
+Revoke a credential. All active access tokens and refresh tokens issued for this credential are immediately invalidated. The credential record is retained but marked as revoked.
+
+```bash
+curl -X POST http://localhost:3000/oauth/credentials/cred-uuid/revoke \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response (200):**
+
+```json
+{
+  "revoked": true
+}
+```
+
+**Error responses:**
+
+| Status | Reason |
+|---|---|
+| 404 | Credential not found |
+
+---
+
+#### DELETE /oauth/credentials/:id
+
+Permanently delete a credential and all associated tokens.
+
+```bash
+curl -X DELETE http://localhost:3000/oauth/credentials/cred-uuid \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response (200):**
+
+```json
+{
+  "deleted": true
+}
+```
+
+**Error responses:**
+
+| Status | Reason |
+|---|---|
+| 404 | Credential not found |
 
 ---
 
