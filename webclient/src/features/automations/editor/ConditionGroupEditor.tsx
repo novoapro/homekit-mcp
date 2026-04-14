@@ -11,6 +11,7 @@ import './AutomationEditorPage.css'; // for wfe-add-menu styles
 const CONDITION_ICONS: Record<string, string> = {
   deviceState: 'house',
   timeCondition: 'clock',
+  engineState: 'state-variable',
   blockResult: 'checkmark-circle',
   and: 'arrow-triangle-branch',
   or: 'arrow-triangle-branch',
@@ -20,6 +21,7 @@ const CONDITION_ICONS: Record<string, string> = {
 const LEAF_TYPE_OPTIONS = [
   { value: 'deviceState', label: 'Device State' },
   { value: 'timeCondition', label: 'Time Window' },
+  { value: 'engineState', label: 'Controller State' },
   { value: 'blockResult', label: 'Block Result' },
 ];
 
@@ -249,6 +251,7 @@ export function ConditionGroupEditor({
 const CONDITION_TYPE_ICONS: Record<string, string> = {
   deviceState: 'house',
   timeCondition: 'clock',
+  engineState: 'state-variable',
   blockResult: 'checkmark-circle',
 };
 

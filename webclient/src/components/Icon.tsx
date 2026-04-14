@@ -116,6 +116,9 @@ const ICON_MAP: Record<string, IconEntry> = {
   'hk-robot-vacuum':         { ms: 'robot_vacuum',       fill: 1  },
   'hk-blinds':               { ms: 'blinds_closed'                 },
   'hk-curtain':              { ms: 'curtains',           fill: 1  },
+
+  // Controller States
+  'state-variable':          { ms: 'database',            fill: 1  },
 };
 
 interface IconProps {

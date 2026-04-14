@@ -1,6 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { Icon } from '@/components/Icon';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
+import { useApi } from '@/hooks/useApi';
 import { DevicePicker } from './DevicePicker';
 import { CharacteristicValueInput } from './CharacteristicValueInput';
 import { CurrentValueIndicator } from './CurrentValueIndicator';
@@ -12,17 +13,23 @@ import './TriggerEditor.css'; // reuse shared form styles
 const CONDITION_LEAF_TYPES = [
   { value: 'deviceState', label: 'Device State' },
   { value: 'timeCondition', label: 'Time Window' },
+  { value: 'engineState', label: 'Controller State' },
   { value: 'blockResult', label: 'Block Result' },
 ];
 
 const COMPARISON_OPS = [
-  { value: 'equals', label: 'Equals' },
-  { value: 'notEquals', label: 'Not Equals' },
-  { value: 'greaterThan', label: 'Greater Than' },
-  { value: 'lessThan', label: 'Less Than' },
-  { value: 'greaterThanOrEqual', label: 'Greater Than or Equal' },
-  { value: 'lessThanOrEqual', label: 'Less Than or Equal' },
+  { value: 'equals', label: 'Equals', types: [] as string[] },
+  { value: 'notEquals', label: 'Not Equals', types: [] as string[] },
+  { value: 'greaterThan', label: 'Greater Than', types: ['number'] },
+  { value: 'lessThan', label: 'Less Than', types: ['number'] },
+  { value: 'greaterThanOrEqual', label: 'Greater or Equal', types: ['number'] },
+  { value: 'lessThanOrEqual', label: 'Less or Equal', types: ['number'] },
+  { value: 'isEmpty', label: 'Is Empty', types: ['string'] },
+  { value: 'isNotEmpty', label: 'Is Not Empty', types: ['string'] },
+  { value: 'contains', label: 'Contains', types: ['string'] },
 ];
+
+const NO_VALUE_OPS = new Set(['isEmpty', 'isNotEmpty']);
 
 const TIME_MODES = [
   { value: 'timeRange', label: 'Between two times' },
@@ -45,6 +52,19 @@ interface ConditionEditorProps {
 
 export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChange }: ConditionEditorProps) {
   const registry = useDeviceRegistry();
+  const api = useApi();
+
+  const STATE_TYPE_SYMBOL: Record<string, string> = { number: '#', string: 'Aa', boolean: '◉' };
+
+  const [controllerStates, setControllerStates] = useState<{ id: string; name: string; displayName?: string; type: string }[]>([]);
+  useEffect(() => {
+    if (draft.type !== 'engineState') return;
+    let cancelled = false;
+    api.getStateVariables().then(vars => {
+      if (!cancelled) setControllerStates(vars.map(v => ({ id: v.id, name: v.name, displayName: v.displayName, type: v.type })));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [api, draft.type]);
 
   const currentOrdinal = useMemo(
     () => allBlocks?.find((b) => b._draftId === currentBlockDraftId)?.ordinal,
@@ -292,6 +312,99 @@ export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChang
           </div>
         </>
       )}
+
+      {/* engineState */}
+      {draft.type === 'engineState' && (() => {
+        const comp = draft.comparison as unknown as { type?: string; value?: unknown } | undefined;
+        const compType = comp?.type || 'equals';
+        const compVal = comp?.value ?? '';
+        const selectedName = draft.variableRef?.name || '';
+        const selectedState = controllerStates.find(s => s.name === selectedName);
+        const selectedType = selectedState?.type;
+
+        return (
+          <>
+            <div className="editor-field">
+              <label>Controller State</label>
+              <select
+                className="editor-select"
+                value={selectedName}
+                onChange={(e) => patch({ variableRef: { type: 'byName', name: e.target.value } })}
+              >
+                <option value="">-- Select state --</option>
+                {controllerStates.map(s => (
+                  <option key={s.id} value={s.name}>{s.displayName || s.name} ({STATE_TYPE_SYMBOL[s.type] || s.type})</option>
+                ))}
+              </select>
+            </div>
+            {selectedName && (
+              <>
+                <div className="editor-field">
+                  <label>Comparison</label>
+                  <select
+                    className="editor-select"
+                    value={compType}
+                    onChange={(e) => {
+                      patch({ comparison: { type: e.target.value, value: compVal } as unknown as typeof draft.comparison });
+                    }}
+                  >
+                    {(selectedType
+                      ? COMPARISON_OPS.filter(op => op.types.length === 0 || op.types.includes(selectedType))
+                      : COMPARISON_OPS
+                    ).map((op) => (
+                      <option key={op.value} value={op.value}>{op.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {!NO_VALUE_OPS.has(compType) && (
+                <div className="editor-field">
+                  <label>Compare To</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <select
+                      className="editor-select"
+                      style={{ width: 'auto', flex: '0 0 auto' }}
+                      value={draft.stateCompareMode || 'literal'}
+                      onChange={(e) => patch({ stateCompareMode: e.target.value as 'literal' | 'stateRef' })}
+                    >
+                      <option value="literal">Value</option>
+                      <option value="stateRef">State</option>
+                    </select>
+                    {(draft.stateCompareMode || 'literal') === 'literal' && (
+                      <>
+                        {selectedType === 'number' && (
+                          <input className="editor-input" style={{ flex: 1 }} type="number" step="any" value={String(compVal)}
+                            onChange={(e) => patch({ comparison: { type: compType, value: e.target.value } as unknown as typeof draft.comparison })} />
+                        )}
+                        {selectedType === 'boolean' && (
+                          <>
+                            <button type="button" className={`sv-switch${(compVal === true || compVal === 'true') ? ' on' : ''}`}
+                              onClick={() => patch({ comparison: { type: compType, value: !(compVal === true || compVal === 'true') } as unknown as typeof draft.comparison })} />
+                            <span style={{ fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{(compVal === true || compVal === 'true') ? 'true' : 'false'}</span>
+                          </>
+                        )}
+                        {(selectedType === 'string' || !selectedType) && (
+                          <input className="editor-input" style={{ flex: 1 }} value={String(compVal)}
+                            onChange={(e) => patch({ comparison: { type: compType, value: e.target.value } as unknown as typeof draft.comparison })} />
+                        )}
+                      </>
+                    )}
+                    {(draft.stateCompareMode || 'literal') === 'stateRef' && (
+                      <select className="editor-select" style={{ flex: 1 }} value={draft.compareToStateRef?.name || ''}
+                        onChange={(e) => patch({ compareToStateRef: { type: 'byName', name: e.target.value } })}>
+                        <option value="">-- Select --</option>
+                        {controllerStates.filter(s => s.name !== selectedName && (!selectedType || s.type === selectedType)).map(s => (
+                          <option key={s.id} value={s.name}>{s.displayName || s.name} ({STATE_TYPE_SYMBOL[s.type] || s.type})</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+                )}
+              </>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }

@@ -8,7 +8,7 @@ function newConditionDraft(): AutomationConditionDraft {
 export function newBlockDraft(type: string): AutomationBlockDraft {
   const base: AutomationBlockDraft = {
     _draftId: newUUID(),
-    block: ['controlDevice', 'runScene', 'webhook', 'log'].includes(type) ? 'action' : 'flowControl',
+    block: ['controlDevice', 'runScene', 'webhook', 'log', 'stateVariable'].includes(type) ? 'action' : 'flowControl',
     type,
   };
   switch (type) {
@@ -23,12 +23,14 @@ export function newBlockDraft(type: string): AutomationBlockDraft {
     case 'group': base.label = ''; base.blocks = []; break;
     case 'return': base.outcome = 'success'; break;
     case 'executeAutomation': base.executionMode = 'inline'; break;
+    case 'stateVariable': base.operation = { operation: 'set', variableRef: { type: 'byName', name: '' } }; break;
   }
   return base;
 }
 
 export const BLOCK_ICONS: Record<string, string> = {
   controlDevice: 'house', runScene: 'sparkles', webhook: 'link', log: 'doc-text',
+  stateVariable: 'state-variable',
   delay: 'clock', waitForState: 'clock', conditional: 'arrow-triangle-branch',
   repeat: 'arrow-2-squarepath', repeatWhile: 'arrow-2-squarepath',
   group: 'folder', return: 'arrow-uturn-left', executeAutomation: 'arrow-right-circle',
@@ -36,6 +38,7 @@ export const BLOCK_ICONS: Record<string, string> = {
 
 export const BLOCK_TYPE_LABELS: Record<string, string> = {
   controlDevice: 'Control Device', runScene: 'Run Scene', webhook: 'Webhook', log: 'Log',
+  stateVariable: 'Controller State',
   delay: 'Delay', waitForState: 'Wait for State', conditional: 'If / Else',
   repeat: 'Repeat', repeatWhile: 'Repeat While', group: 'Group', return: 'Return',
   executeAutomation: 'Execute Automation',

@@ -1,13 +1,18 @@
 import SwiftUI
+import Combine
 
 struct AutomationListView: View {
     @ObservedObject var viewModel: AutomationViewModel
     var aiAutomationService: AIAutomationService?
     var aiEnabled: Bool = false
     @ObservedObject var subscriptionService: SubscriptionService
+    var stateVariableStorage: StateVariableStorageService?
 
     @State private var showingEditor = false
     @State private var showingAIBuilder = false
+    @State private var showingControllerStates = false
+    @State private var loadedStates: [StateVariable] = []
+    @State private var statesCancellable: AnyCancellable?
 
     private var isPro: Bool { subscriptionService.currentTier == .pro }
 
@@ -39,6 +44,44 @@ struct AutomationListView: View {
     private var automationContent: some View {
         VStack(spacing: 0) {
             List {
+                if stateVariableStorage != nil {
+                    Button {
+                        showingControllerStates = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            // 36x36 circle — same size as AutomationRow trigger icon
+                            ZStack {
+                                Circle()
+                                    .fill(Theme.Tint.main.opacity(0.15))
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: "cylinder.split.1x2.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(Theme.Tint.main)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Controller States")
+                                    .font(.headline)
+                                    .foregroundColor(Theme.Text.primary)
+                                Text("Manage persistent state for your automations")
+                                    .font(.footnote)
+                                    .foregroundColor(Theme.Text.secondary)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Color(.tertiaryLabel))
+                        }
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(Theme.contentBackground)
+                }
+
                 if viewModel.automations.isEmpty {
                     emptyState
                 } else {
@@ -51,7 +94,7 @@ struct AutomationListView: View {
                                 recentLogs: viewModel.executionLogs(for: automation.id),
                                 onToggle: { viewModel.toggleEnabled(id: automation.id) },
                                 onClone: { viewModel.cloneAutomation(id: automation.id) },
-                                hasOrphanedReferences: Self.automationHasOrphanedRefs(automation, devices: devices, scenes: scenes)
+                                hasOrphanedReferences: Self.automationHasOrphanedRefs(automation, devices: devices, scenes: scenes, stateNames: Set(loadedStates.map(\.name)))
                             )
                         }
                         .listRowBackground(Theme.contentBackground)
@@ -87,6 +130,12 @@ struct AutomationListView: View {
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.showClonedToast)
         .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer, prompt: "Search automations")
+        .task {
+            if let storage = stateVariableStorage {
+                loadedStates = await storage.getAll()
+                statesCancellable = storage.variablesSubject.receive(on: DispatchQueue.main).sink { loadedStates = $0 }
+            }
+        }
         .navigationTitle("Automations (\(viewModel.automations.count))")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -111,10 +160,18 @@ struct AutomationListView: View {
                 devices: viewModel.devices,
                 scenes: viewModel.scenes,
                 automations: viewModel.automations,
+                controllerStates: loadedStates,
                 onSave: { draft in
                     viewModel.createAutomation(from: draft)
                 }
             )
+        }
+        .sheet(isPresented: $showingControllerStates) {
+            if let storage = stateVariableStorage {
+                NavigationStack {
+                    StateVariablesView(storageService: storage, automations: viewModel.automations)
+                }
+            }
         }
         .sheet(isPresented: $showingAIBuilder) {
             if let service = aiAutomationService {
@@ -149,13 +206,14 @@ struct AutomationListView: View {
                     onResetStatistics: { viewModel.resetStatistics(id: automationId) },
                     onImproveWithAI: viewModel.aiAutomationService != nil ? { prompt in
                         try await viewModel.improveAutomation(id: automationId, prompt: prompt)
-                    } : nil
+                    } : nil,
+                    controllerStates: loadedStates
                 )
             }
         }
     }
 
-    private static func automationHasOrphanedRefs(_ automation: Automation, devices: [DeviceModel], scenes: [SceneModel]) -> Bool {
+    private static func automationHasOrphanedRefs(_ automation: Automation, devices: [DeviceModel], scenes: [SceneModel], stateNames: Set<String> = []) -> Bool {
         let deviceIds = Set(devices.map(\.id))
         let sceneIds = Set(scenes.map(\.id))
         let deviceRefs = AutomationMigrationService.collectDeviceReferences(from: automation)
@@ -165,6 +223,13 @@ struct AutomationListView: View {
         let sceneRefs = AutomationMigrationService.collectSceneReferences(from: automation)
         for ref in sceneRefs {
             if !sceneIds.contains(ref.sceneId) { return true }
+        }
+        // Check for references to deleted controller states
+        if !stateNames.isEmpty {
+            let referencedNames = StateVariableReferenceScanner.collectReferencedStateNames(in: automation)
+            for name in referencedNames {
+                if !stateNames.contains(name) { return true }
+            }
         }
         return false
     }

@@ -20,6 +20,7 @@ final class ServiceContainer {
     lazy var loggingService: LoggingService = LoggingService(storage: storageService)
     let deviceRegistryService: DeviceRegistryService = DeviceRegistryService()
     let automationStorageService: AutomationStorageService = AutomationStorageService()
+    let stateVariableStorageService: StateVariableStorageService = StateVariableStorageService()
     let scheduleTriggerManager: ScheduleTriggerManager = ScheduleTriggerManager()
 
     lazy var webhookService: WebhookService = WebhookService(
@@ -40,7 +41,8 @@ final class ServiceContainer {
         loggingService: loggingService,
         executionLogService: loggingService,
         storage: storageService,
-        registry: deviceRegistryService
+        registry: deviceRegistryService,
+        stateVariableStorage: stateVariableStorageService
     )
 
     lazy var aiAutomationService: AIAutomationService = AIAutomationService(
@@ -62,6 +64,7 @@ final class ServiceContainer {
         aiAutomationService: aiAutomationService,
         subscriptionService: subscriptionService,
         oauthService: oauthService,
+        stateVariableStorage: stateVariableStorageService,
         port: storageService.mcpServerPort
     )
 
@@ -117,6 +120,7 @@ final class ServiceContainer {
         deviceRegistryService: deviceRegistryService,
         homeKitManager: homeKitManager,
         automationStorageService: automationStorageService,
+        stateVariableStorageService: stateVariableStorageService,
         subscriptionService: subscriptionService,
         oauthService: oauthService
     )

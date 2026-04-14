@@ -15,6 +15,7 @@ struct AutomationEditorView: View {
     let devices: [DeviceModel]
     var scenes: [SceneModel] = []
     var automations: [Automation] = []
+    var controllerStates: [StateVariable] = []
     let onSave: (AutomationDraft) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -33,11 +34,12 @@ struct AutomationEditorView: View {
     /// does NOT re-render when individual blocks change inside the form.
     @State private var nestedEditState: NestedEditState?
 
-    init(mode: Mode, devices: [DeviceModel], scenes: [SceneModel] = [], automations: [Automation] = [], onSave: @escaping (AutomationDraft) -> Void) {
+    init(mode: Mode, devices: [DeviceModel], scenes: [SceneModel] = [], automations: [Automation] = [], controllerStates: [StateVariable] = [], onSave: @escaping (AutomationDraft) -> Void) {
         self.mode = mode
         self.devices = devices
         self.scenes = scenes
         self.automations = automations
+        self.controllerStates = controllerStates
         self.onSave = onSave
         switch mode {
         case .create:
@@ -51,13 +53,14 @@ struct AutomationEditorView: View {
         NavigationStack {
             Form {
                 detailsSection
-                TriggerEditorSection(triggers: $draft.triggers, devices: devices, onCopy: showCopyToast)
+                TriggerEditorSection(triggers: $draft.triggers, devices: devices, controllerStates: controllerStates, onCopy: showCopyToast)
                 ConditionEditorSection(
                     conditionRoot: $draft.conditionRoot,
                     devices: devices,
                     scenes: scenes,
                     continueOnError: draft.continueOnError,
-                    allBlocks: draft.allBlockDrafts()
+                    allBlocks: draft.allBlockDrafts(),
+                    controllerStates: controllerStates
                 )
                 BlockEditorSection(
                     blocks: $draft.blocks,
@@ -67,6 +70,7 @@ struct AutomationEditorView: View {
                     continueOnError: draft.continueOnError,
                     allBlocks: draft.allBlockDrafts(),
                     referencedBlockIds: draft.blockIdsReferencedByConditions(),
+                    controllerStates: controllerStates,
                     blockOrdinals: draft.blockOrdinals(),
                     onRequestNestedEdit: { state in
                         nestedEditState = state
@@ -116,7 +120,8 @@ struct AutomationEditorView: View {
                     blocks: BlockEditorSection.nestedBlocksBinding(for: state, blocks: $draft.blocks),
                     devices: devices,
                     scenes: scenes,
-                    blockOrdinals: draft.blockOrdinals()
+                    blockOrdinals: draft.blockOrdinals(),
+                    controllerStates: controllerStates
                 )
             }
             .overlay(alignment: .bottom) {

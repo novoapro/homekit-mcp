@@ -158,6 +158,8 @@ enum TemperatureConversion {
             return .greaterThanOrEqual(convert(v))
         case .lessThanOrEqual(let v):
             return .lessThanOrEqual(convert(v))
+        case .isEmpty, .isNotEmpty, .contains:
+            return comparison
         }
     }
 

@@ -263,7 +263,8 @@ struct ContentView: View {
                     viewModel: automationViewModel,
                     aiAutomationService: settingsViewModel.aiAutomationService,
                     aiEnabled: settingsViewModel.aiEnabled && settingsViewModel.aiApiKeyConfigured,
-                    subscriptionService: settingsViewModel.subscriptionService
+                    subscriptionService: settingsViewModel.subscriptionService,
+                    stateVariableStorage: settingsViewModel.stateVariableStorageService
                 )
             }
         case .nav(.logs):

@@ -29,6 +29,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
     private let aiAutomationService: AIAutomationService?
     private let subscriptionService: SubscriptionService?
     private let oauthService: OAuthService
+    private let stateVariableStorage: StateVariableStorageService?
     private var wsCancellables = Set<AnyCancellable>()
     private var serverTask: Task<Void, Never>?
 
@@ -43,6 +44,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         aiAutomationService: AIAutomationService? = nil,
         subscriptionService: SubscriptionService? = nil,
         oauthService: OAuthService,
+        stateVariableStorage: StateVariableStorageService? = nil,
         port: Int = 3000,
         handler: MCPRequestHandler? = nil
     ) {
@@ -57,6 +59,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         self.aiAutomationService = aiAutomationService
         self.subscriptionService = subscriptionService
         self.oauthService = oauthService
+        self.stateVariableStorage = stateVariableStorage
         self.handler = handler ?? MCPRequestHandler(
             homeKitManager: homeKitManager,
             loggingService: loggingService,
@@ -65,7 +68,8 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             automationEngine: automationEngine,
             registry: registry,
             aiAutomationService: aiAutomationService,
-            subscriptionService: subscriptionService
+            subscriptionService: subscriptionService,
+            stateVariableStorage: stateVariableStorage
         )
     }
 
@@ -750,6 +754,38 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             return try await self.handleRestImproveAutomation(req)
         }
 
+        // MARK: - State Variable REST Endpoints
+
+        protected.on(.GET, "state-variables") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            return try await self.handleRestGetStateVariables(req)
+        }
+
+        protected.on(.GET, "state-variables", ":variableId") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            return try await self.handleRestGetStateVariable(req)
+        }
+
+        protected.on(.POST, "state-variables", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            return try await self.handleRestCreateStateVariable(req)
+        }
+
+        protected.on(.PUT, "state-variables", ":variableId", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            return try await self.handleRestUpdateStateVariable(req)
+        }
+
+        protected.on(.DELETE, "state-variables", ":variableId") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            return try await self.handleRestDeleteStateVariable(req)
+        }
+
         // Clear all logs (state-change logs + automation execution logs)
         protected.on(.DELETE, "logs") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
@@ -1380,6 +1416,104 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                     req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data)
+    }
+
+    // MARK: - State Variable REST Handlers
+
+    private func handleRestGetStateVariables(_ req: Request) async throws -> Response {
+        guard let storage = stateVariableStorage else { throw Abort(.serviceUnavailable) }
+        let variables = await storage.getAll()
+        let data = try JSONEncoder.iso8601.encode(variables)
+        logRESTCall(method: "GET", path: "/state-variables", statusCode: 200,
+                    resultSummary: "\(variables.count) variables",
+                    req: req, responseBody: String(data: data, encoding: .utf8))
+        return jsonResponse(data: data)
+    }
+
+    private func handleRestGetStateVariable(_ req: Request) async throws -> Response {
+        guard let storage = stateVariableStorage else { throw Abort(.serviceUnavailable) }
+        guard let idStr = req.parameters.get("variableId"),
+              let variableId = UUID(uuidString: idStr) else {
+            throw Abort(.badRequest, reason: "Invalid variable ID")
+        }
+        guard let variable = await storage.get(id: variableId) else {
+            throw Abort(.notFound, reason: "State variable not found")
+        }
+        let data = try JSONEncoder.iso8601.encode(variable)
+        logRESTCall(method: "GET", path: "/state-variables/\(idStr)", statusCode: 200,
+                    resultSummary: variable.name,
+                    req: req, responseBody: String(data: data, encoding: .utf8))
+        return jsonResponse(data: data)
+    }
+
+    private func handleRestCreateStateVariable(_ req: Request) async throws -> Response {
+        guard let storage = stateVariableStorage else { throw Abort(.serviceUnavailable) }
+        guard let body = req.body.data,
+              let bodyData = body.getData(at: body.readerIndex, length: body.readableBytes) else {
+            throw Abort(.badRequest, reason: "Missing request body")
+        }
+        var dict = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any] ?? [:]
+        guard let name = dict["name"] as? String, !name.isEmpty else {
+            throw Abort(.badRequest, reason: "Missing required field: name")
+        }
+        guard let typeStr = dict["type"] as? String,
+              let _ = StateVariableType(rawValue: typeStr) else {
+            throw Abort(.badRequest, reason: "Missing or invalid type. Must be: number, string, or boolean")
+        }
+        guard dict["value"] != nil else {
+            throw Abort(.badRequest, reason: "Missing required field: value")
+        }
+        if await storage.getByName(name) != nil {
+            throw Abort(.conflict, reason: "A state variable named '\(name)' already exists")
+        }
+        if dict["id"] == nil { dict["id"] = UUID().uuidString }
+        if dict["createdAt"] == nil { dict["createdAt"] = ISO8601DateFormatter().string(from: Date()) }
+        if dict["updatedAt"] == nil { dict["updatedAt"] = ISO8601DateFormatter().string(from: Date()) }
+        let normalizedData = try JSONSerialization.data(withJSONObject: dict)
+        let variable = try JSONDecoder.iso8601.decode(StateVariable.self, from: normalizedData)
+        let created = await storage.create(variable)
+        let data = try JSONEncoder.iso8601.encode(created)
+        logRESTCall(method: "POST", path: "/state-variables", statusCode: 201,
+                    resultSummary: "Created: \(created.name)",
+                    req: req, responseBody: String(data: data, encoding: .utf8))
+        return jsonResponse(data: data, status: .created)
+    }
+
+    private func handleRestUpdateStateVariable(_ req: Request) async throws -> Response {
+        guard let storage = stateVariableStorage else { throw Abort(.serviceUnavailable) }
+        guard let idStr = req.parameters.get("variableId"),
+              let variableId = UUID(uuidString: idStr) else {
+            throw Abort(.badRequest, reason: "Invalid variable ID")
+        }
+        guard let body = req.body.data,
+              let bodyData = body.getData(at: body.readerIndex, length: body.readableBytes) else {
+            throw Abort(.badRequest, reason: "Missing request body")
+        }
+        let dict = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any] ?? [:]
+        guard let rawValue = dict["value"] else {
+            throw Abort(.badRequest, reason: "Missing required field: value")
+        }
+        guard let updated = await storage.update(id: variableId, value: AnyCodable(rawValue)) else {
+            throw Abort(.notFound, reason: "State variable not found")
+        }
+        let data = try JSONEncoder.iso8601.encode(updated)
+        logRESTCall(method: "PUT", path: "/state-variables/\(idStr)", statusCode: 200,
+                    resultSummary: updated.name,
+                    req: req, responseBody: String(data: data, encoding: .utf8))
+        return jsonResponse(data: data)
+    }
+
+    private func handleRestDeleteStateVariable(_ req: Request) async throws -> Response {
+        guard let storage = stateVariableStorage else { throw Abort(.serviceUnavailable) }
+        guard let idStr = req.parameters.get("variableId"),
+              let variableId = UUID(uuidString: idStr) else {
+            throw Abort(.badRequest, reason: "Invalid variable ID")
+        }
+        guard await storage.delete(id: variableId) else {
+            throw Abort(.notFound, reason: "State variable not found")
+        }
+        logRESTCall(method: "DELETE", path: "/state-variables/\(idStr)", statusCode: 204, resultSummary: "Deleted")
+        return Response(status: .noContent)
     }
 
     private func handleRestWebhookTrigger(_ req: Request) async throws -> Response {

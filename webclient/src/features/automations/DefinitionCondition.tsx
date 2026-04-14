@@ -3,7 +3,7 @@ import { Icon } from '@/components/Icon';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import type {
   AutomationConditionDef, DeviceStateConditionDef, TimeConditionDef,
-  BlockResultConditionDef,
+  BlockResultConditionDef, EngineStateConditionDef,
   LogicAndConditionDef, LogicOrConditionDef, LogicNotConditionDef,
 } from '@/types/automation-definition';
 import { formatComparisonOperator, formatTimeConditionMode } from '@/utils/automation-definition-utils';
@@ -53,6 +53,10 @@ export function DefinitionCondition({ condition, depth = 0, isLast = true, isFir
       }
       case 'timeCondition': return 'Time Condition';
       case 'blockResult': return 'Block Result';
+      case 'engineState': {
+        const e = condition as EngineStateConditionDef;
+        return e.variableRef?.name || 'Controller State';
+      }
       case 'and': return 'All conditions (AND)';
       case 'or': return 'Any condition (OR)';
       case 'not': return 'NOT';
@@ -80,6 +84,10 @@ export function DefinitionCondition({ condition, depth = 0, isLast = true, isFir
         const b = condition as BlockResultConditionDef;
         const scope = b.blockResultScope.scope === 'specific' ? `Block ${b.blockResultScope.blockId}` : 'Last block';
         return `${scope} is ${b.expectedStatus}`;
+      }
+      case 'engineState': {
+        const e = condition as EngineStateConditionDef;
+        return formatComparisonOperator(e.comparison);
       }
       default: return undefined;
     }

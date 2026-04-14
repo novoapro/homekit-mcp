@@ -42,6 +42,26 @@ export interface ApiClient {
   getScenes(): Promise<RESTScene[]>;
   getAutomationRuntime(): Promise<AutomationRuntime>;
   getSubscriptionStatus(): Promise<SubscriptionStatus>;
+  getStateVariables(): Promise<StateVariable[]>;
+  getStateVariable(id: string): Promise<StateVariable>;
+  createStateVariable(data: { name: string; displayName?: string; type: string; value: unknown }): Promise<StateVariable>;
+  updateStateVariable(id: string, value: unknown): Promise<StateVariable>;
+  deleteStateVariable(id: string): Promise<void>;
+}
+
+export interface StateVariable {
+  id: string;
+  name: string;
+  displayName?: string;
+  type: 'number' | 'string' | 'boolean';
+  value: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Human-readable label — prefers displayName, falls back to name. */
+export function stateLabel(s: { name: string; displayName?: string }): string {
+  return s.displayName || s.name;
 }
 
 export class AuthenticationError extends Error {
@@ -241,6 +261,32 @@ export function createApiClient(
 
     async getSubscriptionStatus() {
       return requestJson<SubscriptionStatus>('/subscription/status');
+    },
+
+    async getStateVariables() {
+      return requestJson<StateVariable[]>('/state-variables');
+    },
+
+    async getStateVariable(id: string) {
+      return requestJson<StateVariable>(`/state-variables/${id}`);
+    },
+
+    async createStateVariable(data: { name: string; displayName?: string; type: string; value: unknown }) {
+      return requestJson<StateVariable>('/state-variables', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+
+    async updateStateVariable(id: string, value: unknown) {
+      return requestJson<StateVariable>(`/state-variables/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ value }),
+      });
+    },
+
+    async deleteStateVariable(id: string) {
+      await requestVoid(`/state-variables/${id}`, { method: 'DELETE' });
     },
 
 };

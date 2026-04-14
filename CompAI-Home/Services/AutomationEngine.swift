@@ -4,6 +4,7 @@ import Combine
 /// Core automation engine that evaluates triggers, checks conditions, and executes blocks.
 actor AutomationEngine: AutomationEngineProtocol {
     private let automationStorageService: AutomationStorageService
+    private let stateVariableStorage: StateVariableStorageService
     private let homeKitManager: HomeKitManager
     private let loggingService: LoggingService
     private let executionLogService: LoggingService
@@ -65,15 +66,18 @@ actor AutomationEngine: AutomationEngineProtocol {
         executionLogService: LoggingService,
         storage: StorageService,
         registry: DeviceRegistryService? = nil,
-        conditionEvaluator: ConditionEvaluator? = nil
+        conditionEvaluator: ConditionEvaluator? = nil,
+        stateVariableStorage: StateVariableStorageService = StateVariableStorageService()
     ) {
         automationStorageService = storageService
+        self.stateVariableStorage = stateVariableStorage
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
         self.executionLogService = executionLogService
         self.storage = storage
         self.registry = registry
         self.conditionEvaluator = conditionEvaluator ?? ConditionEvaluator(homeKitManager: homeKitManager, storage: storage, loggingService: loggingService, registry: registry)
+        self.conditionEvaluator.stateVariableStorage = stateVariableStorage
     }
 
     /// Wire up the one-directional subscription to HomeKitManager's state changes.
@@ -835,6 +839,7 @@ actor AutomationEngine: AutomationEngineProtocol {
             case let .webhook(a): return a.name
             case let .log(a): return a.name
             case let .runScene(a): return a.name
+            case let .stateVariable(a): return a.name
             }
         }()
         var result = BlockResult(blockIndex: index, blockKind: "action", blockType: action.displayType, blockName: actionName)
@@ -863,6 +868,8 @@ actor AutomationEngine: AutomationEngineProtocol {
                     try await self.homeKitManager.executeScene(id: a.sceneId)
                     let sceneName = await MainActor.run { self.homeKitManager.getScene(id: a.sceneId)?.name } ?? a.sceneId
                     result.detail = "Ran scene '\(sceneName)'"
+                case let .stateVariable(a):
+                    result.detail = try await self.executeStateVariableAction(a)
                 }
             }
             result.status = .success
@@ -977,6 +984,126 @@ actor AutomationEngine: AutomationEngineProtocol {
         "authorization", "cookie", "set-cookie", "proxy-authorization",
         "te", "trailer", "upgrade"
     ]
+
+    /// Execute a state variable operation and return a human-readable detail string.
+    private func executeStateVariableAction(_ action: StateVariableAction) async throws -> String {
+        switch action.operation {
+        case let .create(name, variableType, initialValue):
+            if await stateVariableStorage.getByName(name) != nil {
+                throw AutomationEngineError.stateVariableError("Variable '\(name)' already exists")
+            }
+            let variable = StateVariable(name: name, type: variableType, value: initialValue)
+            await stateVariableStorage.create(variable)
+            return "Created \(variableType.displayName) variable '\(name)' = \(variable.displayValue)"
+
+        case let .remove(ref):
+            guard let variable = await stateVariableStorage.resolve(ref) else {
+                throw AutomationEngineError.stateVariableError("Variable \(ref.displayDescription) not found")
+            }
+            await stateVariableStorage.delete(id: variable.id)
+            return "Removed variable '\(variable.name)'"
+
+        case let .set(ref, value):
+            guard let variable = await stateVariableStorage.resolve(ref) else {
+                throw AutomationEngineError.stateVariableError("Variable \(ref.displayDescription) not found")
+            }
+            await stateVariableStorage.update(id: variable.id, value: value)
+            return "Set '\(variable.name)' = \(StateVariable(name: variable.name, type: variable.type, value: value).displayValue)"
+
+        case let .increment(ref, by):
+            return try await applyNumberOp(ref: ref, label: "Incremented") { $0 + by }
+
+        case let .decrement(ref, by):
+            return try await applyNumberOp(ref: ref, label: "Decremented") { $0 - by }
+
+        case let .multiply(ref, by):
+            return try await applyNumberOp(ref: ref, label: "Multiplied") { $0 * by }
+
+        case let .addState(ref, otherRef):
+            return try await applyCrossNumberOp(ref: ref, otherRef: otherRef, label: "Added") { $0 + $1 }
+
+        case let .subtractState(ref, otherRef):
+            return try await applyCrossNumberOp(ref: ref, otherRef: otherRef, label: "Subtracted") { $0 - $1 }
+
+        case let .toggle(ref):
+            guard let variable = await stateVariableStorage.resolve(ref) else {
+                throw AutomationEngineError.stateVariableError("Variable \(ref.displayDescription) not found")
+            }
+            guard variable.type == .boolean, let current = variable.boolValue else {
+                throw AutomationEngineError.stateVariableError("Variable '\(variable.name)' is not a boolean")
+            }
+            let newVal = !current
+            await stateVariableStorage.update(id: variable.id, value: AnyCodable(newVal))
+            return "Toggled '\(variable.name)' → \(newVal)"
+
+        case let .andState(ref, otherRef):
+            return try await applyCrossBoolOp(ref: ref, otherRef: otherRef, label: "AND") { $0 && $1 }
+
+        case let .orState(ref, otherRef):
+            return try await applyCrossBoolOp(ref: ref, otherRef: otherRef, label: "OR") { $0 || $1 }
+
+        case let .notState(ref):
+            guard let variable = await stateVariableStorage.resolve(ref) else {
+                throw AutomationEngineError.stateVariableError("Variable \(ref.displayDescription) not found")
+            }
+            guard variable.type == .boolean, let current = variable.boolValue else {
+                throw AutomationEngineError.stateVariableError("Variable '\(variable.name)' is not a boolean")
+            }
+            let newVal = !current
+            await stateVariableStorage.update(id: variable.id, value: AnyCodable(newVal))
+            return "NOT '\(variable.name)' → \(newVal)"
+        }
+    }
+
+    // MARK: - State Variable Helpers
+
+    private func applyNumberOp(ref: StateVariableRef, label: String, op: (Double) -> Double) async throws -> String {
+        guard let variable = await stateVariableStorage.resolve(ref) else {
+            throw AutomationEngineError.stateVariableError("Variable \(ref.displayDescription) not found")
+        }
+        guard variable.type == .number, let current = variable.numberValue else {
+            throw AutomationEngineError.stateVariableError("Variable '\(variable.name)' is not a number")
+        }
+        let newVal = op(current)
+        await stateVariableStorage.update(id: variable.id, value: AnyCodable(newVal))
+        return "\(label) '\(variable.name)' → \(newVal)"
+    }
+
+    private func applyCrossNumberOp(ref: StateVariableRef, otherRef: StateVariableRef, label: String, op: (Double, Double) -> Double) async throws -> String {
+        guard let variable = await stateVariableStorage.resolve(ref) else {
+            throw AutomationEngineError.stateVariableError("Variable \(ref.displayDescription) not found")
+        }
+        guard variable.type == .number, let current = variable.numberValue else {
+            throw AutomationEngineError.stateVariableError("Variable '\(variable.name)' is not a number")
+        }
+        guard let other = await stateVariableStorage.resolve(otherRef) else {
+            throw AutomationEngineError.stateVariableError("Other variable \(otherRef.displayDescription) not found")
+        }
+        guard other.type == .number, let otherVal = other.numberValue else {
+            throw AutomationEngineError.stateVariableError("Variable '\(other.name)' is not a number")
+        }
+        let newVal = op(current, otherVal)
+        await stateVariableStorage.update(id: variable.id, value: AnyCodable(newVal))
+        return "\(label) '\(other.name)' to '\(variable.name)' → \(newVal)"
+    }
+
+    private func applyCrossBoolOp(ref: StateVariableRef, otherRef: StateVariableRef, label: String, op: (Bool, Bool) -> Bool) async throws -> String {
+        guard let variable = await stateVariableStorage.resolve(ref) else {
+            throw AutomationEngineError.stateVariableError("Variable \(ref.displayDescription) not found")
+        }
+        guard variable.type == .boolean, let current = variable.boolValue else {
+            throw AutomationEngineError.stateVariableError("Variable '\(variable.name)' is not a boolean")
+        }
+        guard let other = await stateVariableStorage.resolve(otherRef) else {
+            throw AutomationEngineError.stateVariableError("Other variable \(otherRef.displayDescription) not found")
+        }
+        guard other.type == .boolean, let otherVal = other.boolValue else {
+            throw AutomationEngineError.stateVariableError("Variable '\(other.name)' is not a boolean")
+        }
+        let newVal = op(current, otherVal)
+        await stateVariableStorage.update(id: variable.id, value: AnyCodable(newVal))
+        return "'\(variable.name)' \(label) '\(other.name)' → \(newVal)"
+    }
 
     private func executeWebhook(_ action: WebhookActionConfig) async throws {
         guard let url = URL(string: action.url) else {
@@ -1657,6 +1784,7 @@ enum AutomationEngineError: LocalizedError {
     case webhookFailed(statusCode: Int)
     case ssrfBlocked(String)
     case stopped(outcome: StopOutcome, message: String?)
+    case stateVariableError(String)
 
     var errorDescription: String? {
         switch self {
@@ -1665,6 +1793,7 @@ enum AutomationEngineError: LocalizedError {
         case let .webhookFailed(code): return "Webhook failed with status \(code)"
         case let .ssrfBlocked(url): return "Request blocked: URL '\(url)' resolves to a private/internal IP address"
         case let .stopped(outcome, message): return "Return (\(outcome.rawValue))\(message.map { ": \($0)" } ?? "")"
+        case let .stateVariableError(msg): return "State variable error: \(msg)"
         }
     }
 }

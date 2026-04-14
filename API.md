@@ -687,6 +687,53 @@ See [automation](#automation) in Data Models for the full schema.
 
 ---
 
+### State Variables
+
+Requires: **REST API enabled**
+
+| Method | Path | Description | Status | Response |
+|---|---|---|---|---|
+| `GET` | `/state-variables` | List all state variables | 200 | `stateVariable[]` |
+| `GET` | `/state-variables/:variableId` | Get a single state variable | 200 | `stateVariable` |
+| `POST` | `/state-variables` | Create a new state variable | 201 | `stateVariable` |
+| `PUT` | `/state-variables/:variableId` | Update a state variable's value | 200 | `stateVariable` |
+| `DELETE` | `/state-variables/:variableId` | Delete a state variable | 204 | (empty) |
+
+**POST /state-variables — Create**
+
+```json
+{
+  "name": "counter",
+  "type": "number",
+  "value": 0
+}
+```
+
+Required fields: `name` (string, unique), `type` (`"number"`, `"string"`, or `"boolean"`), `value` (must match the declared type).
+
+**PUT /state-variables/:variableId — Update**
+
+```json
+{
+  "value": 42
+}
+```
+
+Only `value` can be updated. The type is immutable after creation.
+
+**State Variable Model:**
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID | Auto-generated |
+| `name` | string | Unique name |
+| `type` | string | `"number"`, `"string"`, or `"boolean"` |
+| `value` | any | Current value (type-specific) |
+| `createdAt` | ISO 8601 | Creation timestamp |
+| `updatedAt` | ISO 8601 | Last update timestamp |
+
+---
+
 ### Settings
 
 | Method | Path | Description | Response |
@@ -1089,6 +1136,60 @@ Execute a scene.
 | `scene_id` | string | yes | Stable scene identifier |
 
 Returns success message with scene name, or error with reason.
+
+---
+
+#### State Variable Tools
+
+Requires automations enabled + Pro subscription.
+
+##### list_state_variables
+
+List all engine state variables with their current values and types.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| *(none)* | | | |
+
+Returns JSON array of all state variables.
+
+##### get_state_variable
+
+Get a specific state variable by ID or name.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `variable_id` | string | No | UUID of the state variable |
+| `name` | string | No | Name of the state variable (alternative) |
+
+##### create_state_variable
+
+Create a new engine state variable.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | Yes | Unique name for the variable |
+| `type` | string | Yes | `"number"`, `"string"`, or `"boolean"` |
+| `value` | any | Yes | Initial value matching the declared type |
+
+##### update_state_variable
+
+Update the value of an existing state variable.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `variable_id` | string | No | UUID of the state variable |
+| `name` | string | No | Name of the state variable (alternative) |
+| `value` | any | Yes | New value matching the variable's type |
+
+##### delete_state_variable
+
+Delete a state variable by ID or name.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `variable_id` | string | No | UUID of the state variable |
+| `name` | string | No | Name of the state variable (alternative) |
 
 ---
 
@@ -1544,6 +1645,34 @@ All blocks accept an optional `name` field.
 | `type` | `"log"` | yes | |
 | `message` | string | yes | Message to log |
 
+##### stateVariable
+
+Operate on engine state variables (create, update, remove, arithmetic, boolean logic).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `type` | `"stateVariable"` | yes | |
+| `operation` | StateVariableOperation | yes | Operation to perform (see below) |
+
+**StateVariableOperation** has an `operation` field discriminator:
+
+| Operation | Fields | Description |
+|---|---|---|
+| `create` | `name`, `variableType`, `initialValue` | Create a new variable |
+| `remove` | `variableRef` | Delete a variable |
+| `set` | `variableRef`, `value` | Set a variable's value |
+| `increment` | `variableRef`, `by` | Add `by` to a number variable |
+| `decrement` | `variableRef`, `by` | Subtract `by` from a number variable |
+| `multiply` | `variableRef`, `by` | Multiply a number variable by `by` |
+| `addState` | `variableRef`, `otherRef` | Add another variable's value to this one |
+| `subtractState` | `variableRef`, `otherRef` | Subtract another variable's value |
+| `toggle` | `variableRef` | Flip a boolean variable |
+| `andState` | `variableRef`, `otherRef` | Boolean AND with another variable |
+| `orState` | `variableRef`, `otherRef` | Boolean OR with another variable |
+| `notState` | `variableRef` | Boolean NOT |
+
+**StateVariableRef** identifies a variable by name or ID: `{"type": "byName", "name": "counter"}` or `{"type": "byId", "id": "uuid"}`.
+
 #### Flow Control Blocks (`"block": "flowControl"`)
 
 ##### delay
@@ -1633,7 +1762,7 @@ Conditions are used in automation-level guards, conditional blocks, and repeatWh
 | `roomName` | string | yes | |
 | `serviceId` | string | no | |
 | `characteristicId` | string | yes | Stable characteristic ID (resolvable via device registry) |
-| `comparison` | object | yes | `{type, value}` — types: `equals`, `notEquals`, `greaterThan`, `lessThan`, `greaterThanOrEqual`, `lessThanOrEqual` |
+| `comparison` | object | yes | `{type, value}` — types: `equals`, `notEquals`, `greaterThan`, `lessThan`, `greaterThanOrEqual`, `lessThanOrEqual`, `isEmpty`, `isNotEmpty`, `contains`. `isEmpty`/`isNotEmpty` have no value field. `contains` takes a string value. |
 
 #### timeCondition
 
@@ -1662,6 +1791,17 @@ Only valid inside `conditional` block conditions. Not allowed in automation-leve
 | `expectedStatus` | string | yes | `"success"`, `"failure"`, or `"cancelled"` |
 
 Requires `continueOnError = true` on the automation.
+
+#### engineState
+
+Compare an engine state variable's current value.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `type` | `"engineState"` | yes | |
+| `variableRef` | StateVariableRef | yes | Reference to the variable (`{"type": "byName", "name": "counter"}`) |
+| `comparison` | ComparisonOperator | yes | Comparison to apply. Boolean: `equals`/`notEquals`. String: `equals`/`notEquals`/`isEmpty`/`isNotEmpty`/`contains`. Number: all numeric operators. `isEmpty`/`isNotEmpty` have no value field. |
+| `compareToStateRef` | StateVariableRef | no | When set, compare against another variable's value instead of the literal in `comparison` |
 
 #### Logical operators
 

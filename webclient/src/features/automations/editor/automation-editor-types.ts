@@ -39,7 +39,7 @@ export interface AutomationTriggerDraft {
 
 export interface AutomationConditionDraft {
   _draftId: string;
-  type: 'deviceState' | 'timeCondition' | 'blockResult' | 'and' | 'or' | 'not';
+  type: 'deviceState' | 'timeCondition' | 'blockResult' | 'engineState' | 'and' | 'or' | 'not';
   // deviceState
   deviceId?: string;
   serviceId?: string;
@@ -52,6 +52,10 @@ export interface AutomationConditionDraft {
   // blockResult
   blockResultScope?: { scope: string; blockId?: string };
   expectedStatus?: string;
+  // engineState
+  variableRef?: { type: string; name?: string; id?: string };
+  compareToStateRef?: { type: string; name?: string; id?: string };
+  stateCompareMode?: 'literal' | 'stateRef';
   // and / or
   conditions?: AutomationConditionDraft[];
   // not
@@ -86,6 +90,17 @@ export interface AutomationBlockDraft {
   outcome?: string;
   targetAutomationId?: string;
   executionMode?: string;
+  // stateVariable
+  operation?: {
+    operation: string;
+    name?: string;
+    variableType?: string;
+    initialValue?: unknown;
+    variableRef?: { type: string; name?: string; id?: string };
+    value?: unknown;
+    by?: number;
+    otherRef?: { type: string; name?: string; id?: string };
+  };
 }
 
 export interface AutomationDraft {

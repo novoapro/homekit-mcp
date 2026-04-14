@@ -33,6 +33,9 @@ export function formatComparisonOperator(op: ComparisonOperator): string {
     case 'lessThan': return `< ${op.value}`;
     case 'greaterThanOrEqual': return `>= ${op.value}`;
     case 'lessThanOrEqual': return `<= ${op.value}`;
+    case 'isEmpty': return 'is empty';
+    case 'isNotEmpty': return 'is not empty';
+    case 'contains': return `contains "${(op as { value: string }).value}"`;
     default: return 'unknown';
   }
 }
@@ -102,6 +105,7 @@ export function formatRetriggerPolicy(policy: string): string {
 export function formatBlockType(type: string): string {
   const map: Record<string, string> = {
     controlDevice: 'Control Device',
+    stateVariable: 'Controller State',
     webhook: 'Webhook',
     log: 'Log Message',
     runScene: 'Run Scene',
@@ -189,6 +193,13 @@ export function formatConditionSummary(
     case 'not': {
       const inner = formatConditionSummary(c.condition, lookupDevice, lookupChar);
       return inner ? `NOT ${inner}` : 'NOT condition';
+    }
+    case 'engineState': {
+      const ref = c.variableRef as { name?: string } | undefined;
+      const varName = ref?.name || 'state';
+      const comp = c.comparison as { type: string; value?: unknown } | undefined;
+      const compStr = comp ? formatComparisonOperator(comp as ComparisonOperator) : '?';
+      return `${varName} ${compStr}`;
     }
     default:
       return type;

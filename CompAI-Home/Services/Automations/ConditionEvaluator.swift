@@ -16,6 +16,9 @@ class ConditionEvaluator {
     /// Only populated during automation execution; empty for standalone condition tests.
     var blockResults: [UUID: ExecutionStatus] = [:]
 
+    /// State variable storage for evaluating engineState conditions.
+    var stateVariableStorage: StateVariableStorageService?
+
     init(homeKitManager: HomeKitManager, storage: StorageService? = nil, loggingService: LoggingService? = nil, registry: DeviceRegistryService? = nil) {
         self.homeKitManager = homeKitManager
         self.storage = storage
@@ -142,9 +145,70 @@ class ConditionEvaluator {
             return (true, "Scene condition (legacy, always passes)")
         case .blockResult(let cond):
             return evaluateBlockResult(cond)
+        case .engineState(let cond):
+            return await evaluateEngineState(cond)
         case .and, .or, .not:
             // Should not reach here — compound conditions are handled in evaluate(_:)
             return (false, "Unexpected compound condition in leaf evaluator")
+        }
+    }
+
+    private func evaluateEngineState(_ condition: EngineStateCondition) async -> (Bool, String) {
+        guard let storage = stateVariableStorage else {
+            return (false, "Engine state condition: storage not available")
+        }
+
+        guard let variable = await storage.resolve(condition.variableRef) else {
+            return (false, "State variable \(condition.variableRef.displayDescription) not found")
+        }
+
+        let comparison: ComparisonOperator
+        if let otherRef = condition.compareToStateRef {
+            // Compare against another state variable's current value
+            guard let otherVar = await storage.resolve(otherRef) else {
+                return (false, "Compare-to state variable \(otherRef.displayDescription) not found")
+            }
+            // Build a comparison operator using the other variable's current value
+            comparison = Self.buildComparison(from: condition.comparison, replacingValueWith: otherVar.value)
+        } else {
+            comparison = condition.comparison
+        }
+
+        let passed = Self.compare(variable.value.value, using: comparison)
+        let desc = "State '\(variable.name)' \(Self.comparisonDescription(comparison))"
+        return (passed, desc)
+    }
+
+    /// Builds a new comparison operator with the same type but a different value.
+    private static func buildComparison(from original: ComparisonOperator, replacingValueWith newValue: AnyCodable) -> ComparisonOperator {
+        switch original {
+        case .equals: return .equals(newValue)
+        case .notEquals: return .notEquals(newValue)
+        case .greaterThan:
+            if let d = (newValue.value as? Double) ?? (newValue.value as? Int).map({ Double($0) }) {
+                return .greaterThan(d)
+            }
+            return .equals(newValue)
+        case .lessThan:
+            if let d = (newValue.value as? Double) ?? (newValue.value as? Int).map({ Double($0) }) {
+                return .lessThan(d)
+            }
+            return .equals(newValue)
+        case .greaterThanOrEqual:
+            if let d = (newValue.value as? Double) ?? (newValue.value as? Int).map({ Double($0) }) {
+                return .greaterThanOrEqual(d)
+            }
+            return .equals(newValue)
+        case .lessThanOrEqual:
+            if let d = (newValue.value as? Double) ?? (newValue.value as? Int).map({ Double($0) }) {
+                return .lessThanOrEqual(d)
+            }
+            return .equals(newValue)
+        case .isEmpty, .isNotEmpty:
+            return original // no value to replace
+        case .contains:
+            if let s = newValue.value as? String { return .contains(s) }
+            return .equals(newValue)
         }
     }
 
@@ -381,6 +445,15 @@ class ConditionEvaluator {
         case .lessThanOrEqual(let target):
             guard let numericValue = toDouble(value) else { return false }
             return numericValue <= target
+        case .isEmpty:
+            guard let str = value as? String else { return false }
+            return str.isEmpty
+        case .isNotEmpty:
+            guard let str = value as? String else { return false }
+            return !str.isEmpty
+        case .contains(let substring):
+            guard let str = value as? String else { return false }
+            return str.localizedCaseInsensitiveContains(substring)
         }
     }
 
@@ -425,6 +498,9 @@ class ConditionEvaluator {
         case .lessThan(let v): return "< \(v)"
         case .greaterThanOrEqual(let v): return ">= \(v)"
         case .lessThanOrEqual(let v): return "<= \(v)"
+        case .isEmpty: return "is empty"
+        case .isNotEmpty: return "is not empty"
+        case .contains(let v): return "contains \"\(v)\""
         }
     }
 }

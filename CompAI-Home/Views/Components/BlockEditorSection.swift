@@ -19,6 +19,7 @@ struct BlockEditorSection: View {
     var continueOnError: Bool = false
     var allBlocks: [BlockDraft] = []
     var referencedBlockIds: Set<UUID> = []
+    var controllerStates: [StateVariable] = []
     /// 1-based execution order index for each block (keyed by block ID).
     var blockOrdinals: [UUID: Int] = [:]
 
@@ -64,6 +65,9 @@ struct BlockEditorSection: View {
                     }
                     Button("Run Scene", systemImage: "play.rectangle.fill") {
                         blocks.append(.newRunScene())
+                    }
+                    Button("Controller State", systemImage: "cylinder.split.1x2") {
+                        blocks.append(.newStateVariable())
                     }
                     Button("Delay", systemImage: "clock") {
                         blocks.append(.newDelay())
@@ -183,7 +187,8 @@ struct BlockEditorSection: View {
             isReorderMode: isReorderMode,
             automations: automations,
             ordinal: blockOrdinals[blockId],
-            blockOrdinals: blockOrdinals
+            blockOrdinals: blockOrdinals,
+            controllerStates: controllerStates
         )
         .listRowBackground(
             VStack(spacing: 0) {
@@ -325,6 +330,7 @@ struct NestedBlockEditorSheet: View {
     let devices: [DeviceModel]
     var scenes: [SceneModel] = []
     var blockOrdinals: [UUID: Int] = [:]
+    var controllerStates: [StateVariable] = []
     @Environment(\.dismiss) private var dismiss
     @State private var nestedEditState: NestedEditState?
 
@@ -336,6 +342,7 @@ struct NestedBlockEditorSheet: View {
                     devices: devices,
                     scenes: scenes,
                     allowNesting: true,
+                    controllerStates: controllerStates,
                     blockOrdinals: blockOrdinals,
                     onRequestNestedEdit: { state in
                         nestedEditState = state
@@ -358,7 +365,8 @@ struct NestedBlockEditorSheet: View {
                     blocks: BlockEditorSection.nestedBlocksBinding(for: state, blocks: $blocks),
                     devices: devices,
                     scenes: scenes,
-                    blockOrdinals: blockOrdinals
+                    blockOrdinals: blockOrdinals,
+                    controllerStates: controllerStates
                 )
             }
         }

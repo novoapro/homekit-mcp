@@ -14,6 +14,7 @@ struct AutomationDetailView: View {
     var onCancelExecution: ((UUID) -> Void)?
     var onResetStatistics: (() -> Void)?
     var onImproveWithAI: ((String?) async throws -> Automation)?
+    var controllerStates: [StateVariable] = []
 
     @State private var showingDeleteConfirmation = false
     @State private var showingResetConfirmation = false
@@ -57,6 +58,7 @@ struct AutomationDetailView: View {
                 devices: devices,
                 scenes: scenes,
                 automations: automations,
+                controllerStates: controllerStates,
                 onSave: { draft in onUpdate(draft) }
             )
         }
@@ -602,6 +604,14 @@ private struct AutomationConditionRow: View {
                         .fontWeight(.medium)
                 }
             }
+        case let .engineState(c):
+            HStack(spacing: 6) {
+                Image(systemName: "cylinder.split.1x2")
+                    .foregroundStyle(.teal)
+                Text("State \(c.variableRef.displayDescription) \(ConditionEvaluator.comparisonDescription(c.comparison))")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
         }
     }
 }
@@ -686,6 +696,7 @@ private struct ActionBlockRow: View {
         case .webhook: return "globe"
         case .log: return "text.bubble"
         case .runScene: return "play.rectangle.fill"
+        case .stateVariable: return "cylinder.split.1x2"
         }
     }
 
@@ -695,6 +706,7 @@ private struct ActionBlockRow: View {
         case let .webhook(a): return a.name ?? "Webhook"
         case let .log(a): return a.name ?? "Log Message"
         case let .runScene(a): return a.name ?? "Run Scene"
+        case let .stateVariable(a): return a.name ?? "Controller State"
         }
     }
 
@@ -709,6 +721,8 @@ private struct ActionBlockRow: View {
         case let .runScene(a):
             let sceneName = scenes.first(where: { $0.id == a.sceneId })?.name ?? a.sceneId
             return "Scene: \(sceneName)"
+        case let .stateVariable(a):
+            return a.operation.displayName
         }
     }
 }

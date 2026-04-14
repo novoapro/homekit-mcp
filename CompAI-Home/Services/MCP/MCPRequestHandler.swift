@@ -12,11 +12,13 @@ final class MCPRequestHandler: Sendable {
     private let registry: DeviceRegistryService?
     private let aiAutomationService: AIAutomationService?
     private let subscriptionService: SubscriptionService?
+    private let stateVariableStorage: StateVariableStorageService?
 
     init(homeKitManager: HomeKitManager, loggingService: LoggingService, storage: StorageService,
          automationStorageService: AutomationStorageService, automationEngine: AutomationEngine,
          registry: DeviceRegistryService? = nil, aiAutomationService: AIAutomationService? = nil,
-         subscriptionService: SubscriptionService? = nil) {
+         subscriptionService: SubscriptionService? = nil,
+         stateVariableStorage: StateVariableStorageService? = nil) {
         self.homeKitManager = homeKitManager
         self.loggingService = loggingService
         self.storage = storage
@@ -25,6 +27,7 @@ final class MCPRequestHandler: Sendable {
         self.registry = registry
         self.aiAutomationService = aiAutomationService
         self.subscriptionService = subscriptionService
+        self.stateVariableStorage = stateVariableStorage
     }
 
     func handle(_ request: JSONRPCRequest) async -> JSONRPCResponse {
@@ -85,7 +88,9 @@ final class MCPRequestHandler: Sendable {
     private static let automationToolNames: Set<String> = [
         "list_automations", "get_automation", "create_automation", "update_automation",
         "delete_automation", "enable_automation", "get_automation_logs",
-        "trigger_automation", "improve_automation"
+        "trigger_automation", "improve_automation",
+        "list_state_variables", "get_state_variable", "create_state_variable",
+        "update_state_variable", "delete_state_variable"
     ]
 
     // MARK: - Initialize
@@ -226,6 +231,7 @@ final class MCPRequestHandler: Sendable {
         tools += MCPToolDefinitions.metadataTools
         if storage.readAutomationsEnabled() {
             tools += MCPToolDefinitions.automationTools
+            tools += MCPToolDefinitions.stateVariableTools
         }
         let result: [String: Any] = ["tools": tools]
         return JSONRPCResponse.success(id: id, result: AnyCodable(result))
@@ -310,6 +316,16 @@ final class MCPRequestHandler: Sendable {
             return await handleTriggerAutomation(id: id, arguments: arguments)
         case "improve_automation":
             return await handleImproveAutomation(id: id, arguments: arguments)
+        case "list_state_variables":
+            return await handleListStateVariables(id: id)
+        case "get_state_variable":
+            return await handleGetStateVariable(id: id, arguments: arguments)
+        case "create_state_variable":
+            return await handleCreateStateVariable(id: id, arguments: arguments)
+        case "update_state_variable":
+            return await handleUpdateStateVariable(id: id, arguments: arguments)
+        case "delete_state_variable":
+            return await handleDeleteStateVariable(id: id, arguments: arguments)
         default:
             return JSONRPCResponse.error(
                 id: id,
@@ -491,7 +507,7 @@ final class MCPRequestHandler: Sendable {
                     "description": "Must be true if using blockResult conditions"],
                 "triggers": ["type": "array", "required": true, "description": "Array of trigger objects"],
                 "conditions": ["type": "array", "required": false,
-                    "description": "Optional execution guards (AND-ed). Evaluated after any trigger fires. Only deviceState, timeCondition allowed (no blockResult). Failure logs as conditionNotMet (skipped)."],
+                    "description": "Optional execution guards (AND-ed). Evaluated after any trigger fires. Supports deviceState, timeCondition, engineState (no blockResult). Failure logs as conditionNotMet (skipped)."],
                 "blocks": ["type": "array", "required": true, "description": "Array of block objects (actions and flow control)"]
             ] as [String: Any],
             "retriggerPolicies": [
@@ -513,7 +529,7 @@ final class MCPRequestHandler: Sendable {
                         "name": ["type": "string", "required": false],
                         "retriggerPolicy": ["type": "string", "required": false],
                         "conditions": ["type": "array", "required": false,
-                            "description": "Per-trigger guard conditions. Only deviceState, timeCondition allowed. If conditions fail, trigger is silently skipped."]
+                            "description": "Per-trigger guard conditions. Supports deviceState, timeCondition, engineState. If conditions fail, trigger is silently skipped."]
                     ] as [String: Any]
                 ],
                 [
@@ -523,7 +539,7 @@ final class MCPRequestHandler: Sendable {
                         "name": ["type": "string", "required": false],
                         "retriggerPolicy": ["type": "string", "required": false],
                         "conditions": ["type": "array", "required": false,
-                            "description": "Per-trigger guard conditions. Only deviceState, timeCondition allowed. If conditions fail, trigger is silently skipped."]
+                            "description": "Per-trigger guard conditions. Supports deviceState, timeCondition, engineState. If conditions fail, trigger is silently skipped."]
                     ] as [String: Any]
                 ],
                 [
@@ -535,7 +551,7 @@ final class MCPRequestHandler: Sendable {
                         "name": ["type": "string", "required": false],
                         "retriggerPolicy": ["type": "string", "required": false],
                         "conditions": ["type": "array", "required": false,
-                            "description": "Per-trigger guard conditions. Only deviceState, timeCondition allowed. If conditions fail, trigger is silently skipped."]
+                            "description": "Per-trigger guard conditions. Supports deviceState, timeCondition, engineState. If conditions fail, trigger is silently skipped."]
                     ] as [String: Any]
                 ],
                 [
@@ -545,7 +561,7 @@ final class MCPRequestHandler: Sendable {
                         "name": ["type": "string", "required": false],
                         "retriggerPolicy": ["type": "string", "required": false],
                         "conditions": ["type": "array", "required": false,
-                            "description": "Per-trigger guard conditions. Only deviceState, timeCondition allowed. If conditions fail, trigger is silently skipped."]
+                            "description": "Per-trigger guard conditions. Supports deviceState, timeCondition, engineState. If conditions fail, trigger is silently skipped."]
                     ] as [String: Any]
                 ],
                 [
@@ -555,7 +571,7 @@ final class MCPRequestHandler: Sendable {
                         "name": ["type": "string", "required": false],
                         "retriggerPolicy": ["type": "string", "required": false],
                         "conditions": ["type": "array", "required": false,
-                            "description": "Per-trigger guard conditions. Only deviceState, timeCondition allowed. If conditions fail, trigger is silently skipped."]
+                            "description": "Per-trigger guard conditions. Supports deviceState, timeCondition, engineState. If conditions fail, trigger is silently skipped."]
                     ] as [String: Any]
                 ]
             ] as [[String: Any]],
@@ -622,6 +638,14 @@ final class MCPRequestHandler: Sendable {
                         "block": "action", "type": "log",
                         "fields": [
                             "message": ["type": "string", "required": true],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
+                        "block": "action", "type": "stateVariable",
+                        "description": "Operate on controller states (create, remove, set, increment, decrement, multiply, toggle, etc.)",
+                        "fields": [
+                            "operation": ["type": "object", "required": true, "description": "See stateVariableOperations"],
                             "name": ["type": "string", "required": false]
                         ] as [String: Any]
                     ]
@@ -742,6 +766,18 @@ final class MCPRequestHandler: Sendable {
                         ] as [String: Any]
                     ],
                     [
+                        "type": "engineState",
+                        "description": "Compare a controller state variable's current value. Use list_state_variables to discover available states.",
+                        "fields": [
+                            "variableRef": ["type": "object", "required": true,
+                                "description": "Reference: {\"type\":\"byName\",\"name\":\"my_counter\"}"],
+                            "comparison": ["type": "object", "required": true,
+                                "description": "ComparisonOperator. For booleans: equals/notEquals only. For strings: equals/notEquals. For numbers: all operators."],
+                            "compareToStateRef": ["type": "object", "required": false,
+                                "description": "Optional. When set, compare against another state variable's value instead of a literal."]
+                        ] as [String: Any]
+                    ],
+                    [
                         "type": "and",
                         "fields": ["conditions": ["type": "array", "description": "Array of AutomationCondition objects"]]
                     ],
@@ -756,24 +792,50 @@ final class MCPRequestHandler: Sendable {
                 ] as [[String: Any]]
             ] as [String: Any],
             "comparisonOperators": [
-                "description": "Comparison types for deviceState conditions",
+                "description": "Comparison types for deviceState and engineState conditions. Boolean: equals/notEquals. String: equals/notEquals/isEmpty/isNotEmpty/contains. Number: all numeric operators.",
                 "types": [
-                    ["type": "equals", "fields": ["value": "any"]],
-                    ["type": "notEquals", "fields": ["value": "any"]],
-                    ["type": "greaterThan", "fields": ["value": "number"]],
-                    ["type": "lessThan", "fields": ["value": "number"]],
-                    ["type": "greaterThanOrEqual", "fields": ["value": "number"]],
-                    ["type": "lessThanOrEqual", "fields": ["value": "number"]]
+                    ["type": "equals", "fields": ["value": "any"], "description": "All types"],
+                    ["type": "notEquals", "fields": ["value": "any"], "description": "All types"],
+                    ["type": "greaterThan", "fields": ["value": "number"], "description": "Numbers only"],
+                    ["type": "lessThan", "fields": ["value": "number"], "description": "Numbers only"],
+                    ["type": "greaterThanOrEqual", "fields": ["value": "number"], "description": "Numbers only"],
+                    ["type": "lessThanOrEqual", "fields": ["value": "number"], "description": "Numbers only"],
+                    ["type": "isEmpty", "fields": [:] as [String: Any], "description": "Strings only. No value field needed."],
+                    ["type": "isNotEmpty", "fields": [:] as [String: Any], "description": "Strings only. No value field needed."],
+                    ["type": "contains", "fields": ["value": "string"], "description": "Strings only. Case-insensitive substring match."]
+                ] as [[String: Any]]
+            ] as [String: Any],
+            "stateVariableOperations": [
+                "description": "Operations for the stateVariable action block. Use list_state_variables to discover available states and their types.",
+                "variableRef": "{\"type\":\"byName\",\"name\":\"state_name\"} — identifies the target state",
+                "operations": [
+                    ["operation": "create", "fields": ["name": "string", "variableType": "number|string|boolean", "initialValue": "any"],
+                        "description": "Create a new controller state"],
+                    ["operation": "remove", "fields": ["variableRef": "object"], "description": "Delete a state"],
+                    ["operation": "set", "fields": ["variableRef": "object", "value": "any"], "description": "Set value (any type)"],
+                    ["operation": "increment", "fields": ["variableRef": "object", "by": "number"], "description": "Add to number state"],
+                    ["operation": "decrement", "fields": ["variableRef": "object", "by": "number"], "description": "Subtract from number state"],
+                    ["operation": "multiply", "fields": ["variableRef": "object", "by": "number"], "description": "Multiply number state"],
+                    ["operation": "addState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Add another state's value (numbers)"],
+                    ["operation": "subtractState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Subtract another state's value (numbers)"],
+                    ["operation": "toggle", "fields": ["variableRef": "object"], "description": "Flip boolean state"],
+                    ["operation": "andState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Boolean AND with another state"],
+                    ["operation": "orState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Boolean OR with another state"],
+                    ["operation": "notState", "fields": ["variableRef": "object"], "description": "Boolean NOT"]
                 ] as [[String: Any]]
             ] as [String: Any],
             "importantRules": [
                 "Always include deviceName and roomName alongside deviceId in triggers, conditions, and blocks.",
                 "blockResult conditions are ONLY valid inside conditional block conditions.",
-                "Guard-level conditions only support: deviceState, timeCondition, and/or/not.",
-                "repeatWhile conditions only support: deviceState, timeCondition, and/or/not (no blockResult).",
+                "Guard-level conditions support: deviceState, timeCondition, engineState, and/or/not.",
+                "repeatWhile conditions support: deviceState, timeCondition, engineState, and/or/not (no blockResult).",
                 "Set continueOnError=true on the automation when using blockResult conditions.",
                 "Use list_devices to discover device IDs, service IDs, and characteristic IDs.",
-                "Use characteristic IDs (not types) in triggers, conditions, and controlDevice actions."
+                "Use characteristic IDs (not types) in triggers, conditions, and controlDevice actions.",
+                "Use list_state_variables to discover controller states before using stateVariable blocks or engineState conditions.",
+                "Controller state names are lowercase identifiers (a-z, 0-9, _). Use stateVariable blocks to create/modify them.",
+                "For engineState conditions: boolean states support equals/notEquals; string states support equals/notEquals/isEmpty/isNotEmpty/contains; number states support all numeric comparison operators.",
+                "isEmpty and isNotEmpty comparisons have no value field. contains takes a string value for case-insensitive substring matching."
             ]
         ]
 
@@ -1469,6 +1531,90 @@ final class MCPRequestHandler: Sendable {
         }
 
         return " (\(parts.joined(separator: ", ")))"
+    }
+
+    // MARK: - State Variable Tool Handlers
+
+    private func resolveStateVariable(arguments: [String: Any]) async -> StateVariable? {
+        guard let storage = stateVariableStorage else { return nil }
+        if let idStr = arguments["variable_id"] as? String, let id = UUID(uuidString: idStr) {
+            return await storage.get(id: id)
+        }
+        if let name = arguments["name"] as? String {
+            return await storage.getByName(name)
+        }
+        return nil
+    }
+
+    private func handleListStateVariables(id: JSONRPCId?) async -> JSONRPCResponse {
+        guard let storage = stateVariableStorage else {
+            return toolResult(text: "State variable storage not available.", isError: true, id: id)
+        }
+        let variables = await storage.getAll()
+        if variables.isEmpty {
+            return toolResult(text: "No state variables found. Use create_state_variable to create one.", id: id)
+        }
+        return toolResult(encoding: variables, id: id)
+    }
+
+    private func handleGetStateVariable(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let variable = await resolveStateVariable(arguments: arguments) else {
+            return toolResult(text: "State variable not found. Provide a valid variable_id or name.", isError: true, id: id)
+        }
+        return toolResult(encoding: variable, id: id)
+    }
+
+    private func handleCreateStateVariable(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let storage = stateVariableStorage else {
+            return toolResult(text: "State variable storage not available.", isError: true, id: id)
+        }
+        guard let name = arguments["name"] as? String, !name.isEmpty else {
+            return toolResult(text: "Missing required argument: name", isError: true, id: id)
+        }
+        guard let typeStr = arguments["type"] as? String,
+              let varType = StateVariableType(rawValue: typeStr) else {
+            return toolResult(text: "Missing or invalid type. Must be: number, string, or boolean", isError: true, id: id)
+        }
+        guard let rawValue = arguments["value"] else {
+            return toolResult(text: "Missing required argument: value", isError: true, id: id)
+        }
+        if await storage.getByName(name) != nil {
+            return toolResult(text: "A state variable named '\(name)' already exists.", isError: true, id: id)
+        }
+        let variable = StateVariable(name: name, type: varType, value: AnyCodable(rawValue))
+        let created = await storage.create(variable)
+        return toolResult(text: "State variable created.\nID: \(created.id.uuidString)\nName: \(created.name)\nType: \(created.type.rawValue)\nValue: \(created.displayValue)", id: id)
+    }
+
+    private func handleUpdateStateVariable(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let storage = stateVariableStorage else {
+            return toolResult(text: "State variable storage not available.", isError: true, id: id)
+        }
+        guard let variable = await resolveStateVariable(arguments: arguments) else {
+            return toolResult(text: "State variable not found. Provide a valid variable_id or name.", isError: true, id: id)
+        }
+        guard let rawValue = arguments["value"] else {
+            return toolResult(text: "Missing required argument: value", isError: true, id: id)
+        }
+        guard let updated = await storage.update(id: variable.id, value: AnyCodable(rawValue)) else {
+            return toolResult(text: "Failed to update state variable.", isError: true, id: id)
+        }
+        return toolResult(text: "State variable updated.\nID: \(updated.id.uuidString)\nName: \(updated.name)\nValue: \(updated.displayValue)", id: id)
+    }
+
+    private func handleDeleteStateVariable(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
+        guard let storage = stateVariableStorage else {
+            return toolResult(text: "State variable storage not available.", isError: true, id: id)
+        }
+        guard let variable = await resolveStateVariable(arguments: arguments) else {
+            return toolResult(text: "State variable not found. Provide a valid variable_id or name.", isError: true, id: id)
+        }
+        let deleted = await storage.delete(id: variable.id)
+        if deleted {
+            return toolResult(text: "State variable '\(variable.name)' deleted.", id: id)
+        } else {
+            return toolResult(text: "Failed to delete state variable.", isError: true, id: id)
+        }
     }
 
     // MARK: - Tool Result Builders

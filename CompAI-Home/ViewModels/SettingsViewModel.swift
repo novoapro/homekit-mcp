@@ -166,6 +166,7 @@ class SettingsViewModel: ObservableObject {
     let deviceRegistryService: DeviceRegistryService
     let homeKitManager: HomeKitManager
     let automationStorageService: AutomationStorageService
+    let stateVariableStorageService: StateVariableStorageService
     let subscriptionService: SubscriptionService
     private var cancellables = Set<AnyCancellable>()
 
@@ -183,6 +184,7 @@ class SettingsViewModel: ObservableObject {
         deviceRegistryService: DeviceRegistryService,
         homeKitManager: HomeKitManager,
         automationStorageService: AutomationStorageService,
+        stateVariableStorageService: StateVariableStorageService,
         subscriptionService: SubscriptionService,
         oauthService: OAuthService
     ) {
@@ -197,6 +199,7 @@ class SettingsViewModel: ObservableObject {
         self.deviceRegistryService = deviceRegistryService
         self.homeKitManager = homeKitManager
         self.automationStorageService = automationStorageService
+        self.stateVariableStorageService = stateVariableStorageService
         self.subscriptionService = subscriptionService
         self.oauthService = oauthService
         self.webhookEnabled = storage.webhookEnabled

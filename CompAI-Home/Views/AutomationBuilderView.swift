@@ -645,6 +645,14 @@ private struct AutomationBuilderConditionRow: View {
                         .fontWeight(.medium)
                 }
             }
+        case .engineState(let c):
+            HStack(spacing: 6) {
+                Image(systemName: "cylinder.split.1x2")
+                    .foregroundStyle(.teal)
+                Text("State \(c.variableRef.displayDescription) \(ConditionEvaluator.comparisonDescription(c.comparison))")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
         }
     }
 }
@@ -706,6 +714,7 @@ private struct BuilderActionBlockRow: View {
         case .webhook: return "globe"
         case .log: return "text.bubble"
         case .runScene: return "play.rectangle.fill"
+        case .stateVariable: return "cylinder.split.1x2"
         }
     }
 
@@ -715,6 +724,7 @@ private struct BuilderActionBlockRow: View {
         case .webhook(let a): return a.name ?? "Webhook"
         case .log(let a): return a.name ?? "Log Message"
         case .runScene(let a): return a.name ?? "Run Scene"
+        case .stateVariable(let a): return a.name ?? "Controller State"
         }
     }
 
@@ -729,6 +739,8 @@ private struct BuilderActionBlockRow: View {
         case .runScene(let a):
             let sceneName = scenes.first(where: { $0.id == a.sceneId })?.name ?? a.sceneId
             return "Run scene \"\(sceneName)\""
+        case .stateVariable(let a):
+            return a.operation.displayName
         }
     }
 }

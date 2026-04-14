@@ -54,6 +54,9 @@ enum ComparisonType: String, CaseIterable, Identifiable {
     case lessThan
     case greaterThanOrEqual
     case lessThanOrEqual
+    case isEmpty
+    case isNotEmpty
+    case contains
 
     var id: String {
         rawValue
@@ -67,6 +70,9 @@ enum ComparisonType: String, CaseIterable, Identifiable {
         case .lessThan: return "Less Than"
         case .greaterThanOrEqual: return "Greater or Equal"
         case .lessThanOrEqual: return "Less or Equal"
+        case .isEmpty: return "Is Empty"
+        case .isNotEmpty: return "Is Not Empty"
+        case .contains: return "Contains"
         }
     }
 
@@ -78,6 +84,17 @@ enum ComparisonType: String, CaseIterable, Identifiable {
         case .lessThan: return "<"
         case .greaterThanOrEqual: return "≥"
         case .lessThanOrEqual: return "≤"
+        case .isEmpty: return "is empty"
+        case .isNotEmpty: return "is not empty"
+        case .contains: return "contains"
+        }
+    }
+
+    /// Whether this comparison requires a value input from the user.
+    var requiresValue: Bool {
+        switch self {
+        case .isEmpty, .isNotEmpty: return false
+        default: return true
         }
     }
 }
@@ -390,6 +407,9 @@ extension ConditionDraft {
             let scene = scenes.first(where: { $0.id == sceneId })
             let sceneName = scene?.name ?? sceneId
             return sceneIsActive ? "Scene \"\(sceneName)\" active" : "Scene \"\(sceneName)\" not active"
+        case .engineState:
+            let varName = stateVariableName.isEmpty ? "unknown" : stateVariableName
+            return "State '\(varName)' \(comparisonType.symbol) \(comparisonValue)"
         case .blockResult:
             let statusName = blockResultExpectedStatus.displayName
             switch blockResultScope {
@@ -438,6 +458,8 @@ extension BlockDraft {
             return d.autoName()
         case let .runScene(d):
             return d.autoName(scenes: scenes)
+        case let .stateVariable(d):
+            return d.operationType.displayName + (d.variableName.isEmpty ? "" : " '\(d.variableName)'")
         case let .delay(d):
             return d.autoName()
         case let .waitForState(d):
@@ -465,6 +487,7 @@ extension BlockDraft {
             case let .webhook(d): return d.name
             case let .log(d): return d.name
             case let .runScene(d): return d.name
+            case let .stateVariable(d): return d.name
             case let .delay(d): return d.name
             case let .waitForState(d): return d.name
             case let .conditional(d): return d.name
@@ -521,7 +544,7 @@ extension BlockDraft {
             return d.blocks.contains { $0._hasOrphan(deviceIds: deviceIds, sceneIds: sceneIds) }
         case let .group(d):
             return d.blocks.contains { $0._hasOrphan(deviceIds: deviceIds, sceneIds: sceneIds) }
-        case .webhook, .log, .delay, .stop, .executeAutomation:
+        case .webhook, .log, .stateVariable, .delay, .stop, .executeAutomation:
             return false
         }
     }
@@ -538,7 +561,7 @@ extension ConditionGroupDraft {
                     if !c.deviceId.isEmpty && !deviceIds.contains(c.deviceId) { return true }
                 case .sceneActive:
                     if !c.sceneId.isEmpty && !sceneIds.contains(c.sceneId) { return true }
-                case .timeCondition, .blockResult:
+                case .timeCondition, .blockResult, .engineState:
                     break
                 }
             case let .group(g):
@@ -642,6 +665,7 @@ enum ConditionDraftType: String, CaseIterable, Identifiable {
     case timeCondition
     case sceneActive
     case blockResult
+    case engineState
 
     var id: String { rawValue }
 
@@ -651,6 +675,7 @@ enum ConditionDraftType: String, CaseIterable, Identifiable {
         case .timeCondition: return "Time Condition"
         case .sceneActive: return "Scene Active"
         case .blockResult: return "Block Result"
+        case .engineState: return "Controller State"
         }
     }
 
@@ -660,6 +685,7 @@ enum ConditionDraftType: String, CaseIterable, Identifiable {
         case .timeCondition: return "clock.fill"
         case .sceneActive: return "play.rectangle.fill"
         case .blockResult: return "checkmark.rectangle.stack"
+        case .engineState: return "cylinder.split.1x2"
         }
     }
 }
@@ -713,6 +739,24 @@ struct ConditionDraft: Identifiable {
     var blockResultBlockId: UUID? = nil
     var blockResultExpectedStatus: ExecutionStatus = .success
 
+    // Engine State fields
+    var stateVariableName: String = ""
+    var stateVariableId: String = ""
+    var stateCompareToVariableName: String = ""
+    var stateCompareMode: StateCompareMode = .literal
+
+    enum StateCompareMode: String, CaseIterable, Identifiable {
+        case literal
+        case stateRef
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .literal: return "Value"
+            case .stateRef: return "State Variable"
+            }
+        }
+    }
+
     static func empty() -> ConditionDraft {
         ConditionDraft(
             id: UUID(),
@@ -757,6 +801,19 @@ struct ConditionDraft: Identifiable {
             id: UUID(),
             name: "",
             conditionDraftType: .blockResult,
+            deviceId: "",
+            serviceId: nil,
+            characteristicId: "",
+            comparisonType: .equals,
+            comparisonValue: ""
+        )
+    }
+
+    static func emptyEngineState() -> ConditionDraft {
+        ConditionDraft(
+            id: UUID(),
+            name: "",
+            conditionDraftType: .engineState,
             deviceId: "",
             serviceId: nil,
             characteristicId: "",
@@ -819,6 +876,10 @@ struct BlockDraft: Identifiable {
     static func newExecuteAutomation() -> BlockDraft {
         BlockDraft(id: UUID(), blockType: .executeAutomation(ExecuteAutomationDraft()))
     }
+
+    static func newStateVariable() -> BlockDraft {
+        BlockDraft(id: UUID(), blockType: .stateVariable(StateVariableDraft()))
+    }
 }
 
 enum BlockDraftType {
@@ -826,6 +887,7 @@ enum BlockDraftType {
     case webhook(WebhookDraft)
     case log(LogDraft)
     case runScene(RunSceneDraft)
+    case stateVariable(StateVariableDraft)
     case delay(DelayDraft)
     case waitForState(WaitForStateDraft)
     case conditional(ConditionalDraft)
@@ -841,6 +903,7 @@ enum BlockDraftType {
         case .webhook: return "Webhook"
         case .log: return "Log Message"
         case .runScene: return "Run Scene"
+        case .stateVariable: return "Controller State"
         case .delay: return "Delay"
         case .waitForState: return "Wait for State"
         case .conditional: return "If/Else"
@@ -858,6 +921,7 @@ enum BlockDraftType {
         case .webhook: return "globe"
         case .log: return "text.bubble"
         case .runScene: return "play.rectangle.fill"
+        case .stateVariable: return "cylinder.split.1x2"
         case .delay: return "clock"
         case .waitForState: return "hourglass"
         case .conditional: return "arrow.triangle.branch"
@@ -871,7 +935,7 @@ enum BlockDraftType {
 
     var isFlowControl: Bool {
         switch self {
-        case .controlDevice, .webhook, .log, .runScene: return false
+        case .controlDevice, .webhook, .log, .runScene, .stateVariable: return false
         default: return true
         }
     }
@@ -916,6 +980,180 @@ struct LogDraft {
 struct RunSceneDraft {
     var name: String = ""
     var sceneId: String = ""
+}
+
+// MARK: - State Variable Draft
+
+enum StateVariableOperationType: String, CaseIterable, Identifiable {
+    case create, remove, set
+    case increment, decrement, multiply, addState, subtractState
+    case toggle, andState, orState, notState
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .create: return "Create Variable"
+        case .remove: return "Remove Variable"
+        case .set: return "Set Value"
+        case .increment: return "Increment"
+        case .decrement: return "Decrement"
+        case .multiply: return "Multiply"
+        case .addState: return "Add State"
+        case .subtractState: return "Subtract State"
+        case .toggle: return "Toggle"
+        case .andState: return "AND State"
+        case .orState: return "OR State"
+        case .notState: return "NOT State"
+        }
+    }
+
+    /// The variable types this operation applies to. Empty means applicable to all types.
+    var applicableTypes: [StateVariableType] {
+        switch self {
+        case .create, .remove, .set: return []
+        case .increment, .decrement, .multiply, .addState, .subtractState: return [.number]
+        case .toggle, .andState, .orState, .notState: return [.boolean]
+        }
+    }
+
+    /// Whether this operation requires a secondary state variable reference.
+    var requiresOtherRef: Bool {
+        switch self {
+        case .addState, .subtractState, .andState, .orState: return true
+        default: return false
+        }
+    }
+
+    /// Whether this operation requires a numeric amount.
+    var requiresAmount: Bool {
+        switch self {
+        case .increment, .decrement, .multiply: return true
+        default: return false
+        }
+    }
+
+    /// Whether this operation requires a value input.
+    var requiresValue: Bool {
+        switch self {
+        case .create, .set: return true
+        default: return false
+        }
+    }
+}
+
+struct StateVariableDraft {
+    var name: String = ""
+    var operationType: StateVariableOperationType = .set
+    var variableName: String = ""
+    var variableId: String = ""
+    var variableType: StateVariableType = .number
+    var value: String = ""
+    var otherVariableName: String = ""
+    var amountValue: Double = 1.0
+
+    /// Convert from a `StateVariableAction` model to a draft.
+    static func from(_ action: StateVariableAction) -> StateVariableDraft {
+        var draft = StateVariableDraft()
+        draft.name = action.name ?? ""
+        switch action.operation {
+        case let .create(varName, varType, initialValue):
+            draft.operationType = .create
+            draft.variableName = varName
+            draft.variableType = varType
+            draft.value = stringFromAny(initialValue.value)
+        case let .remove(ref):
+            draft.operationType = .remove
+            applyRef(ref, to: &draft)
+        case let .set(ref, val):
+            draft.operationType = .set
+            applyRef(ref, to: &draft)
+            draft.value = stringFromAny(val.value)
+        case let .increment(ref, by):
+            draft.operationType = .increment
+            applyRef(ref, to: &draft)
+            draft.amountValue = by
+        case let .decrement(ref, by):
+            draft.operationType = .decrement
+            applyRef(ref, to: &draft)
+            draft.amountValue = by
+        case let .multiply(ref, by):
+            draft.operationType = .multiply
+            applyRef(ref, to: &draft)
+            draft.amountValue = by
+        case let .addState(ref, otherRef):
+            draft.operationType = .addState
+            applyRef(ref, to: &draft)
+            applyOtherRef(otherRef, to: &draft)
+        case let .subtractState(ref, otherRef):
+            draft.operationType = .subtractState
+            applyRef(ref, to: &draft)
+            applyOtherRef(otherRef, to: &draft)
+        case let .toggle(ref):
+            draft.operationType = .toggle
+            applyRef(ref, to: &draft)
+        case let .andState(ref, otherRef):
+            draft.operationType = .andState
+            applyRef(ref, to: &draft)
+            applyOtherRef(otherRef, to: &draft)
+        case let .orState(ref, otherRef):
+            draft.operationType = .orState
+            applyRef(ref, to: &draft)
+            applyOtherRef(otherRef, to: &draft)
+        case let .notState(ref):
+            draft.operationType = .notState
+            applyRef(ref, to: &draft)
+        }
+        return draft
+    }
+
+    private static func applyRef(_ ref: StateVariableRef, to draft: inout StateVariableDraft) {
+        switch ref {
+        case let .byName(name): draft.variableName = name
+        case let .byId(id): draft.variableId = id.uuidString
+        }
+    }
+
+    private static func applyOtherRef(_ ref: StateVariableRef, to draft: inout StateVariableDraft) {
+        if case let .byName(name) = ref {
+            draft.otherVariableName = name
+        }
+    }
+
+    /// Convert this draft back to a `StateVariableOperation` model.
+    func toOperation() -> StateVariableOperation {
+        let ref: StateVariableRef = variableName.isEmpty
+            ? .byId(UUID(uuidString: variableId) ?? UUID())
+            : .byName(variableName)
+        let otherRef: StateVariableRef = .byName(otherVariableName)
+
+        switch operationType {
+        case .create:
+            return .create(name: variableName, variableType: variableType, initialValue: parseValue(value))
+        case .remove:
+            return .remove(variableRef: ref)
+        case .set:
+            return .set(variableRef: ref, value: parseValue(value))
+        case .increment:
+            return .increment(variableRef: ref, by: amountValue)
+        case .decrement:
+            return .decrement(variableRef: ref, by: amountValue)
+        case .multiply:
+            return .multiply(variableRef: ref, by: amountValue)
+        case .addState:
+            return .addState(variableRef: ref, otherRef: otherRef)
+        case .subtractState:
+            return .subtractState(variableRef: ref, otherRef: otherRef)
+        case .toggle:
+            return .toggle(variableRef: ref)
+        case .andState:
+            return .andState(variableRef: ref, otherRef: otherRef)
+        case .orState:
+            return .orState(variableRef: ref, otherRef: otherRef)
+        case .notState:
+            return .notState(variableRef: ref)
+        }
+    }
 }
 
 struct DelayDraft {
@@ -981,7 +1219,7 @@ extension BlockDraft {
 extension BlockDraftType {
     func deepCopy() -> BlockDraftType {
         switch self {
-        case .controlDevice, .webhook, .log, .runScene, .delay, .waitForState, .stop, .executeAutomation:
+        case .controlDevice, .webhook, .log, .runScene, .stateVariable, .delay, .waitForState, .stop, .executeAutomation:
             return self // value types with no nested blocks
         case .conditional(var d):
             d.thenBlocks = d.thenBlocks.map { $0.deepCopy() }
@@ -1496,6 +1734,28 @@ extension AutomationDraft {
                 draft.blockResultScope = .any
             }
             return .leaf(draft)
+        case let .engineState(c):
+            let (compType, compValue) = convertComparison(c.comparison)
+            var draft = ConditionDraft(
+                id: UUID(),
+                conditionDraftType: .engineState,
+                deviceId: "",
+                serviceId: nil,
+                characteristicId: "",
+                comparisonType: compType,
+                comparisonValue: compValue
+            )
+            switch c.variableRef {
+            case let .byName(name): draft.stateVariableName = name
+            case let .byId(id): draft.stateVariableId = id.uuidString
+            }
+            if let otherRef = c.compareToStateRef {
+                draft.stateCompareMode = .stateRef
+                if case let .byName(name) = otherRef {
+                    draft.stateCompareToVariableName = name
+                }
+            }
+            return .leaf(draft)
         case .not(let inner):
             // NOT always maps to a group with isNegated = true
             var subGroup = convertConditionTree([inner], devices: devices)
@@ -1520,6 +1780,9 @@ extension AutomationDraft {
         case let .lessThan(v): return (.lessThan, String(v))
         case let .greaterThanOrEqual(v): return (.greaterThanOrEqual, String(v))
         case let .lessThanOrEqual(v): return (.lessThanOrEqual, String(v))
+        case .isEmpty: return (.isEmpty, "")
+        case .isNotEmpty: return (.isNotEmpty, "")
+        case let .contains(v): return (.contains, v)
         }
     }
 
@@ -1562,6 +1825,8 @@ extension AutomationDraft {
                 name: a.name ?? "",
                 sceneId: a.sceneId
             )))
+        case let .stateVariable(a):
+            return BlockDraft(id: blockId, blockType: .stateVariable(StateVariableDraft.from(a)))
         }
     }
 
@@ -1765,6 +2030,18 @@ extension ConditionDraft {
                 scope: scope,
                 expectedStatus: blockResultExpectedStatus
             ))
+        case .engineState:
+            let ref: StateVariableRef = stateVariableName.isEmpty
+                ? .byId(UUID(uuidString: stateVariableId) ?? UUID())
+                : .byName(stateVariableName)
+            let compareToRef: StateVariableRef? = stateCompareMode == .stateRef && !stateCompareToVariableName.isEmpty
+                ? .byName(stateCompareToVariableName)
+                : nil
+            base = .engineState(EngineStateCondition(
+                variableRef: ref,
+                comparison: toComparison(),
+                compareToStateRef: compareToRef
+            ))
         }
         return base
     }
@@ -1814,6 +2091,9 @@ extension ComparisonType {
         case .lessThan: return .lessThan(Double(value) ?? 0)
         case .greaterThanOrEqual: return .greaterThanOrEqual(Double(value) ?? 0)
         case .lessThanOrEqual: return .lessThanOrEqual(Double(value) ?? 0)
+        case .isEmpty: return .isEmpty
+        case .isNotEmpty: return .isNotEmpty
+        case .contains: return .contains(value)
         }
     }
 }
@@ -1842,6 +2122,11 @@ extension BlockDraft {
         case let .runScene(d):
             return .action(.runScene(RunSceneAction(
                 sceneId: d.sceneId,
+                name: d.name.isEmpty ? nil : d.name
+            )), blockId: id)
+        case let .stateVariable(d):
+            return .action(.stateVariable(StateVariableAction(
+                operation: d.toOperation(),
                 name: d.name.isEmpty ? nil : d.name
             )), blockId: id)
         case let .delay(d):

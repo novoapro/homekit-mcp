@@ -19,6 +19,7 @@ struct BlockEditorRow: View {
     var ordinal: Int?
     /// Full ordinals map for passing to condition editors.
     var blockOrdinals: [UUID: Int] = [:]
+    var controllerStates: [StateVariable] = []
     @State private var isExpanded: Bool = true
     @State private var isEditingName: Bool = false
     @State private var showReferencedAlert: Bool = false
@@ -40,6 +41,7 @@ struct BlockEditorRow: View {
                 )
             } label: {
                 blockLabel
+                    .contentShape(Rectangle())
             }
             .contextMenu {
                 if let onDuplicate {
@@ -197,6 +199,7 @@ struct BlockEditorRow: View {
                 case let .webhook(d): return d.name
                 case let .log(d): return d.name
                 case let .runScene(d): return d.name
+                case let .stateVariable(d): return d.name
                 case let .delay(d): return d.name
                 case let .waitForState(d): return d.name
                 case let .conditional(d): return d.name
@@ -213,6 +216,7 @@ struct BlockEditorRow: View {
                 case .webhook(var d): d.name = newName; block.blockType = .webhook(d)
                 case .log(var d): d.name = newName; block.blockType = .log(d)
                 case .runScene(var d): d.name = newName; block.blockType = .runScene(d)
+                case .stateVariable(var d): d.name = newName; block.blockType = .stateVariable(d)
                 case .delay(var d): d.name = newName; block.blockType = .delay(d)
                 case .waitForState(var d): d.name = newName; block.blockType = .waitForState(d)
                 case .conditional(var d): d.name = newName; block.blockType = .conditional(d)
@@ -237,6 +241,8 @@ struct BlockEditorRow: View {
             logContent
         case .runScene:
             runSceneContent
+        case .stateVariable:
+            stateVariableContent
         case .delay:
             delayContent
         case .waitForState:
@@ -275,6 +281,11 @@ extension BlockEditorRow {
     private var runSceneContent: some View {
         RunSceneEditor(block: $block, scenes: scenes)
     }
+
+    @ViewBuilder
+    private var stateVariableContent: some View {
+        StateVariableEditor(block: $block, controllerStates: controllerStates)
+    }
 }
 
 // MARK: - Flow Control Block Editors
@@ -285,11 +296,11 @@ extension BlockEditorRow {
     }
 
     private var waitForStateContent: some View {
-        WaitForStateEditor(block: $block, devices: devices, scenes: scenes, continueOnError: continueOnError, allBlocks: allBlocks, currentBlockId: block.id, blockOrdinals: blockOrdinals)
+        WaitForStateEditor(block: $block, devices: devices, scenes: scenes, continueOnError: continueOnError, allBlocks: allBlocks, currentBlockId: block.id, blockOrdinals: blockOrdinals, controllerStates: controllerStates)
     }
 
     private var conditionalContent: some View {
-        ConditionalEditor(block: $block, devices: devices, scenes: scenes, allowNesting: allowNesting, continueOnError: continueOnError, allBlocks: allBlocks, currentBlockId: block.id, blockOrdinals: blockOrdinals, onEditNestedBlocks: onEditNestedBlocks)
+        ConditionalEditor(block: $block, devices: devices, scenes: scenes, allowNesting: allowNesting, continueOnError: continueOnError, allBlocks: allBlocks, currentBlockId: block.id, blockOrdinals: blockOrdinals, controllerStates: controllerStates, onEditNestedBlocks: onEditNestedBlocks)
     }
 
     private var repeatContent: some View {
@@ -297,7 +308,7 @@ extension BlockEditorRow {
     }
 
     private var repeatWhileContent: some View {
-        RepeatWhileEditor(block: $block, devices: devices, scenes: scenes, allowNesting: allowNesting, continueOnError: continueOnError, allBlocks: allBlocks, currentBlockId: block.id, blockOrdinals: blockOrdinals, onEditNestedBlocks: onEditNestedBlocks)
+        RepeatWhileEditor(block: $block, devices: devices, scenes: scenes, allowNesting: allowNesting, continueOnError: continueOnError, allBlocks: allBlocks, currentBlockId: block.id, blockOrdinals: blockOrdinals, controllerStates: controllerStates, onEditNestedBlocks: onEditNestedBlocks)
     }
 
     private var groupContent: some View {
@@ -450,6 +461,173 @@ private struct RunSceneEditor: View {
     }
 }
 
+// MARK: - State Variable Editor
+
+private struct StateVariableEditor: View {
+    @Binding var block: BlockDraft
+    var controllerStates: [StateVariable] = []
+
+    private var draft: Binding<StateVariableDraft> {
+        Binding(
+            get: {
+                if case .stateVariable(let d) = block.blockType { return d }
+                return StateVariableDraft()
+            },
+            set: { block.blockType = .stateVariable($0) }
+        )
+    }
+
+    /// The selected state's type — looks up from loaded states, or infers from the current operation.
+    private var selectedStateType: StateVariableType? {
+        // First try to find in loaded states
+        if let found = controllerStates.first(where: { $0.name == draft.wrappedValue.variableName })?.type {
+            return found
+        }
+        // Infer from the current operation type if states aren't loaded
+        let opType = draft.wrappedValue.operationType
+        if !opType.applicableTypes.isEmpty {
+            return opType.applicableTypes.first
+        }
+        return nil
+    }
+
+    /// Operations filtered to the selected state's type.
+    private var availableOperations: [StateVariableOperationType] {
+        guard let type = selectedStateType else {
+            // Type unknown — show all non-create ops so the user can still see/edit
+            return StateVariableOperationType.allCases.filter { $0 != .create }
+        }
+        return StateVariableOperationType.allCases.filter { op in
+            op != .create && (op.applicableTypes.isEmpty || op.applicableTypes.contains(type))
+        }
+    }
+
+    /// Whether the user is in "create new" mode.
+    private var isCreateMode: Bool {
+        draft.wrappedValue.operationType == .create
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Step 1: Pick existing state or create new
+            Picker("State", selection: Binding(
+                get: { isCreateMode ? "__create__" : draft.wrappedValue.variableName },
+                set: { newValue in
+                    if newValue == "__create__" {
+                        draft.wrappedValue.operationType = .create
+                        draft.wrappedValue.variableName = ""
+                    } else {
+                        if isCreateMode {
+                            draft.wrappedValue.operationType = .set
+                        }
+                        draft.wrappedValue.variableName = newValue
+                        // If the operation doesn't apply to this type, reset to .set
+                        if let type = controllerStates.first(where: { $0.name == newValue })?.type {
+                            let applicable = draft.wrappedValue.operationType.applicableTypes
+                            if !applicable.isEmpty && !applicable.contains(type) {
+                                draft.wrappedValue.operationType = .set
+                            }
+                        }
+                    }
+                }
+            )) {
+                ForEach(controllerStates) { state in
+                    Text("\(state.label) (\(state.type.symbol))").tag(state.name)
+                }
+                // Show the current variable name even if not in loaded states (e.g., states not loaded yet)
+                if !isCreateMode,
+                   !draft.wrappedValue.variableName.isEmpty,
+                   !controllerStates.contains(where: { $0.name == draft.wrappedValue.variableName }) {
+                    Text(draft.wrappedValue.variableName).tag(draft.wrappedValue.variableName)
+                }
+                Divider()
+                Text("Create New...").tag("__create__")
+            }
+
+            if isCreateMode {
+                // Create new state
+                TextField("Name (no spaces)", text: draft.variableName)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+
+                Picker("Type", selection: draft.variableType) {
+                    ForEach(StateVariableType.allCases) { t in
+                        Label(t.displayName, systemImage: t.icon).tag(t)
+                    }
+                }
+
+                // Type-specific initial value
+                initialValueInput
+            } else if !draft.wrappedValue.variableName.isEmpty {
+                // Step 2: Pick operation (filtered by type)
+                Picker("Operation", selection: draft.operationType) {
+                    ForEach(availableOperations) { op in
+                        Text(op.displayName).tag(op)
+                    }
+                }
+
+                // Step 3: Type-specific value/amount inputs
+                if draft.wrappedValue.operationType.requiresValue {
+                    typedValueInput
+                }
+
+                if draft.wrappedValue.operationType.requiresAmount {
+                    HStack {
+                        Text("Amount")
+                            .foregroundColor(Theme.Text.secondary)
+                        Spacer()
+                        TextField("Amount", value: draft.amountValue, format: .number)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 100)
+                    }
+                }
+
+                if draft.wrappedValue.operationType.requiresOtherRef {
+                    Picker("Other State", selection: draft.otherVariableName) {
+                        Text("Select...").tag("")
+                        ForEach(controllerStates.filter { $0.name != draft.wrappedValue.variableName && (selectedStateType == nil || $0.type == selectedStateType) }) { state in
+                            Text("\(state.label) (\(state.type.symbol))").tag(state.name)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var initialValueInput: some View {
+        switch draft.wrappedValue.variableType {
+        case .number:
+            TextField("Number", text: draft.value)
+                .keyboardType(.decimalPad)
+        case .string:
+            TextField("Text value", text: draft.value)
+        case .boolean:
+            Toggle("Initial Value", isOn: Binding(
+                get: { draft.wrappedValue.value.lowercased() == "true" },
+                set: { draft.wrappedValue.value = $0 ? "true" : "false" }
+            ))
+        }
+    }
+
+    @ViewBuilder
+    private var typedValueInput: some View {
+        switch selectedStateType {
+        case .number:
+            TextField("Number", text: draft.value)
+                .keyboardType(.decimalPad)
+        case .boolean:
+            Toggle("Value", isOn: Binding(
+                get: { draft.wrappedValue.value.lowercased() == "true" },
+                set: { draft.wrappedValue.value = $0 ? "true" : "false" }
+            ))
+        case .string, .none:
+            TextField("Value", text: draft.value)
+        }
+    }
+}
+
 // MARK: - Delay Editor
 
 private struct DelayEditor: View {
@@ -488,6 +666,7 @@ private struct WaitForStateEditor: View {
     var allBlocks: [BlockDraft] = []
     var currentBlockId: UUID? = nil
     var blockOrdinals: [UUID: Int] = [:]
+    var controllerStates: [StateVariable] = []
 
     private var draft: Binding<WaitForStateDraft> {
         Binding(
@@ -509,7 +688,8 @@ private struct WaitForStateEditor: View {
             allBlocks: allBlocks,
             currentBlockId: currentBlockId,
             allowBlockResult: false,
-            blockOrdinals: blockOrdinals
+            blockOrdinals: blockOrdinals,
+            controllerStates: controllerStates
         )
 
         HStack {
@@ -535,6 +715,7 @@ private struct ConditionalEditor: View {
     var allBlocks: [BlockDraft] = []
     var currentBlockId: UUID? = nil
     var blockOrdinals: [UUID: Int] = [:]
+    var controllerStates: [StateVariable] = []
     let onEditNestedBlocks: ((String, [BlockDraft]) -> Void)?
 
     private var draft: Binding<ConditionalDraft> {
@@ -692,6 +873,7 @@ private struct RepeatWhileEditor: View {
     var allBlocks: [BlockDraft] = []
     var currentBlockId: UUID? = nil
     var blockOrdinals: [UUID: Int] = [:]
+    var controllerStates: [StateVariable] = []
     let onEditNestedBlocks: ((String, [BlockDraft]) -> Void)?
 
     private var draft: Binding<RepeatWhileDraft> {
@@ -714,7 +896,8 @@ private struct RepeatWhileEditor: View {
             allBlocks: allBlocks,
             currentBlockId: currentBlockId,
             allowBlockResult: false,
-            blockOrdinals: blockOrdinals
+            blockOrdinals: blockOrdinals,
+            controllerStates: controllerStates
         )
 
         Stepper("Max Iterations: \(draft.wrappedValue.maxIterations)", value: draft.maxIterations, in: 1...10000)

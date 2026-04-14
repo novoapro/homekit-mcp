@@ -20,10 +20,14 @@ export interface ComparisonGT { type: 'greaterThan'; value: number; }
 export interface ComparisonLT { type: 'lessThan'; value: number; }
 export interface ComparisonGTE { type: 'greaterThanOrEqual'; value: number; }
 export interface ComparisonLTE { type: 'lessThanOrEqual'; value: number; }
+export interface ComparisonIsEmpty { type: 'isEmpty'; }
+export interface ComparisonIsNotEmpty { type: 'isNotEmpty'; }
+export interface ComparisonContains { type: 'contains'; value: string; }
 
 export type ComparisonOperator =
   | ComparisonEquals | ComparisonNotEquals
-  | ComparisonGT | ComparisonLT | ComparisonGTE | ComparisonLTE;
+  | ComparisonGT | ComparisonLT | ComparisonGTE | ComparisonLTE
+  | ComparisonIsEmpty | ComparisonIsNotEmpty | ComparisonContains;
 
 // Schedules
 export interface ScheduleTime { hour: number; minute: number; }
@@ -124,9 +128,17 @@ export interface LogicNotConditionDef {
   condition: AutomationConditionDef;
 }
 
+export interface EngineStateConditionDef {
+  type: 'engineState';
+  variableRef: { type: string; name?: string; id?: string };
+  comparison: ComparisonOperator;
+  compareToStateRef?: { type: string; name?: string; id?: string };
+}
+
 export type AutomationConditionDef =
   | DeviceStateConditionDef | TimeConditionDef
-  | BlockResultConditionDef | LogicAndConditionDef | LogicOrConditionDef | LogicNotConditionDef;
+  | BlockResultConditionDef | EngineStateConditionDef
+  | LogicAndConditionDef | LogicOrConditionDef | LogicNotConditionDef;
 
 // Automation Blocks
 export interface AutomationBlockDef {
@@ -157,6 +169,7 @@ export interface AutomationBlockDef {
   outcome?: string;
   targetAutomationId?: string;
   executionMode?: string;
+  operation?: unknown;
 }
 
 // Full Automation Definition

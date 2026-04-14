@@ -182,6 +182,7 @@ enum AutomationAction: Codable {
     case webhook(WebhookActionConfig)
     case log(LogAction)
     case runScene(RunSceneAction)
+    case stateVariable(StateVariableAction)
 
     private enum ActionType: String, Codable {
         case controlDevice
@@ -189,6 +190,7 @@ enum AutomationAction: Codable {
         case log
         case runScene
         case activateScene // legacy alias for decoding
+        case stateVariable
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -197,6 +199,7 @@ enum AutomationAction: Codable {
         case url, method, headers, body
         case message
         case sceneId, sceneName
+        case operation
     }
 
     init(from decoder: Decoder) throws {
@@ -234,6 +237,11 @@ enum AutomationAction: Codable {
                 sceneName: container.decodeIfPresent(String.self, forKey: .sceneName),
                 name: name
             ))
+        case .stateVariable:
+            self = try .stateVariable(StateVariableAction(
+                operation: container.decode(StateVariableOperation.self, forKey: .operation),
+                name: name
+            ))
         }
     }
 
@@ -265,6 +273,10 @@ enum AutomationAction: Codable {
             try container.encodeIfPresent(action.name, forKey: .name)
             try container.encode(action.sceneId, forKey: .sceneId)
             try container.encodeIfPresent(action.sceneName, forKey: .sceneName)
+        case let .stateVariable(action):
+            try container.encode(ActionType.stateVariable, forKey: .type)
+            try container.encodeIfPresent(action.name, forKey: .name)
+            try container.encode(action.operation, forKey: .operation)
         }
     }
 
@@ -274,6 +286,7 @@ enum AutomationAction: Codable {
         case .webhook: return "webhook"
         case .log: return "log"
         case .runScene: return "runScene"
+        case .stateVariable: return "stateVariable"
         }
     }
 }
@@ -1213,6 +1226,7 @@ indirect enum AutomationCondition: Codable {
     case timeCondition(TimeCondition)
     case sceneActive(SceneActiveCondition) // Legacy — no longer offered in UI; kept for backward compat decoding
     case blockResult(BlockResultCondition)
+    case engineState(EngineStateCondition)
     case and([AutomationCondition])
     case or([AutomationCondition])
     case not(AutomationCondition)
@@ -1223,6 +1237,7 @@ indirect enum AutomationCondition: Codable {
         case sunEvent // backward compat decode only
         case sceneActive
         case blockResult
+        case engineState
         case and
         case or
         case not
@@ -1238,6 +1253,8 @@ indirect enum AutomationCondition: Codable {
         case sceneId, sceneName, isActive
         // blockResult fields
         case blockResultScope, expectedStatus
+        // engineState fields
+        case variableRef, compareToStateRef
     }
 
     init(from decoder: Decoder) throws {
@@ -1284,6 +1301,12 @@ indirect enum AutomationCondition: Codable {
                 scope: container.decode(BlockResultScope.self, forKey: .blockResultScope),
                 expectedStatus: container.decode(ExecutionStatus.self, forKey: .expectedStatus)
             ))
+        case .engineState:
+            self = try .engineState(EngineStateCondition(
+                variableRef: container.decode(StateVariableRef.self, forKey: .variableRef),
+                comparison: container.decode(ComparisonOperator.self, forKey: .comparison),
+                compareToStateRef: container.decodeIfPresent(StateVariableRef.self, forKey: .compareToStateRef)
+            ))
         case .and:
             self = try .and(container.decode([AutomationCondition].self, forKey: .conditions))
         case .or:
@@ -1319,6 +1342,11 @@ indirect enum AutomationCondition: Codable {
             try container.encode(ConditionType.blockResult, forKey: .type)
             try container.encode(cond.scope, forKey: .blockResultScope)
             try container.encode(cond.expectedStatus, forKey: .expectedStatus)
+        case let .engineState(cond):
+            try container.encode(ConditionType.engineState, forKey: .type)
+            try container.encode(cond.variableRef, forKey: .variableRef)
+            try container.encode(cond.comparison, forKey: .comparison)
+            try container.encodeIfPresent(cond.compareToStateRef, forKey: .compareToStateRef)
         case let .and(conditions):
             try container.encode(ConditionType.and, forKey: .type)
             try container.encode(conditions, forKey: .conditions)
@@ -1549,6 +1577,10 @@ enum ComparisonOperator: Codable {
     case lessThan(Double)
     case greaterThanOrEqual(Double)
     case lessThanOrEqual(Double)
+    // String-specific
+    case isEmpty
+    case isNotEmpty
+    case contains(String)
 
     private enum OperatorType: String, Codable {
         case equals
@@ -1557,6 +1589,9 @@ enum ComparisonOperator: Codable {
         case lessThan
         case greaterThanOrEqual
         case lessThanOrEqual
+        case isEmpty
+        case isNotEmpty
+        case contains
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -1579,6 +1614,12 @@ enum ComparisonOperator: Codable {
             self = try .greaterThanOrEqual(container.decode(Double.self, forKey: .value))
         case .lessThanOrEqual:
             self = try .lessThanOrEqual(container.decode(Double.self, forKey: .value))
+        case .isEmpty:
+            self = .isEmpty
+        case .isNotEmpty:
+            self = .isNotEmpty
+        case .contains:
+            self = try .contains(container.decode(String.self, forKey: .value))
         }
     }
 
@@ -1602,6 +1643,13 @@ enum ComparisonOperator: Codable {
             try container.encode(value, forKey: .value)
         case let .lessThanOrEqual(value):
             try container.encode(OperatorType.lessThanOrEqual, forKey: .type)
+            try container.encode(value, forKey: .value)
+        case .isEmpty:
+            try container.encode(OperatorType.isEmpty, forKey: .type)
+        case .isNotEmpty:
+            try container.encode(OperatorType.isNotEmpty, forKey: .type)
+        case let .contains(value):
+            try container.encode(OperatorType.contains, forKey: .type)
             try container.encode(value, forKey: .value)
         }
     }

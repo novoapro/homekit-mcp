@@ -662,7 +662,13 @@ actor AIAutomationService {
         { "block": "action", "type": "runScene", "name": "optional", "sceneId": "scene-uuid", "sceneName": "Scene Name" }
         { "block": "action", "type": "webhook", "name": "optional", "url": "https://...", "method": "POST", "headers": {}, "body": {} }
         { "block": "action", "type": "log", "name": "optional", "message": "Something happened" }
+        { "block": "action", "type": "stateVariable", "name": "optional", "operation": { "operation": "set", "variableRef": { "type": "byName", "name": "my_counter" }, "value": 42 } }
         ```
+        stateVariable operations: create (name, variableType, initialValue), remove (variableRef), \
+        set (variableRef, value), increment/decrement/multiply (variableRef, by), \
+        addState/subtractState (variableRef, otherRef) for numbers, \
+        toggle (variableRef), andState/orState (variableRef, otherRef), notState (variableRef) for booleans. \
+        variableRef format: {"type":"byName","name":"state_name"}. Use list_state_variables to discover existing states.
 
         ### Flow Control Blocks
 
@@ -696,20 +702,25 @@ actor AIAutomationService {
         right state for this automation to run. They are the PRIMARY mechanism for AND/OR/NOT logic. \
         Use execution guards whenever the user describes multi-condition scenarios like \
         "when X AND Y", "only if Z", "unless W", "but only during...", "if ... is on/off". \
-        IMPORTANT: Only deviceState, timeCondition (and logical and/or/not) are valid here. \
+        IMPORTANT: Only deviceState, timeCondition, engineState (and logical and/or/not) are valid here. \
         Do NOT use blockResult in execution guards or per-trigger guards — no blocks have executed yet at that point. \
         Per-trigger guards use the same format but are placed inside the trigger object's "conditions" array.
 
         ```json
         { "type": "deviceState", "deviceId": "...", "deviceName": "Living Room Light", "roomName": "Living Room", "serviceId": "optional", "characteristicId": "<characteristic-uuid>", "comparison": { "type": "equals", "value": true } }
         { "type": "timeCondition", "mode": "afterSunset" }
-        { "type": "timeCondition", "mode": "nighttime" }
-        { "type": "timeCondition", "mode": "daytime" }
         { "type": "timeCondition", "mode": "timeRange", "startTime": { "type": "fixed", "hour": 22, "minute": 0 }, "endTime": { "type": "marker", "marker": "sunrise" } }
+        { "type": "engineState", "variableRef": { "type": "byName", "name": "my_flag" }, "comparison": { "type": "equals", "value": true } }
+        { "type": "engineState", "variableRef": { "type": "byName", "name": "counter" }, "comparison": { "type": "greaterThan", "value": 5 }, "compareToStateRef": null }
         { "type": "and", "conditions": [ ... ] }
         { "type": "or", "conditions": [ ... ] }
         { "type": "not", "condition": { ... } }
         ```
+        engineState compares a controller state's current value. variableRef: {"type":"byName","name":"state_name"}. \
+        For boolean states: equals/notEquals. For string states: equals/notEquals/isEmpty/isNotEmpty/contains. \
+        For number states: all numeric comparison operators (equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual). \
+        isEmpty and isNotEmpty have no value field. contains takes a string value for case-insensitive substring matching. \
+        Optional compareToStateRef compares against another state's value instead of a literal.
         The "comparison" in deviceState uses ComparisonOperator: "equals", "notEquals", \
         "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual" with "value".
         timeCondition modes: "beforeSunrise", "afterSunrise", "beforeSunset", "afterSunset", \

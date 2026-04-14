@@ -30,6 +30,19 @@ export function BlockEditor({
   const registry = useDeviceRegistry();
   const api = useApi();
 
+  const STATE_TYPE_SYMBOL: Record<string, string> = { number: '#', string: 'Aa', boolean: '◉' };
+
+  // Fetch controller states for stateVariable and engineState blocks
+  const [controllerStates, setControllerStates] = useState<{ id: string; name: string; displayName?: string; type: string }[]>([]);
+  useEffect(() => {
+    if (draft.type !== 'stateVariable') return;
+    let cancelled = false;
+    api.getStateVariables().then(vars => {
+      if (!cancelled) setControllerStates(vars.map(v => ({ id: v.id, name: v.name, displayName: v.displayName, type: v.type })));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [api, draft.type]);
+
   // Fetch callable automations (those with a 'automation' trigger)
   const [callableAutomations, setCallableAutomations] = useState<Automation[]>([]);
   useEffect(() => {
@@ -173,6 +186,145 @@ export function BlockEditor({
           />
         </div>
       )}
+
+      {/* stateVariable */}
+      {draft.type === 'stateVariable' && (() => {
+        const op = draft.operation || { operation: 'set', variableRef: { type: 'byName', name: '' } };
+        const patchOp = (updates: Record<string, unknown>) => patch({ operation: { ...op, ...updates } });
+
+        const selectedName = op.operation === 'create' ? '__create__' : (op.variableRef?.name || '');
+        const selectedState = controllerStates.find(s => s.name === selectedName);
+        const selectedType = selectedState?.type;
+
+        const ALL_OPS = [
+          { value: 'remove', label: 'Remove', types: [] as string[] },
+          { value: 'set', label: 'Set Value', types: [] as string[] },
+          { value: 'increment', label: 'Increment', types: ['number'] },
+          { value: 'decrement', label: 'Decrement', types: ['number'] },
+          { value: 'multiply', label: 'Multiply', types: ['number'] },
+          { value: 'addState', label: 'Add State', types: ['number'] },
+          { value: 'subtractState', label: 'Subtract State', types: ['number'] },
+          { value: 'toggle', label: 'Toggle', types: ['boolean'] },
+          { value: 'andState', label: 'AND State', types: ['boolean'] },
+          { value: 'orState', label: 'OR State', types: ['boolean'] },
+          { value: 'notState', label: 'NOT State', types: ['boolean'] },
+        ];
+        const filteredOps = selectedType
+          ? ALL_OPS.filter(o => o.types.length === 0 || o.types.includes(selectedType))
+          : ALL_OPS;
+
+        const isCreate = op.operation === 'create';
+        const needsAmount = ['increment', 'decrement', 'multiply'].includes(op.operation);
+        const needsValue = ['set'].includes(op.operation);
+        const needsOtherRef = ['addState', 'subtractState', 'andState', 'orState'].includes(op.operation);
+
+        const sanitizeName = (v: string) => v.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').replace(/_+/g, '_');
+
+        return (
+          <>
+            {/* Step 1: Pick state or create new */}
+            <div className="editor-field">
+              <label>Controller State</label>
+              <select className="editor-select" value={selectedName} onChange={(e) => {
+                if (e.target.value === '__create__') {
+                  patchOp({ operation: 'create', variableRef: undefined, name: '', variableType: 'number' });
+                } else {
+                  const newOp = op.operation === 'create' ? 'set' : op.operation;
+                  // Reset op if not applicable to new type
+                  const newState = controllerStates.find(s => s.name === e.target.value);
+                  const applicable = ALL_OPS.find(o => o.value === newOp);
+                  const finalOp = applicable && (applicable.types.length === 0 || applicable.types.includes(newState?.type || ''))
+                    ? newOp : 'set';
+                  patchOp({ operation: finalOp, variableRef: { type: 'byName', name: e.target.value } });
+                }
+              }}>
+                <option value="">-- Select state --</option>
+                {controllerStates.map(s => <option key={s.id} value={s.name}>{s.displayName || s.name} ({STATE_TYPE_SYMBOL[s.type] || s.type})</option>)}
+                <option value="__create__">Create New...</option>
+              </select>
+            </div>
+
+            {isCreate ? (
+              <>
+                <div className="editor-field">
+                  <label>Name</label>
+                  <input className="editor-input" value={op.name || ''} onChange={(e) => patchOp({ name: sanitizeName(e.target.value) })} placeholder="my_counter" />
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Lowercase, no spaces (a-z, 0-9, _)</span>
+                </div>
+                <div className="editor-field">
+                  <label>Type</label>
+                  <select className="editor-select" value={op.variableType || 'number'} onChange={(e) => patchOp({ variableType: e.target.value })}>
+                    <option value="number">Number</option>
+                    <option value="string">String</option>
+                    <option value="boolean">Boolean</option>
+                  </select>
+                </div>
+                <div className="editor-field">
+                  <label>Initial Value</label>
+                  {(op.variableType || 'number') === 'number' && (
+                    <input className="editor-input" type="number" step="any" value={String(op.initialValue ?? 0)} onChange={(e) => patchOp({ initialValue: parseFloat(e.target.value) || 0 })} />
+                  )}
+                  {(op.variableType || 'number') === 'string' && (
+                    <input className="editor-input" value={String(op.initialValue ?? '')} onChange={(e) => patchOp({ initialValue: e.target.value })} />
+                  )}
+                  {(op.variableType || 'number') === 'boolean' && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <button type="button" className={`sv-switch${op.initialValue ? ' on' : ''}`} onClick={() => patchOp({ initialValue: !op.initialValue })} />
+                      <span>{op.initialValue ? 'true' : 'false'}</span>
+                    </label>
+                  )}
+                </div>
+              </>
+            ) : selectedName ? (
+              <>
+                {/* Step 2: Operation (type-filtered) */}
+                <div className="editor-field">
+                  <label>Operation</label>
+                  <select className="editor-select" value={op.operation} onChange={(e) => patchOp({ operation: e.target.value })}>
+                    {filteredOps.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+
+                {/* Step 3: Type-specific value inputs */}
+                {needsValue && (
+                  <div className="editor-field">
+                    <label>Value</label>
+                    {selectedType === 'number' && (
+                      <input className="editor-input" type="number" step="any" value={String(op.value ?? '')} onChange={(e) => patchOp({ value: e.target.value })} />
+                    )}
+                    {selectedType === 'boolean' && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                        <button type="button" className={`sv-switch${(op.value === true || op.value === 'true') ? ' on' : ''}`} onClick={() => patchOp({ value: !(op.value === true || op.value === 'true') })} />
+                        <span>{(op.value === true || op.value === 'true') ? 'true' : 'false'}</span>
+                      </label>
+                    )}
+                    {(selectedType === 'string' || !selectedType) && (
+                      <input className="editor-input" value={String(op.value ?? '')} onChange={(e) => patchOp({ value: e.target.value })} />
+                    )}
+                  </div>
+                )}
+                {needsAmount && (
+                  <div className="editor-field">
+                    <label>Amount</label>
+                    <input className="editor-input" type="number" step="any" value={op.by ?? 1} onChange={(e) => patchOp({ by: parseFloat(e.target.value) || 0 })} />
+                  </div>
+                )}
+                {needsOtherRef && (
+                  <div className="editor-field">
+                    <label>Other State</label>
+                    <select className="editor-select" value={op.otherRef?.name || ''} onChange={(e) => patchOp({ otherRef: { type: 'byName', name: e.target.value } })}>
+                      <option value="">-- Select --</option>
+                      {controllerStates.filter(s => s.name !== selectedName && (!selectedType || s.type === selectedType)).map(s => (
+                        <option key={s.id} value={s.name}>{s.displayName || s.name} ({STATE_TYPE_SYMBOL[s.type] || s.type})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            ) : null}
+          </>
+        );
+      })()}
 
       {/* delay */}
       {draft.type === 'delay' && (

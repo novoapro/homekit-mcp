@@ -414,6 +414,96 @@ enum MCPToolDefinitions {
         ],
     ]
 
+    // MARK: - State Variable Tools
+
+    static let stateVariableTools: [[String: Any]] = [
+        [
+            "name": "list_state_variables",
+            "description": "List all engine state variables with their current values, types, and metadata.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [:] as [String: Any]
+            ] as [String: Any]
+        ],
+        [
+            "name": "get_state_variable",
+            "description": "Get a specific state variable by ID or name.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "variable_id": [
+                        "type": "string",
+                        "description": "UUID of the state variable"
+                    ] as [String: Any],
+                    "name": [
+                        "type": "string",
+                        "description": "Name of the state variable (alternative to variable_id)"
+                    ] as [String: Any]
+                ] as [String: Any]
+            ] as [String: Any]
+        ],
+        [
+            "name": "create_state_variable",
+            "description": "Create a new engine state variable. Types: 'number', 'string', 'boolean'.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "name": [
+                        "type": "string",
+                        "description": "Name of the state variable (must be unique)"
+                    ] as [String: Any],
+                    "type": [
+                        "type": "string",
+                        "description": "Variable type: 'number', 'string', or 'boolean'",
+                        "enum": ["number", "string", "boolean"]
+                    ] as [String: Any],
+                    "value": [
+                        "description": "Initial value. Must match the declared type."
+                    ] as [String: Any]
+                ] as [String: Any],
+                "required": ["name", "type", "value"]
+            ] as [String: Any]
+        ],
+        [
+            "name": "update_state_variable",
+            "description": "Update the value of an existing state variable. The new value must match the variable's type.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "variable_id": [
+                        "type": "string",
+                        "description": "UUID of the state variable"
+                    ] as [String: Any],
+                    "name": [
+                        "type": "string",
+                        "description": "Name of the state variable (alternative to variable_id)"
+                    ] as [String: Any],
+                    "value": [
+                        "description": "New value. Must match the variable's type."
+                    ] as [String: Any]
+                ] as [String: Any],
+                "required": ["value"]
+            ] as [String: Any]
+        ],
+        [
+            "name": "delete_state_variable",
+            "description": "Delete a state variable by ID or name.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "variable_id": [
+                        "type": "string",
+                        "description": "UUID of the state variable"
+                    ] as [String: Any],
+                    "name": [
+                        "type": "string",
+                        "description": "Name of the state variable (alternative to variable_id)"
+                    ] as [String: Any]
+                ] as [String: Any]
+            ] as [String: Any]
+        ],
+    ]
+
     // MARK: - Metadata Tools
 
     /// Metadata tools for AI agent efficiency — always available.

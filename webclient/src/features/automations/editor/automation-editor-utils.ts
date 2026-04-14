@@ -72,6 +72,11 @@ export function newConditionLeaf(type: string): AutomationConditionDraft {
       base.blockResultScope = { scope: 'any' };
       base.expectedStatus = 'success';
       break;
+    case 'engineState':
+      base.variableRef = { type: 'byName', name: '' };
+      base.comparison = { type: 'equals', value: '' };
+      base.stateCompareMode = 'literal';
+      break;
     case 'and':
     case 'or':
       base.conditions = [];
@@ -218,6 +223,13 @@ function conditionDraftToPayload(c: AutomationConditionDraft): AutomationConditi
       return { type: 'or', conditions: (c.conditions ?? []).map(conditionDraftToPayload) };
     case 'not':
       return { type: 'not', condition: c.condition ? conditionDraftToPayload(c.condition) : undefined! };
+    case 'engineState':
+      return {
+        type: 'engineState',
+        variableRef: c.variableRef ?? { type: 'byName', name: '' },
+        comparison: c.comparison ?? { type: 'equals', value: '' },
+        ...(c.stateCompareMode === 'stateRef' && c.compareToStateRef && { compareToStateRef: c.compareToStateRef }),
+      } as AutomationConditionDef;
   }
 }
 
@@ -246,6 +258,8 @@ function blockDraftToPayload(b: AutomationBlockDraft, idMap?: Map<string, string
       };
     case 'log':
       return { ...shared, message: b.message };
+    case 'stateVariable':
+      return { ...shared, operation: b.operation };
     case 'delay':
       return { ...shared, seconds: b.seconds ?? 1 };
     case 'waitForState':
@@ -418,6 +432,16 @@ function conditionDefToDraft(c: AutomationConditionDef): AutomationConditionDraf
       base.blockResultScope = c.blockResultScope;
       base.expectedStatus = c.expectedStatus;
       break;
+    case 'engineState':
+      base.variableRef = c.variableRef;
+      base.comparison = c.comparison;
+      if (c.compareToStateRef) {
+        base.compareToStateRef = c.compareToStateRef;
+        base.stateCompareMode = 'stateRef';
+      } else {
+        base.stateCompareMode = 'literal';
+      }
+      break;
     case 'and':
     case 'or':
       base.conditions = (c.conditions ?? []).map(conditionDefToDraft);
@@ -452,6 +476,9 @@ function blockDefToDraft(b: AutomationBlockDef, blockIdMap?: Map<string, string>
       break;
     case 'log':
       base.message = b.message;
+      break;
+    case 'stateVariable':
+      base.operation = b.operation as AutomationBlockDraft['operation'];
       break;
     case 'delay':
       base.seconds = b.seconds;
@@ -499,6 +526,9 @@ const COMPARISON_SYMBOLS: Record<string, string> = {
   lessThan: '<',
   greaterThanOrEqual: '\u2265',
   lessThanOrEqual: '\u2264',
+  isEmpty: 'is empty',
+  isNotEmpty: 'is not empty',
+  contains: 'contains',
 };
 
 const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -631,6 +661,14 @@ export function conditionAutoName(c: AutomationConditionDraft, registry: Registr
         return `Block "${c.blockResultScope.blockId}" = ${status}`;
       }
       return `Any block = ${status}`;
+    }
+    case 'engineState': {
+      const varName = c.variableRef?.name || 'state';
+      if (c.comparison) {
+        const sym = COMPARISON_SYMBOLS[c.comparison.type] || '=';
+        return `${varName} ${sym} ${formatAutoVal('value' in c.comparison ? c.comparison.value : undefined)}`;
+      }
+      return `State: ${varName}`;
     }
     case 'and': {
       const inner = (c.conditions || []).map((ch) => conditionAutoName(ch, registry, allBlocks));

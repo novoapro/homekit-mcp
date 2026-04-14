@@ -3,12 +3,13 @@ import SwiftUI
 struct TriggerEditorSection: View {
     @Binding var triggers: [TriggerDraft]
     let devices: [DeviceModel]
+    var controllerStates: [StateVariable] = []
     var onCopy: (() -> Void)? = nil
 
     var body: some View {
         Section {
             ForEach($triggers) { $trigger in
-                TriggerRow(trigger: $trigger, devices: devices, onCopy: onCopy, onDelete: {
+                TriggerRow(trigger: $trigger, devices: devices, controllerStates: controllerStates, onCopy: onCopy, onDelete: {
                     triggers.removeAll(where: { $0.id == trigger.id })
                 })
             }
@@ -50,6 +51,7 @@ struct TriggerEditorSection: View {
 private struct TriggerRow: View {
     @Binding var trigger: TriggerDraft
     let devices: [DeviceModel]
+    var controllerStates: [StateVariable] = []
     var onCopy: (() -> Void)?
     let onDelete: () -> Void
     @State private var isEditingName: Bool = false
@@ -152,7 +154,8 @@ private struct TriggerRow: View {
                 allBlocks: [],
                 currentBlockId: nil,
                 allowBlockResult: false,
-                blockOrdinals: [:]
+                blockOrdinals: [:],
+                controllerStates: controllerStates
             )
         } label: {
             HStack {

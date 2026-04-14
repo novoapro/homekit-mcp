@@ -356,6 +356,35 @@ export function AutomationsPage() {
         />
       )}
 
+      {/* Controller States access row */}
+      {!selectionMode && !isLoading && automations.length > 0 && (
+        <div style={{ padding: '0 var(--spacing-md)' }}>
+          <div
+            className="auto-card"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              marginBottom: 'var(--card-gap, 8px)', cursor: 'pointer',
+              background: 'color-mix(in srgb, teal 5%, var(--bg-card))',
+              borderLeft: '3px solid teal',
+            }}
+            onClick={() => navigate('/state-variables')}
+          >
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 36, height: 36, borderRadius: 10,
+              background: 'color-mix(in srgb, teal 12%, transparent)',
+            }}>
+              <Icon name="state-variable" size={18} style={{ color: 'teal' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Controller States</div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Manage persistent state for your automations</div>
+            </div>
+            <Icon name="chevron-right" size={14} style={{ color: 'var(--text-tertiary)' }} />
+          </div>
+        </div>
+      )}
+
       {/* Automation card list */}
       {filteredAutomations.length > 0 && (
         <div className={`auto-card-list${selectionMode ? ' with-bulk-bar' : ''}`}>

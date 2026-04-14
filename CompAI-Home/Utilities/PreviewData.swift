@@ -538,8 +538,8 @@ enum PreviewData {
             keychainService: keychainService, aiAutomationService: aiAutomationService,
             backupService: backupService, cloudBackupService: cloudBackupService, appleSignInService: appleSignInService,
             deviceRegistryService: registryService, homeKitManager: manager,
-            automationStorageService: automationStorage, subscriptionService: subscriptionService,
-            oauthService: oauthService
+            automationStorageService: automationStorage, stateVariableStorageService: StateVariableStorageService(),
+            subscriptionService: subscriptionService, oauthService: oauthService
         )
     }
 

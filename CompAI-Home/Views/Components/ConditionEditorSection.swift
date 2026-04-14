@@ -14,6 +14,7 @@ struct ConditionEditorSection: View {
     var allowBlockResult: Bool = false
     /// 1-based execution order index for each block.
     var blockOrdinals: [UUID: Int] = [:]
+    var controllerStates: [StateVariable] = []
 
     var body: some View {
         Section {
@@ -26,7 +27,8 @@ struct ConditionEditorSection: View {
                 allBlocks: allBlocks,
                 currentBlockId: currentBlockId,
                 allowBlockResult: allowBlockResult,
-                blockOrdinals: blockOrdinals
+                blockOrdinals: blockOrdinals,
+                controllerStates: controllerStates
             )
         } header: {
             Text("Execution Guards (\(conditionRoot.leafCount))")
@@ -53,6 +55,7 @@ struct ConditionGroupEditor: View {
     var currentBlockId: UUID? = nil
     var allowBlockResult: Bool = false
     var blockOrdinals: [UUID: Int] = [:]
+    var controllerStates: [StateVariable] = []
 
     var body: some View {
         // Compact operator row
@@ -103,6 +106,7 @@ struct ConditionGroupEditor: View {
                         allBlocks: allBlocks,
                         currentBlockId: currentBlockId,
                         blockOrdinals: blockOrdinals,
+                        controllerStates: controllerStates,
                         onDelete: { group.children.remove(at: index) }
                     )
                 }
@@ -118,7 +122,8 @@ struct ConditionGroupEditor: View {
                             allBlocks: allBlocks,
                             currentBlockId: currentBlockId,
                             allowBlockResult: allowBlockResult,
-                            blockOrdinals: blockOrdinals
+                            blockOrdinals: blockOrdinals,
+                            controllerStates: controllerStates
                         )
                     } label: {
                         subGroupLabel(at: index)
@@ -145,6 +150,11 @@ struct ConditionGroupEditor: View {
                     group.children.append(.leaf(.emptyTimeCondition()))
                 } label: {
                     Label("Time Condition", systemImage: "clock.fill")
+                }
+                Button {
+                    group.children.append(.leaf(.emptyEngineState()))
+                } label: {
+                    Label("Controller State", systemImage: "cylinder.split.1x2")
                 }
                 if allowBlockResult && continueOnError {
                     Button {
@@ -253,6 +263,7 @@ private struct ConditionLeafRow: View {
     var allBlocks: [BlockDraft] = []
     var currentBlockId: UUID? = nil
     var blockOrdinals: [UUID: Int] = [:]
+    var controllerStates: [StateVariable] = []
     let onDelete: () -> Void
     @State private var showingEditSheet = false
 
@@ -311,7 +322,8 @@ private struct ConditionLeafRow: View {
                 scenes: scenes,
                 allBlocks: allBlocks,
                 currentBlockId: currentBlockId,
-                blockOrdinals: blockOrdinals
+                blockOrdinals: blockOrdinals,
+                controllerStates: controllerStates
             )
         }
     }
@@ -322,6 +334,7 @@ private struct ConditionLeafRow: View {
         case .timeCondition: return .orange
         case .sceneActive: return .green
         case .blockResult: return .purple
+        case .engineState: return .teal
         }
     }
 }
@@ -335,6 +348,7 @@ private struct ConditionLeafEditSheet: View {
     var allBlocks: [BlockDraft] = []
     var currentBlockId: UUID? = nil
     var blockOrdinals: [UUID: Int] = [:]
+    var controllerStates: [StateVariable] = []
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var automationViewModel: AutomationViewModel
 
@@ -485,6 +499,79 @@ private struct ConditionLeafEditSheet: View {
 
         case .blockResult:
             blockResultContent
+
+        case .engineState:
+            engineStateContent
+        }
+    }
+
+    // MARK: - Engine State Content
+
+    @ViewBuilder
+    private var engineStateContent: some View {
+        // Pick the state
+        Picker("State", selection: $condition.stateVariableName) {
+            Text("Select...").tag("")
+            ForEach(controllerStates) { state in
+                Text("\(state.label) (\(state.type.symbol))").tag(state.name)
+            }
+        }
+
+        if !condition.stateVariableName.isEmpty {
+            let selectedType = controllerStates.first(where: { $0.name == condition.stateVariableName })?.type
+
+            Picker("Comparison", selection: $condition.comparisonType) {
+                ForEach(Self.comparisonTypes(for: selectedType)) { ct in
+                    Text(ct.symbol).tag(ct)
+                }
+            }
+
+            if condition.comparisonType.requiresValue {
+                Picker("Compare To", selection: $condition.stateCompareMode) {
+                    ForEach(ConditionDraft.StateCompareMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+
+                if condition.stateCompareMode == .literal {
+                    switch selectedType {
+                    case .number:
+                        TextField("Number", text: $condition.comparisonValue)
+                            .keyboardType(.decimalPad)
+                    case .boolean:
+                        Toggle("Value", isOn: Binding(
+                            get: { condition.comparisonValue.lowercased() == "true" },
+                            set: { condition.comparisonValue = $0 ? "true" : "false" }
+                        ))
+                    case .string, .none:
+                        TextField("Value", text: $condition.comparisonValue)
+                    }
+                } else {
+                    Picker("Other State", selection: $condition.stateCompareToVariableName) {
+                        Text("Select...").tag("")
+                        ForEach(controllerStates.filter { s in
+                            s.name != condition.stateVariableName &&
+                            (selectedType == nil || s.type == selectedType)
+                        }) { state in
+                            Text("\(state.label) (\(state.type.symbol))").tag(state.name)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Returns comparison types appropriate for the state variable type.
+    private static func comparisonTypes(for stateType: StateVariableType?) -> [ComparisonType] {
+        switch stateType {
+        case .boolean:
+            return [.equals, .notEquals]
+        case .string:
+            return [.equals, .notEquals, .isEmpty, .isNotEmpty, .contains]
+        case .number:
+            return [.equals, .notEquals, .greaterThan, .lessThan, .greaterThanOrEqual, .lessThanOrEqual]
+        case .none:
+            return ComparisonType.allCases
         }
     }
 
