@@ -2270,11 +2270,7 @@ extension ConditionDraft {
     /// Returns nil for non-datetime conditions or when compare mode is stateRef.
     func buildDatetimeSentinel() -> String? {
         guard stateCompareMode == .literal else { return nil }
-        // Only produce a sentinel if the comparison value is a datetime sentinel
-        if StateVariable.isDatetimeSentinel(comparisonValue) {
-            return comparisonValue
-        }
-        // If using the datetime compare mode fields, build the sentinel
+        // Build the sentinel from the datetime compare mode fields
         switch datetimeCompareMode {
         case .now:
             return "__now__"
