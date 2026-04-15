@@ -398,7 +398,7 @@ extension TriggerDraft {
 }
 
 extension ConditionDraft {
-    func autoName(devices: [DeviceModel], scenes: [SceneModel] = [], allBlocks: [BlockDraft] = [], blockOrdinals: [UUID: Int] = [:]) -> String {
+    func autoName(devices: [DeviceModel], scenes: [SceneModel] = [], allBlocks: [BlockDraft] = [], blockOrdinals: [UUID: Int] = [:], controllerStates: [StateVariable] = []) -> String {
         switch conditionDraftType {
         case .deviceState:
             guard !deviceId.isEmpty else { return "New Condition" }
@@ -422,14 +422,16 @@ extension ConditionDraft {
             let sceneName = scene?.name ?? sceneId
             return sceneIsActive ? "Scene \"\(sceneName)\" active" : "Scene \"\(sceneName)\" not active"
         case .engineState:
-            let varName = stateVariableName.isEmpty ? "unknown" : stateVariableName
+            let varLabel = stateVariableName.isEmpty
+                ? "unknown"
+                : (controllerStates.first(where: { $0.name == stateVariableName })?.label ?? stateVariableName)
             let displayVal = Self.formatDisplayValue(comparisonValue)
             // Use semantic labels for datetime conditions
             if StateVariable.isDatetimeSentinel(comparisonValue) || datetimeCompareMode != .specific {
                 let verb = comparisonType.displayName(for: .datetime).lowercased()
-                return "'\(varName)' \(verb) \(displayVal)"
+                return "'\(varLabel)' \(verb) \(displayVal)"
             }
-            return "'\(varName)' \(comparisonType.symbol) \(displayVal)"
+            return "'\(varLabel)' \(comparisonType.symbol) \(displayVal)"
         case .blockResult:
             let statusName = blockResultExpectedStatus.displayName
             switch blockResultScope {
@@ -464,13 +466,13 @@ extension ConditionDraft {
 }
 
 extension ConditionGroupDraft {
-    func autoDescription(devices: [DeviceModel], scenes: [SceneModel] = []) -> String {
+    func autoDescription(devices: [DeviceModel], scenes: [SceneModel] = [], controllerStates: [StateVariable] = []) -> String {
         let parts: [String] = children.compactMap { node in
             switch node {
             case .leaf(let draft):
-                return draft.autoName(devices: devices, scenes: scenes)
+                return draft.autoName(devices: devices, scenes: scenes, controllerStates: controllerStates)
             case .group(let subGroup):
-                let sub = subGroup.autoDescription(devices: devices, scenes: scenes)
+                let sub = subGroup.autoDescription(devices: devices, scenes: scenes, controllerStates: controllerStates)
                 return sub.isEmpty ? nil : "(\(sub))"
             }
         }
@@ -481,10 +483,13 @@ extension ConditionGroupDraft {
 }
 
 extension BlockDraft {
-    func autoName(devices: [DeviceModel], scenes: [SceneModel] = []) -> String {
+    func autoName(devices: [DeviceModel], scenes: [SceneModel] = [], controllerStates: [StateVariable] = []) -> String {
+        let stateLabel: (String) -> String = { name in
+            controllerStates.first(where: { $0.name == name })?.label ?? name
+        }
         switch blockType {
         case let .controlDevice(d):
-            return d.autoName(devices: devices)
+            return d.autoName(devices: devices, stateLabel: stateLabel)
         case let .webhook(d):
             return d.autoName()
         case let .log(d):
@@ -492,9 +497,9 @@ extension BlockDraft {
         case let .runScene(d):
             return d.autoName(scenes: scenes)
         case let .stateVariable(d):
-            return d.autoName()
+            return d.autoName(stateLabel: stateLabel)
         case let .delay(d):
-            return d.autoName()
+            return d.autoName(stateLabel: stateLabel)
         case let .waitForState(d):
             return d.autoName(devices: devices, scenes: scenes)
         case let .conditional(d):
@@ -513,7 +518,7 @@ extension BlockDraft {
     }
 
     /// Returns the user-set name or the auto-generated name
-    func displayName(devices: [DeviceModel], scenes: [SceneModel] = []) -> String {
+    func displayName(devices: [DeviceModel], scenes: [SceneModel] = [], controllerStates: [StateVariable] = []) -> String {
         let explicitName: String = {
             switch blockType {
             case let .controlDevice(d): return d.name
@@ -531,19 +536,18 @@ extension BlockDraft {
             case let .executeAutomation(d): return d.name
             }
         }()
-        return explicitName.isEmpty ? autoName(devices: devices, scenes: scenes) : explicitName
+        return explicitName.isEmpty ? autoName(devices: devices, scenes: scenes, controllerStates: controllerStates) : explicitName
     }
 }
 
 private extension ControlDeviceDraft {
-    func autoName(devices: [DeviceModel]) -> String {
+    func autoName(devices: [DeviceModel], stateLabel: (String) -> String = { $0 }) -> String {
         guard !deviceId.isEmpty else { return "Control Device" }
         let devName = devices.resolvedName(deviceId: deviceId, serviceId: serviceId)
         let charName = characteristicId.isEmpty ? "" : devices.resolvedCharacteristicName(deviceId: deviceId, characteristicId: characteristicId)
         if charName.isEmpty { return "Set \(devName)" }
         if valueSource == .global && !valueRefName.isEmpty {
-            let refLabel = valueRefDisplayName.isEmpty ? valueRefName : valueRefDisplayName
-            return "Set \(devName) \(charName) = \(refLabel) (Global)"
+            return "Set \(devName) \(charName) = \(stateLabel(valueRefName)) (Global)"
         }
         let resolvedCharType = devices.resolvedCharacteristicType(deviceId: deviceId, characteristicId: characteristicId)
         let displayVal = CharacteristicInputConfig.displayValueForName(characteristicType: resolvedCharType, rawValue: value)
@@ -635,9 +639,9 @@ private extension RunSceneDraft {
 }
 
 private extension DelayDraft {
-    func autoName() -> String {
+    func autoName(stateLabel: (String) -> String = { $0 }) -> String {
         if valueSource == .global && !secondsRefName.isEmpty {
-            return "Delay \(secondsRefName) (Global)"
+            return "Delay \(stateLabel(secondsRefName)) (Global)"
         }
         return "Delay \(seconds)s"
     }
@@ -1166,8 +1170,8 @@ struct StateVariableDraft {
     var sourceServiceId: String?
     var sourceCharacteristicId: String = ""
 
-    func autoName() -> String {
-        let displayLabel = variableDisplayName.isEmpty ? variableName : variableDisplayName
+    func autoName(stateLabel: (String) -> String = { $0 }) -> String {
+        let displayLabel = variableName.isEmpty ? "" : stateLabel(variableName)
         let varLabel = displayLabel.isEmpty ? "" : " '\(displayLabel)'"
         switch operationType {
         case .set:

@@ -281,7 +281,7 @@ private struct ConditionLeafRow: View {
                 .foregroundStyle(conditionIconColor)
                 .frame(width: 20)
 
-            Text(condition.name.isEmpty ? condition.autoName(devices: devices, scenes: scenes, allBlocks: allBlocks, blockOrdinals: blockOrdinals) : condition.name)
+            Text(condition.name.isEmpty ? condition.autoName(devices: devices, scenes: scenes, allBlocks: allBlocks, blockOrdinals: blockOrdinals, controllerStates: controllerStates) : condition.name)
                 .font(.footnote)
                 .foregroundStyle(Theme.Text.primary)
                 .lineLimit(1)

@@ -107,7 +107,7 @@ struct BlockEditorRow: View {
                             .textFieldStyle(.roundedBorder)
                             .onSubmit { isEditingName = false }
                     } else {
-                        Text(block.displayName(devices: devices, scenes: scenes))
+                        Text(block.displayName(devices: devices, scenes: scenes, controllerStates: controllerStates))
                             .font(.footnote)
                             .foregroundColor(Theme.Text.secondary)
                             .lineLimit(1)

@@ -1,11 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Icon } from '@/components/Icon';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
+import { useApi } from '@/hooks/useApi';
 import { BlockEditor } from './BlockEditor';
 import type { AutomationBlockDraft } from './automation-editor-types';
-import { blockAutoName } from './automation-editor-utils';
+import { blockAutoName, type StateDisplayNames } from './automation-editor-utils';
 import { BLOCK_ICONS } from './block-helpers';
 import './BlockCard.css';
 
@@ -33,7 +34,21 @@ export function BlockCard({
   currentAutomationId,
 }: BlockCardProps) {
   const registry = useDeviceRegistry();
+  const api = useApi();
   const isExpanded = expandedId === block._draftId && !reorderMode;
+
+  // Load global value display names for auto-names
+  const [stateNames, setStateNames] = useState<StateDisplayNames>({});
+  useEffect(() => {
+    let cancelled = false;
+    api.getStateVariables().then(vars => {
+      if (cancelled) return;
+      const map: StateDisplayNames = {};
+      for (const v of vars) map[v.name] = v.displayName || v.name;
+      setStateNames(map);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [api]);
 
   const {
     attributes,
@@ -50,8 +65,8 @@ export function BlockCard({
   };
 
   const autoName = useMemo(
-    () => block.name || blockAutoName(block, registry),
-    [block, registry],
+    () => block.name || blockAutoName(block, registry, stateNames),
+    [block, registry, stateNames],
   );
 
   const icon = BLOCK_ICONS[block.type] || 'square';
