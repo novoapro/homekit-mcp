@@ -154,7 +154,7 @@ struct ConditionGroupEditor: View {
                 Button {
                     group.children.append(.leaf(.emptyEngineState()))
                 } label: {
-                    Label("Controller State", systemImage: "cylinder.split.1x2")
+                    Label("Global Value", systemImage: "cylinder.split.1x2")
                 }
                 if allowBlockResult && continueOnError {
                     Button {
@@ -513,7 +513,7 @@ private struct ConditionLeafEditSheet: View {
         Picker("State", selection: $condition.stateVariableName) {
             Text("Select...").tag("")
             ForEach(controllerStates) { state in
-                Text("\(state.label) (\(state.type.symbol))").tag(state.name)
+                Label(state.label, systemImage: state.type.icon).tag(state.name)
             }
         }
 
@@ -543,6 +543,28 @@ private struct ConditionLeafEditSheet: View {
                             get: { condition.comparisonValue.lowercased() == "true" },
                             set: { condition.comparisonValue = $0 ? "true" : "false" }
                         ))
+                    case .datetime:
+                        Picker("Compare Against", selection: Binding(
+                            get: { condition.comparisonValue == "__now__" ? "__now__" : "__custom__" },
+                            set: { newValue in
+                                if newValue == "__now__" {
+                                    condition.comparisonValue = "__now__"
+                                } else {
+                                    condition.comparisonValue = StateVariable.formatDateISO(Date())
+                                }
+                            }
+                        )) {
+                            Text("Now (current time)").tag("__now__")
+                            Text("Specific date").tag("__custom__")
+                        }
+                        if condition.comparisonValue != "__now__" {
+                            DatePicker("Date", selection: Binding(
+                                get: {
+                                    StateVariable.parseDate(condition.comparisonValue) ?? Date()
+                                },
+                                set: { condition.comparisonValue = StateVariable.formatDateISO($0) }
+                            ))
+                        }
                     case .string, .none:
                         TextField("Value", text: $condition.comparisonValue)
                     }
@@ -553,7 +575,7 @@ private struct ConditionLeafEditSheet: View {
                             s.name != condition.stateVariableName &&
                             (selectedType == nil || s.type == selectedType)
                         }) { state in
-                            Text("\(state.label) (\(state.type.symbol))").tag(state.name)
+                            Label(state.label, systemImage: state.type.icon).tag(state.name)
                         }
                     }
                 }
@@ -569,6 +591,8 @@ private struct ConditionLeafEditSheet: View {
         case .string:
             return [.equals, .notEquals, .isEmpty, .isNotEmpty, .contains]
         case .number:
+            return [.equals, .notEquals, .greaterThan, .lessThan, .greaterThanOrEqual, .lessThanOrEqual]
+        case .datetime:
             return [.equals, .notEquals, .greaterThan, .lessThan, .greaterThanOrEqual, .lessThanOrEqual]
         case .none:
             return ComparisonType.allCases

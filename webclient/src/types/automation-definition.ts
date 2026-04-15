@@ -150,6 +150,7 @@ export interface AutomationBlockDef {
   serviceId?: string;
   characteristicId?: string;
   value?: unknown;
+  valueRef?: { type: string; name?: string; id?: string };
   url?: string;
   method?: string;
   headers?: Record<string, string>;

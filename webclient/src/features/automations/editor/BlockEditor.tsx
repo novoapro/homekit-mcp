@@ -30,18 +30,19 @@ export function BlockEditor({
   const registry = useDeviceRegistry();
   const api = useApi();
 
-  const STATE_TYPE_SYMBOL: Record<string, string> = { number: '#', string: 'Aa', boolean: '◉' };
+  const STATE_TYPE_SYMBOL: Record<string, string> = { number: '#', string: 'Aa', boolean: '◉', datetime: '⏱' };
 
-  // Fetch controller states for stateVariable and engineState blocks
+  // Fetch global values for stateVariable, controlDevice (global mode), and engineState blocks
   const [controllerStates, setControllerStates] = useState<{ id: string; name: string; displayName?: string; type: string }[]>([]);
+  const needsGlobalValues = draft.type === 'stateVariable' || draft.type === 'controlDevice';
   useEffect(() => {
-    if (draft.type !== 'stateVariable') return;
+    if (!needsGlobalValues) return;
     let cancelled = false;
     api.getStateVariables().then(vars => {
       if (!cancelled) setControllerStates(vars.map(v => ({ id: v.id, name: v.name, displayName: v.displayName, type: v.type })));
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [api, draft.type]);
+  }, [api, needsGlobalValues]);
 
   // Fetch callable automations (those with a 'automation' trigger)
   const [callableAutomations, setCallableAutomations] = useState<Automation[]>([]);
@@ -59,9 +60,17 @@ export function BlockEditor({
     return () => { cancelled = true; };
   }, [api, draft.type, currentAutomationId]);
 
+  const stateDisplayNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const s of controllerStates) {
+      map[s.name] = s.displayName || s.name;
+    }
+    return map;
+  }, [controllerStates]);
+
   const autoDescription = useMemo(
-    () => draft.name || blockAutoName(draft, registry),
-    [draft, registry],
+    () => draft.name || blockAutoName(draft, registry, stateDisplayNames),
+    [draft, registry, stateDisplayNames],
   );
 
   const patch = useCallback(
@@ -125,13 +134,83 @@ export function BlockEditor({
             writableOnly
             onChange={(val) => patch({ deviceId: val.deviceId, serviceId: val.serviceId, characteristicId: val.characteristicId })}
           />
-          <CharacteristicValueInput
-            characteristic={draft.deviceId && draft.characteristicId
+
+          {/* Value Source Toggle: Local vs Global */}
+          {(() => {
+            const char = draft.deviceId && draft.characteristicId
               ? registry.lookupCharacteristic(draft.deviceId, draft.characteristicId)
-              : undefined}
-            value={draft.value}
-            onChange={(val) => patch({ value: val })}
-          />
+              : undefined;
+            const NUMERIC_FORMATS = new Set(['uint8', 'uint16', 'uint32', 'uint64', 'int', 'float']);
+            const compatibleType = char
+              ? char.format === 'bool' ? 'boolean'
+                : NUMERIC_FORMATS.has(char.format) ? 'number'
+                : char.format === 'string' ? 'string'
+                : undefined
+              : undefined;
+            const compatibleStates = compatibleType
+              ? controllerStates.filter(s => s.type === compatibleType)
+              : controllerStates;
+
+            return compatibleStates.length > 0 ? (
+              <>
+                <div className="editor-field">
+                  <label>Value Source</label>
+                  <div className="char-toggle-wrap">
+                    <button type="button"
+                      className={`char-toggle-option${(draft.valueSource || 'local') === 'local' ? ' active' : ''}`}
+                      onClick={() => patch({ valueSource: 'local', valueRef: undefined })}>
+                      Local
+                    </button>
+                    <button type="button"
+                      className={`char-toggle-option${draft.valueSource === 'global' ? ' active' : ''}`}
+                      onClick={() => patch({ valueSource: 'global' })}>
+                      Global
+                    </button>
+                  </div>
+                </div>
+
+                {draft.valueSource === 'global' && (
+                  <div className="editor-field">
+                    <label>Global Value</label>
+                    <select className="editor-select"
+                      value={draft.valueRef?.name || ''}
+                      onChange={(e) => patch({ valueRef: e.target.value ? { type: 'byName', name: e.target.value } : undefined })}>
+                      <option value="">-- Select global value --</option>
+                      {compatibleStates.map(s => (
+                        <option key={s.id} value={s.name}>
+                          ({STATE_TYPE_SYMBOL[s.type] || s.type}) {s.displayName || s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            ) : null;
+          })()}
+
+          {draft.valueSource === 'global' ? (
+            <>
+
+              {/* Default fallback value (required) */}
+              <CharacteristicValueInput
+                characteristic={draft.deviceId && draft.characteristicId
+                  ? registry.lookupCharacteristic(draft.deviceId, draft.characteristicId)
+                  : undefined}
+                value={draft.value}
+                onChange={(val) => patch({ value: val })}
+                label="Default Value"
+                placeholder="Fallback if global value is removed"
+              />
+            </>
+          ) : (
+            <CharacteristicValueInput
+              characteristic={draft.deviceId && draft.characteristicId
+                ? registry.lookupCharacteristic(draft.deviceId, draft.characteristicId)
+                : undefined}
+              value={draft.value}
+              onChange={(val) => patch({ value: val })}
+            />
+          )}
         </>
       )}
 
@@ -199,6 +278,7 @@ export function BlockEditor({
         const ALL_OPS = [
           { value: 'remove', label: 'Remove', types: [] as string[] },
           { value: 'set', label: 'Set Value', types: [] as string[] },
+          { value: 'setFromCharacteristic', label: 'Set from Device', types: [] as string[] },
           { value: 'increment', label: 'Increment', types: ['number'] },
           { value: 'decrement', label: 'Decrement', types: ['number'] },
           { value: 'multiply', label: 'Multiply', types: ['number'] },
@@ -208,15 +288,28 @@ export function BlockEditor({
           { value: 'andState', label: 'AND State', types: ['boolean'] },
           { value: 'orState', label: 'OR State', types: ['boolean'] },
           { value: 'notState', label: 'NOT State', types: ['boolean'] },
+          { value: 'setToNow', label: 'Set to Now', types: ['datetime'] },
+          { value: 'addTime', label: 'Add Time', types: ['datetime'] },
+          { value: 'subtractTime', label: 'Subtract Time', types: ['datetime'] },
         ];
         const filteredOps = selectedType
           ? ALL_OPS.filter(o => o.types.length === 0 || o.types.includes(selectedType))
           : ALL_OPS;
 
+        const NUMERIC_FORMATS_SET = new Set(['uint8', 'uint16', 'uint32', 'uint64', 'int', 'float']);
+        const BOOL_FORMATS_SET = new Set(['bool']);
+        const STRING_FORMATS_SET = new Set(['string']);
+        const formatFilterForType = selectedType === 'number' ? NUMERIC_FORMATS_SET
+          : selectedType === 'boolean' ? BOOL_FORMATS_SET
+          : selectedType === 'string' ? STRING_FORMATS_SET
+          : undefined;
+
         const isCreate = op.operation === 'create';
         const needsAmount = ['increment', 'decrement', 'multiply'].includes(op.operation);
         const needsValue = ['set'].includes(op.operation);
         const needsOtherRef = ['addState', 'subtractState', 'andState', 'orState'].includes(op.operation);
+        const needsDevice = op.operation === 'setFromCharacteristic';
+        const needsTimeAmount = ['addTime', 'subtractTime'].includes(op.operation);
 
         const sanitizeName = (v: string) => v.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').replace(/_+/g, '_');
 
@@ -224,10 +317,10 @@ export function BlockEditor({
           <>
             {/* Step 1: Pick state or create new */}
             <div className="editor-field">
-              <label>Controller State</label>
+              <label>Global Value</label>
               <select className="editor-select" value={selectedName} onChange={(e) => {
                 if (e.target.value === '__create__') {
-                  patchOp({ operation: 'create', variableRef: undefined, name: '', variableType: 'number' });
+                  patchOp({ operation: 'create', variableRef: undefined, name: '', variableType: 'number', initialValue: 0 });
                 } else {
                   const newOp = op.operation === 'create' ? 'set' : op.operation;
                   // Reset op if not applicable to new type
@@ -239,7 +332,7 @@ export function BlockEditor({
                 }
               }}>
                 <option value="">-- Select state --</option>
-                {controllerStates.map(s => <option key={s.id} value={s.name}>{s.displayName || s.name} ({STATE_TYPE_SYMBOL[s.type] || s.type})</option>)}
+                {controllerStates.map(s => <option key={s.id} value={s.name}>({STATE_TYPE_SYMBOL[s.type] || s.type}) {s.displayName || s.name}</option>)}
                 <option value="__create__">Create New...</option>
               </select>
             </div>
@@ -253,10 +346,15 @@ export function BlockEditor({
                 </div>
                 <div className="editor-field">
                   <label>Type</label>
-                  <select className="editor-select" value={op.variableType || 'number'} onChange={(e) => patchOp({ variableType: e.target.value })}>
+                  <select className="editor-select" value={op.variableType || 'number'} onChange={(e) => {
+                    const t = e.target.value;
+                    const defaultValue = t === 'number' ? 0 : t === 'boolean' ? false : t === 'datetime' ? new Date().toISOString() : '';
+                    patchOp({ variableType: t, initialValue: defaultValue });
+                  }}>
                     <option value="number">Number</option>
                     <option value="string">String</option>
                     <option value="boolean">Boolean</option>
+                    <option value="datetime">Date & Time</option>
                   </select>
                 </div>
                 <div className="editor-field">
@@ -280,7 +378,23 @@ export function BlockEditor({
                 {/* Step 2: Operation (type-filtered) */}
                 <div className="editor-field">
                   <label>Operation</label>
-                  <select className="editor-select" value={op.operation} onChange={(e) => patchOp({ operation: e.target.value })}>
+                  <select className="editor-select" value={op.operation} onChange={(e) => {
+                    const newOp = e.target.value;
+                    const defaults: Record<string, unknown> = { operation: newOp };
+                    // Set sensible defaults so pre-populated fields are saved even without user interaction
+                    if (['set'].includes(newOp) && op.value === undefined) {
+                      if (selectedType === 'number') defaults.value = 0;
+                      else if (selectedType === 'boolean') defaults.value = false;
+                      else if (selectedType === 'datetime') defaults.value = new Date().toISOString();
+                      else defaults.value = '';
+                    }
+                    if (['increment', 'decrement', 'multiply'].includes(newOp) && op.by === undefined) defaults.by = 1;
+                    if (['addTime', 'subtractTime'].includes(newOp)) {
+                      if (op.amount === undefined) defaults.amount = 1;
+                      if (op.unit === undefined) defaults.unit = 'minutes';
+                    }
+                    patchOp(defaults);
+                  }}>
                     {filteredOps.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
@@ -298,7 +412,12 @@ export function BlockEditor({
                         <span>{(op.value === true || op.value === 'true') ? 'true' : 'false'}</span>
                       </label>
                     )}
-                    {(selectedType === 'string' || !selectedType) && (
+                    {selectedType === 'datetime' && (
+                      <input className="editor-input" type="datetime-local"
+                        value={(() => { try { return new Date(String(op.value || '')).toISOString().slice(0, 16); } catch { return ''; } })()}
+                        onChange={(e) => patchOp({ value: new Date(e.target.value).toISOString() })} />
+                    )}
+                    {(selectedType === 'string' || (!selectedType && selectedType !== 'datetime')) && (
                       <input className="editor-input" value={String(op.value ?? '')} onChange={(e) => patchOp({ value: e.target.value })} />
                     )}
                   </div>
@@ -309,13 +428,41 @@ export function BlockEditor({
                     <input className="editor-input" type="number" step="any" value={op.by ?? 1} onChange={(e) => patchOp({ by: parseFloat(e.target.value) || 0 })} />
                   </div>
                 )}
+                {needsTimeAmount && (
+                  <>
+                    <div className="editor-field">
+                      <label>Amount</label>
+                      <input className="editor-input" type="number" step="any" min={0} value={op.amount ?? 1}
+                        onChange={(e) => patchOp({ amount: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="editor-field">
+                      <label>Unit</label>
+                      <select className="editor-select" value={op.unit || 'minutes'}
+                        onChange={(e) => patchOp({ unit: e.target.value })}>
+                        <option value="seconds">Seconds</option>
+                        <option value="minutes">Minutes</option>
+                        <option value="hours">Hours</option>
+                        <option value="days">Days</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+                {needsDevice && (
+                  <DevicePicker
+                    initialDeviceId={op.deviceId}
+                    initialServiceId={op.serviceId}
+                    initialCharId={op.characteristicId}
+                    formatFilter={formatFilterForType}
+                    onChange={(val) => patchOp({ deviceId: val.deviceId, serviceId: val.serviceId, characteristicId: val.characteristicId })}
+                  />
+                )}
                 {needsOtherRef && (
                   <div className="editor-field">
                     <label>Other State</label>
                     <select className="editor-select" value={op.otherRef?.name || ''} onChange={(e) => patchOp({ otherRef: { type: 'byName', name: e.target.value } })}>
                       <option value="">-- Select --</option>
                       {controllerStates.filter(s => s.name !== selectedName && (!selectedType || s.type === selectedType)).map(s => (
-                        <option key={s.id} value={s.name}>{s.displayName || s.name} ({STATE_TYPE_SYMBOL[s.type] || s.type})</option>
+                        <option key={s.id} value={s.name}>({STATE_TYPE_SYMBOL[s.type] || s.type}) {s.displayName || s.name}</option>
                       ))}
                     </select>
                   </div>

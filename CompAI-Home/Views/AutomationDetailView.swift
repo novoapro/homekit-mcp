@@ -706,7 +706,7 @@ private struct ActionBlockRow: View {
         case let .webhook(a): return a.name ?? "Webhook"
         case let .log(a): return a.name ?? "Log Message"
         case let .runScene(a): return a.name ?? "Run Scene"
-        case let .stateVariable(a): return a.name ?? "Controller State"
+        case let .stateVariable(a): return a.name ?? "Global Value"
         }
     }
 

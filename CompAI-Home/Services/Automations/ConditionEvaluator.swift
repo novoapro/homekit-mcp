@@ -185,24 +185,20 @@ class ConditionEvaluator {
         case .equals: return .equals(newValue)
         case .notEquals: return .notEquals(newValue)
         case .greaterThan:
-            if let d = (newValue.value as? Double) ?? (newValue.value as? Int).map({ Double($0) }) {
-                return .greaterThan(d)
-            }
+            if let d = toDouble(newValue.value) { return .greaterThan(d) }
+            if let date = StateVariable.parseDate(newValue.value) { return .greaterThan(date.timeIntervalSince1970) }
             return .equals(newValue)
         case .lessThan:
-            if let d = (newValue.value as? Double) ?? (newValue.value as? Int).map({ Double($0) }) {
-                return .lessThan(d)
-            }
+            if let d = toDouble(newValue.value) { return .lessThan(d) }
+            if let date = StateVariable.parseDate(newValue.value) { return .lessThan(date.timeIntervalSince1970) }
             return .equals(newValue)
         case .greaterThanOrEqual:
-            if let d = (newValue.value as? Double) ?? (newValue.value as? Int).map({ Double($0) }) {
-                return .greaterThanOrEqual(d)
-            }
+            if let d = toDouble(newValue.value) { return .greaterThanOrEqual(d) }
+            if let date = StateVariable.parseDate(newValue.value) { return .greaterThanOrEqual(date.timeIntervalSince1970) }
             return .equals(newValue)
         case .lessThanOrEqual:
-            if let d = (newValue.value as? Double) ?? (newValue.value as? Int).map({ Double($0) }) {
-                return .lessThanOrEqual(d)
-            }
+            if let d = toDouble(newValue.value) { return .lessThanOrEqual(d) }
+            if let date = StateVariable.parseDate(newValue.value) { return .lessThanOrEqual(date.timeIntervalSince1970) }
             return .equals(newValue)
         case .isEmpty, .isNotEmpty:
             return original // no value to replace
@@ -434,17 +430,22 @@ class ConditionEvaluator {
         case .notEquals(let target):
             return !valuesEqual(value, target.value)
         case .greaterThan(let target):
-            guard let numericValue = toDouble(value) else { return false }
-            return numericValue > target
+            if let numericValue = toDouble(value) { return numericValue > target }
+            // Datetime fallback: compare ISO 8601 date against epoch target
+            if let date = StateVariable.parseDate(value) { return date.timeIntervalSince1970 > target }
+            return false
         case .lessThan(let target):
-            guard let numericValue = toDouble(value) else { return false }
-            return numericValue < target
+            if let numericValue = toDouble(value) { return numericValue < target }
+            if let date = StateVariable.parseDate(value) { return date.timeIntervalSince1970 < target }
+            return false
         case .greaterThanOrEqual(let target):
-            guard let numericValue = toDouble(value) else { return false }
-            return numericValue >= target
+            if let numericValue = toDouble(value) { return numericValue >= target }
+            if let date = StateVariable.parseDate(value) { return date.timeIntervalSince1970 >= target }
+            return false
         case .lessThanOrEqual(let target):
-            guard let numericValue = toDouble(value) else { return false }
-            return numericValue <= target
+            if let numericValue = toDouble(value) { return numericValue <= target }
+            if let date = StateVariable.parseDate(value) { return date.timeIntervalSince1970 <= target }
+            return false
         case .isEmpty:
             guard let str = value as? String else { return false }
             return str.isEmpty
@@ -457,7 +458,7 @@ class ConditionEvaluator {
         }
     }
 
-    /// Flexible equality with type coercion (Bool↔Int, Int↔Double).
+    /// Flexible equality with type coercion (Bool↔Int, Int↔Double, Date↔Date).
     static func valuesEqual(_ a: Any?, _ b: Any?) -> Bool {
         if a == nil && b == nil { return true }
         guard let a, let b else { return false }
@@ -469,6 +470,11 @@ class ConditionEvaluator {
         // Numeric comparisons (Int, Double, Bool as numeric)
         if let aNum = toDouble(a), let bNum = toDouble(b) {
             return aNum == bNum
+        }
+
+        // Datetime comparisons — parse both sides as dates
+        if let aDate = StateVariable.parseDate(a), let bDate = StateVariable.parseDate(b) {
+            return abs(aDate.timeIntervalSince(bDate)) < 1.0 // within 1 second
         }
 
         return false

@@ -409,7 +409,8 @@ extension ConditionDraft {
             return sceneIsActive ? "Scene \"\(sceneName)\" active" : "Scene \"\(sceneName)\" not active"
         case .engineState:
             let varName = stateVariableName.isEmpty ? "unknown" : stateVariableName
-            return "State '\(varName)' \(comparisonType.symbol) \(comparisonValue)"
+            let displayVal = Self.formatDisplayValue(comparisonValue)
+            return "'\(varName)' \(comparisonType.symbol) \(displayVal)"
         case .blockResult:
             let statusName = blockResultExpectedStatus.displayName
             switch blockResultScope {
@@ -427,6 +428,19 @@ extension ConditionDraft {
                 return "Any block \(statusName)"
             }
         }
+    }
+
+    /// Formats a comparison value for human-readable display.
+    /// Handles "__now__" and ISO 8601 datetime strings.
+    static func formatDisplayValue(_ value: String) -> String {
+        if value == "__now__" { return "Now" }
+        if let date = StateVariable.parseDate(value) {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            return formatter.string(from: date)
+        }
+        return value
     }
 }
 
@@ -459,7 +473,7 @@ extension BlockDraft {
         case let .runScene(d):
             return d.autoName(scenes: scenes)
         case let .stateVariable(d):
-            return d.operationType.displayName + (d.variableName.isEmpty ? "" : " '\(d.variableName)'")
+            return d.autoName()
         case let .delay(d):
             return d.autoName()
         case let .waitForState(d):
@@ -508,6 +522,10 @@ private extension ControlDeviceDraft {
         let devName = devices.resolvedName(deviceId: deviceId, serviceId: serviceId)
         let charName = characteristicId.isEmpty ? "" : devices.resolvedCharacteristicName(deviceId: deviceId, characteristicId: characteristicId)
         if charName.isEmpty { return "Set \(devName)" }
+        if valueSource == .global && !valueRefName.isEmpty {
+            let refLabel = valueRefDisplayName.isEmpty ? valueRefName : valueRefDisplayName
+            return "Set \(devName) \(charName) = \(refLabel) (Global)"
+        }
         let resolvedCharType = devices.resolvedCharacteristicType(deviceId: deviceId, characteristicId: characteristicId)
         let displayVal = CharacteristicInputConfig.displayValueForName(characteristicType: resolvedCharType, rawValue: value)
         let valStr = displayVal.isEmpty ? "" : "= \(displayVal)"
@@ -675,7 +693,7 @@ enum ConditionDraftType: String, CaseIterable, Identifiable {
         case .timeCondition: return "Time Condition"
         case .sceneActive: return "Scene Active"
         case .blockResult: return "Block Result"
-        case .engineState: return "Controller State"
+        case .engineState: return "Global Value"
         }
     }
 
@@ -903,7 +921,7 @@ enum BlockDraftType {
         case .webhook: return "Webhook"
         case .log: return "Log Message"
         case .runScene: return "Run Scene"
-        case .stateVariable: return "Controller State"
+        case .stateVariable: return "Global Value"
         case .delay: return "Delay"
         case .waitForState: return "Wait for State"
         case .conditional: return "If/Else"
@@ -957,6 +975,18 @@ struct ControlDeviceDraft {
     var characteristicId: String = ""
     var value: String = ""
 
+    /// Whether the value comes from a local (hardcoded) or global (Global Value reference) source.
+    var valueSource: ValueSource = .local
+    /// Name of the referenced Global Value (only used when valueSource == .global).
+    var valueRefName: String = ""
+    /// Display name of the referenced Global Value (for human-readable auto-names).
+    var valueRefDisplayName: String = ""
+
+    enum ValueSource: String {
+        case local       // hardcoded in workflow
+        case global      // from a Global Value
+    }
+
     // Cached characteristic metadata for UI rendering when device isn't available
     var characteristicFormat: String?
     var characteristicMinValue: Double?
@@ -985,9 +1015,10 @@ struct RunSceneDraft {
 // MARK: - State Variable Draft
 
 enum StateVariableOperationType: String, CaseIterable, Identifiable {
-    case create, remove, set
+    case create, remove, set, setFromCharacteristic
     case increment, decrement, multiply, addState, subtractState
     case toggle, andState, orState, notState
+    case setToNow, addTime, subtractTime
 
     var id: String { rawValue }
 
@@ -996,6 +1027,10 @@ enum StateVariableOperationType: String, CaseIterable, Identifiable {
         case .create: return "Create Variable"
         case .remove: return "Remove Variable"
         case .set: return "Set Value"
+        case .setFromCharacteristic: return "Set from Device"
+        case .setToNow: return "Set to Now"
+        case .addTime: return "Add Time"
+        case .subtractTime: return "Subtract Time"
         case .increment: return "Increment"
         case .decrement: return "Decrement"
         case .multiply: return "Multiply"
@@ -1011,9 +1046,10 @@ enum StateVariableOperationType: String, CaseIterable, Identifiable {
     /// The variable types this operation applies to. Empty means applicable to all types.
     var applicableTypes: [StateVariableType] {
         switch self {
-        case .create, .remove, .set: return []
+        case .create, .remove, .set, .setFromCharacteristic: return []
         case .increment, .decrement, .multiply, .addState, .subtractState: return [.number]
         case .toggle, .andState, .orState, .notState: return [.boolean]
+        case .setToNow, .addTime, .subtractTime: return [.datetime]
         }
     }
 
@@ -1033,6 +1069,22 @@ enum StateVariableOperationType: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Whether this operation requires device/characteristic selection.
+    var requiresDevice: Bool {
+        switch self {
+        case .setFromCharacteristic: return true
+        default: return false
+        }
+    }
+
+    /// Whether this operation requires a time amount and unit (for datetime arithmetic).
+    var requiresTimeAmount: Bool {
+        switch self {
+        case .addTime, .subtractTime: return true
+        default: return false
+        }
+    }
+
     /// Whether this operation requires a value input.
     var requiresValue: Bool {
         switch self {
@@ -1046,11 +1098,49 @@ struct StateVariableDraft {
     var name: String = ""
     var operationType: StateVariableOperationType = .set
     var variableName: String = ""
+    /// Display name of the selected Global Value (for human-readable auto-names).
+    var variableDisplayName: String = ""
     var variableId: String = ""
     var variableType: StateVariableType = .number
     var value: String = ""
     var otherVariableName: String = ""
     var amountValue: Double = 1.0
+    // datetime arithmetic fields
+    var timeAmount: Double = 1.0
+    var timeUnit: StateVariableOperation.TimeUnit = .minutes
+    // setFromCharacteristic fields
+    var sourceDeviceId: String = ""
+    var sourceServiceId: String?
+    var sourceCharacteristicId: String = ""
+
+    func autoName() -> String {
+        let displayLabel = variableDisplayName.isEmpty ? variableName : variableDisplayName
+        let varLabel = displayLabel.isEmpty ? "" : " '\(displayLabel)'"
+        switch operationType {
+        case .set:
+            let displayVal = ConditionDraft.formatDisplayValue(value)
+            return "Set\(varLabel) = \(displayVal)"
+        case .setToNow:
+            return "Set\(varLabel) to Now"
+        case .addTime:
+            return "Add \(formatTimeAmount(timeAmount, timeUnit)) to\(varLabel)"
+        case .subtractTime:
+            return "Subtract \(formatTimeAmount(timeAmount, timeUnit)) from\(varLabel)"
+        case .increment:
+            return "Increment\(varLabel) by \(amountValue)"
+        case .decrement:
+            return "Decrement\(varLabel) by \(amountValue)"
+        case .multiply:
+            return "Multiply\(varLabel) by \(amountValue)"
+        default:
+            return operationType.displayName + varLabel
+        }
+    }
+
+    private func formatTimeAmount(_ amount: Double, _ unit: StateVariableOperation.TimeUnit) -> String {
+        let amountStr = amount.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(amount)) : String(amount)
+        return "\(amountStr) \(unit.displayName.lowercased())"
+    }
 
     /// Convert from a `StateVariableAction` model to a draft.
     static func from(_ action: StateVariableAction) -> StateVariableDraft {
@@ -1103,6 +1193,25 @@ struct StateVariableDraft {
         case let .notState(ref):
             draft.operationType = .notState
             applyRef(ref, to: &draft)
+        case let .setToNow(ref):
+            draft.operationType = .setToNow
+            applyRef(ref, to: &draft)
+        case let .addTime(ref, amount, unit):
+            draft.operationType = .addTime
+            applyRef(ref, to: &draft)
+            draft.timeAmount = amount
+            draft.timeUnit = unit
+        case let .subtractTime(ref, amount, unit):
+            draft.operationType = .subtractTime
+            applyRef(ref, to: &draft)
+            draft.timeAmount = amount
+            draft.timeUnit = unit
+        case let .setFromCharacteristic(ref, deviceId, characteristicId, serviceId):
+            draft.operationType = .setFromCharacteristic
+            applyRef(ref, to: &draft)
+            draft.sourceDeviceId = deviceId
+            draft.sourceCharacteristicId = characteristicId
+            draft.sourceServiceId = serviceId
         }
         return draft
     }
@@ -1152,6 +1261,19 @@ struct StateVariableDraft {
             return .orState(variableRef: ref, otherRef: otherRef)
         case .notState:
             return .notState(variableRef: ref)
+        case .setToNow:
+            return .setToNow(variableRef: ref)
+        case .addTime:
+            return .addTime(variableRef: ref, amount: timeAmount, unit: timeUnit)
+        case .subtractTime:
+            return .subtractTime(variableRef: ref, amount: timeAmount, unit: timeUnit)
+        case .setFromCharacteristic:
+            return .setFromCharacteristic(
+                variableRef: ref,
+                deviceId: sourceDeviceId,
+                characteristicId: sourceCharacteristicId,
+                serviceId: sourceServiceId
+            )
         }
     }
 }
@@ -1799,7 +1921,7 @@ extension AutomationDraft {
         switch action {
         case let .controlDevice(a):
             let meta = lookupCharacteristicMeta(deviceId: a.deviceId, characteristicId: a.characteristicId, in: devices)
-            return BlockDraft(id: blockId, blockType: .controlDevice(ControlDeviceDraft(
+            var draft = ControlDeviceDraft(
                 name: a.name ?? "",
                 deviceId: a.deviceId,
                 serviceId: a.serviceId,
@@ -1810,7 +1932,12 @@ extension AutomationDraft {
                 characteristicMaxValue: meta.maxValue,
                 characteristicStepValue: meta.stepValue,
                 characteristicValidValues: meta.validValues
-            )))
+            )
+            if let ref = a.valueRef {
+                draft.valueSource = .global
+                if case let .byName(name) = ref { draft.valueRefName = name }
+            }
+            return BlockDraft(id: blockId, blockType: .controlDevice(draft))
         case let .webhook(a):
             return BlockDraft(id: blockId, blockType: .webhook(WebhookDraft(
                 name: a.name ?? "",
@@ -2087,14 +2214,21 @@ extension ComparisonType {
         switch self {
         case .equals: return .equals(parseValue(value))
         case .notEquals: return .notEquals(parseValue(value))
-        case .greaterThan: return .greaterThan(Double(value) ?? 0)
-        case .lessThan: return .lessThan(Double(value) ?? 0)
-        case .greaterThanOrEqual: return .greaterThanOrEqual(Double(value) ?? 0)
-        case .lessThanOrEqual: return .lessThanOrEqual(Double(value) ?? 0)
+        case .greaterThan: return .greaterThan(Self.toNumericOrEpoch(value))
+        case .lessThan: return .lessThan(Self.toNumericOrEpoch(value))
+        case .greaterThanOrEqual: return .greaterThanOrEqual(Self.toNumericOrEpoch(value))
+        case .lessThanOrEqual: return .lessThanOrEqual(Self.toNumericOrEpoch(value))
         case .isEmpty: return .isEmpty
         case .isNotEmpty: return .isNotEmpty
         case .contains: return .contains(value)
         }
+    }
+
+    /// Converts a string to Double. For datetime values ("__now__" or ISO 8601), converts to epoch timestamp.
+    private static func toNumericOrEpoch(_ value: String) -> Double {
+        if let d = Double(value) { return d }
+        if let date = StateVariable.parseDate(value) { return date.timeIntervalSince1970 }
+        return 0
     }
 }
 
@@ -2102,11 +2236,14 @@ extension BlockDraft {
     func toBlock(devices: [DeviceModel]) -> AutomationBlock {
         switch blockType {
         case let .controlDevice(d):
+            let valueRef: StateVariableRef? = d.valueSource == .global && !d.valueRefName.isEmpty
+                ? .byName(d.valueRefName) : nil
             return .action(.controlDevice(ControlDeviceAction(
                 deviceId: d.deviceId,
                 serviceId: d.serviceId,
                 characteristicId: d.characteristicId,
                 value: parseValue(d.value),
+                valueRef: valueRef,
                 name: d.name.isEmpty ? nil : d.name
             )), blockId: id)
         case let .webhook(d):

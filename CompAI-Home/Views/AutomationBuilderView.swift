@@ -724,7 +724,7 @@ private struct BuilderActionBlockRow: View {
         case .webhook(let a): return a.name ?? "Webhook"
         case .log(let a): return a.name ?? "Log Message"
         case .runScene(let a): return a.name ?? "Run Scene"
-        case .stateVariable(let a): return a.name ?? "Controller State"
+        case .stateVariable(let a): return a.name ?? "Global Value"
         }
     }
 

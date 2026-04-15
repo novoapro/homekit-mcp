@@ -13,17 +13,17 @@ import './TriggerEditor.css'; // reuse shared form styles
 const CONDITION_LEAF_TYPES = [
   { value: 'deviceState', label: 'Device State' },
   { value: 'timeCondition', label: 'Time Window' },
-  { value: 'engineState', label: 'Controller State' },
+  { value: 'engineState', label: 'Global Value' },
   { value: 'blockResult', label: 'Block Result' },
 ];
 
 const COMPARISON_OPS = [
   { value: 'equals', label: 'Equals', types: [] as string[] },
   { value: 'notEquals', label: 'Not Equals', types: [] as string[] },
-  { value: 'greaterThan', label: 'Greater Than', types: ['number'] },
-  { value: 'lessThan', label: 'Less Than', types: ['number'] },
-  { value: 'greaterThanOrEqual', label: 'Greater or Equal', types: ['number'] },
-  { value: 'lessThanOrEqual', label: 'Less or Equal', types: ['number'] },
+  { value: 'greaterThan', label: 'Greater Than', types: ['number', 'datetime'] },
+  { value: 'lessThan', label: 'Less Than', types: ['number', 'datetime'] },
+  { value: 'greaterThanOrEqual', label: 'Greater or Equal', types: ['number', 'datetime'] },
+  { value: 'lessThanOrEqual', label: 'Less or Equal', types: ['number', 'datetime'] },
   { value: 'isEmpty', label: 'Is Empty', types: ['string'] },
   { value: 'isNotEmpty', label: 'Is Not Empty', types: ['string'] },
   { value: 'contains', label: 'Contains', types: ['string'] },
@@ -54,7 +54,7 @@ export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChang
   const registry = useDeviceRegistry();
   const api = useApi();
 
-  const STATE_TYPE_SYMBOL: Record<string, string> = { number: '#', string: 'Aa', boolean: '◉' };
+  const STATE_TYPE_SYMBOL: Record<string, string> = { number: '#', string: 'Aa', boolean: '◉', datetime: '⏱' };
 
   const [controllerStates, setControllerStates] = useState<{ id: string; name: string; displayName?: string; type: string }[]>([]);
   useEffect(() => {
@@ -325,15 +325,27 @@ export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChang
         return (
           <>
             <div className="editor-field">
-              <label>Controller State</label>
+              <label>Global Value</label>
               <select
                 className="editor-select"
                 value={selectedName}
-                onChange={(e) => patch({ variableRef: { type: 'byName', name: e.target.value } })}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  const state = controllerStates.find(s => s.name === name);
+                  // Set a type-appropriate default comparison value
+                  const defaultVal = state?.type === 'number' ? 0
+                    : state?.type === 'boolean' ? true
+                    : state?.type === 'datetime' ? '__now__'
+                    : '';
+                  patch({
+                    variableRef: { type: 'byName', name },
+                    comparison: { type: 'equals', value: defaultVal } as unknown as typeof draft.comparison,
+                  });
+                }}
               >
                 <option value="">-- Select state --</option>
                 {controllerStates.map(s => (
-                  <option key={s.id} value={s.name}>{s.displayName || s.name} ({STATE_TYPE_SYMBOL[s.type] || s.type})</option>
+                  <option key={s.id} value={s.name}>({STATE_TYPE_SYMBOL[s.type] || s.type}) {s.displayName || s.name}</option>
                 ))}
               </select>
             </div>
@@ -382,7 +394,21 @@ export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChang
                             <span style={{ fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{(compVal === true || compVal === 'true') ? 'true' : 'false'}</span>
                           </>
                         )}
-                        {(selectedType === 'string' || !selectedType) && (
+                        {selectedType === 'datetime' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                            <select className="editor-select" value={compVal === '__now__' ? '__now__' : 'custom'}
+                              onChange={(e) => patch({ comparison: { type: compType, value: e.target.value === '__now__' ? '__now__' : new Date().toISOString() } as unknown as typeof draft.comparison })}>
+                              <option value="__now__">Now (current time)</option>
+                              <option value="custom">Specific date</option>
+                            </select>
+                            {compVal !== '__now__' && (
+                              <input className="editor-input" type="datetime-local"
+                                value={(() => { try { return new Date(String(compVal)).toISOString().slice(0, 16); } catch { return ''; } })()}
+                                onChange={(e) => patch({ comparison: { type: compType, value: new Date(e.target.value).toISOString() } as unknown as typeof draft.comparison })} />
+                            )}
+                          </div>
+                        )}
+                        {(selectedType === 'string' || (!selectedType && selectedType !== 'datetime')) && (
                           <input className="editor-input" style={{ flex: 1 }} value={String(compVal)}
                             onChange={(e) => patch({ comparison: { type: compType, value: e.target.value } as unknown as typeof draft.comparison })} />
                         )}
@@ -393,7 +419,7 @@ export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChang
                         onChange={(e) => patch({ compareToStateRef: { type: 'byName', name: e.target.value } })}>
                         <option value="">-- Select --</option>
                         {controllerStates.filter(s => s.name !== selectedName && (!selectedType || s.type === selectedType)).map(s => (
-                          <option key={s.id} value={s.name}>{s.displayName || s.name} ({STATE_TYPE_SYMBOL[s.type] || s.type})</option>
+                          <option key={s.id} value={s.name}>({STATE_TYPE_SYMBOL[s.type] || s.type}) {s.displayName || s.name}</option>
                         ))}
                       </select>
                     )}

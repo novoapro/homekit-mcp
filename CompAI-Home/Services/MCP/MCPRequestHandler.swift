@@ -89,8 +89,8 @@ final class MCPRequestHandler: Sendable {
         "list_automations", "get_automation", "create_automation", "update_automation",
         "delete_automation", "enable_automation", "get_automation_logs",
         "trigger_automation", "improve_automation",
-        "list_state_variables", "get_state_variable", "create_state_variable",
-        "update_state_variable", "delete_state_variable"
+        "list_global_values", "get_global_value", "create_global_value",
+        "update_global_value", "delete_global_value"
     ]
 
     // MARK: - Initialize
@@ -316,15 +316,15 @@ final class MCPRequestHandler: Sendable {
             return await handleTriggerAutomation(id: id, arguments: arguments)
         case "improve_automation":
             return await handleImproveAutomation(id: id, arguments: arguments)
-        case "list_state_variables":
+        case "list_global_values":
             return await handleListStateVariables(id: id)
-        case "get_state_variable":
+        case "get_global_value":
             return await handleGetStateVariable(id: id, arguments: arguments)
-        case "create_state_variable":
+        case "create_global_value":
             return await handleCreateStateVariable(id: id, arguments: arguments)
-        case "update_state_variable":
+        case "update_global_value":
             return await handleUpdateStateVariable(id: id, arguments: arguments)
-        case "delete_state_variable":
+        case "delete_global_value":
             return await handleDeleteStateVariable(id: id, arguments: arguments)
         default:
             return JSONRPCResponse.error(
@@ -612,7 +612,9 @@ final class MCPRequestHandler: Sendable {
                             "characteristicId": ["type": "string", "required": true,
                                 "description": "Stable characteristic ID from list_devices."],
                             "value": ["type": "any", "required": true,
-                                "description": "Value to set."],
+                                "description": "Value to set. Also serves as the default fallback when valueRef is used."],
+                            "valueRef": ["type": "object", "required": false,
+                                "description": "Optional. Reference a global value: {\"type\":\"byName\",\"name\":\"my_value\"}. At runtime the global value is used; if deleted, falls back to the value field. IMPORTANT: The global value type must match the characteristic format — boolean globals for bool characteristics, number globals for numeric characteristics (uint8/uint16/uint32/uint64/int/float), string globals for string characteristics."],
                             "name": ["type": "string", "required": false]
                         ] as [String: Any]
                     ],
@@ -643,7 +645,7 @@ final class MCPRequestHandler: Sendable {
                     ],
                     [
                         "block": "action", "type": "stateVariable",
-                        "description": "Operate on controller states (create, remove, set, increment, decrement, multiply, toggle, etc.)",
+                        "description": "Operate on global values (create, remove, set, increment, decrement, multiply, toggle, etc.)",
                         "fields": [
                             "operation": ["type": "object", "required": true, "description": "See stateVariableOperations"],
                             "name": ["type": "string", "required": false]
@@ -767,14 +769,14 @@ final class MCPRequestHandler: Sendable {
                     ],
                     [
                         "type": "engineState",
-                        "description": "Compare a controller state variable's current value. Use list_state_variables to discover available states.",
+                        "description": "Compare a global value's current value. Use list_global_values to discover available values.",
                         "fields": [
                             "variableRef": ["type": "object", "required": true,
                                 "description": "Reference: {\"type\":\"byName\",\"name\":\"my_counter\"}"],
                             "comparison": ["type": "object", "required": true,
                                 "description": "ComparisonOperator. For booleans: equals/notEquals only. For strings: equals/notEquals. For numbers: all operators."],
                             "compareToStateRef": ["type": "object", "required": false,
-                                "description": "Optional. When set, compare against another state variable's value instead of a literal."]
+                                "description": "Optional. When set, compare against another global value instead of a literal."]
                         ] as [String: Any]
                     ],
                     [
@@ -806,22 +808,26 @@ final class MCPRequestHandler: Sendable {
                 ] as [[String: Any]]
             ] as [String: Any],
             "stateVariableOperations": [
-                "description": "Operations for the stateVariable action block. Use list_state_variables to discover available states and their types.",
-                "variableRef": "{\"type\":\"byName\",\"name\":\"state_name\"} — identifies the target state",
+                "description": "Operations for the stateVariable action block. Use list_global_values to discover available values and their types.",
+                "variableRef": "{\"type\":\"byName\",\"name\":\"value_name\"} — identifies the target global value",
                 "operations": [
                     ["operation": "create", "fields": ["name": "string", "variableType": "number|string|boolean", "initialValue": "any"],
-                        "description": "Create a new controller state"],
-                    ["operation": "remove", "fields": ["variableRef": "object"], "description": "Delete a state"],
+                        "description": "Create a new global value"],
+                    ["operation": "remove", "fields": ["variableRef": "object"], "description": "Delete a global value"],
                     ["operation": "set", "fields": ["variableRef": "object", "value": "any"], "description": "Set value (any type)"],
-                    ["operation": "increment", "fields": ["variableRef": "object", "by": "number"], "description": "Add to number state"],
-                    ["operation": "decrement", "fields": ["variableRef": "object", "by": "number"], "description": "Subtract from number state"],
-                    ["operation": "multiply", "fields": ["variableRef": "object", "by": "number"], "description": "Multiply number state"],
-                    ["operation": "addState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Add another state's value (numbers)"],
-                    ["operation": "subtractState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Subtract another state's value (numbers)"],
-                    ["operation": "toggle", "fields": ["variableRef": "object"], "description": "Flip boolean state"],
-                    ["operation": "andState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Boolean AND with another state"],
-                    ["operation": "orState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Boolean OR with another state"],
-                    ["operation": "notState", "fields": ["variableRef": "object"], "description": "Boolean NOT"]
+                    ["operation": "increment", "fields": ["variableRef": "object", "by": "number"], "description": "Add to number value"],
+                    ["operation": "decrement", "fields": ["variableRef": "object", "by": "number"], "description": "Subtract from number value"],
+                    ["operation": "multiply", "fields": ["variableRef": "object", "by": "number"], "description": "Multiply number value"],
+                    ["operation": "addState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Add another global value (numbers)"],
+                    ["operation": "subtractState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Subtract another global value (numbers)"],
+                    ["operation": "toggle", "fields": ["variableRef": "object"], "description": "Flip boolean value"],
+                    ["operation": "andState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Boolean AND with another value"],
+                    ["operation": "orState", "fields": ["variableRef": "object", "otherRef": "object"], "description": "Boolean OR with another value"],
+                    ["operation": "notState", "fields": ["variableRef": "object"], "description": "Boolean NOT"],
+                    ["operation": "setToNow", "fields": ["variableRef": "object"], "description": "Set a datetime global value to the current date/time"],
+                    ["operation": "addTime", "fields": ["variableRef": "object", "amount": "number", "unit": "seconds|minutes|hours|days"], "description": "Add time to a datetime global value"],
+                    ["operation": "subtractTime", "fields": ["variableRef": "object", "amount": "number", "unit": "seconds|minutes|hours|days"], "description": "Subtract time from a datetime global value"],
+                    ["operation": "setFromCharacteristic", "fields": ["variableRef": "object", "deviceId": "string", "characteristicId": "string", "serviceId": "string (optional)"], "description": "Read a device characteristic's current value into a global value. The characteristic format must match the global value type: bool→boolean, uint8/uint16/uint32/uint64/int/float→number, string→string. Not usable with datetime."]
                 ] as [[String: Any]]
             ] as [String: Any],
             "importantRules": [
@@ -832,10 +838,12 @@ final class MCPRequestHandler: Sendable {
                 "Set continueOnError=true on the automation when using blockResult conditions.",
                 "Use list_devices to discover device IDs, service IDs, and characteristic IDs.",
                 "Use characteristic IDs (not types) in triggers, conditions, and controlDevice actions.",
-                "Use list_state_variables to discover controller states before using stateVariable blocks or engineState conditions.",
-                "Controller state names are lowercase identifiers (a-z, 0-9, _). Use stateVariable blocks to create/modify them.",
-                "For engineState conditions: boolean states support equals/notEquals; string states support equals/notEquals/isEmpty/isNotEmpty/contains; number states support all numeric comparison operators.",
-                "isEmpty and isNotEmpty comparisons have no value field. contains takes a string value for case-insensitive substring matching."
+                "Use list_global_values to discover global values before using stateVariable blocks or engineState conditions.",
+                "Global value names are lowercase identifiers (a-z, 0-9, _). Use stateVariable blocks to create/modify them.",
+                "For engineState conditions: boolean values support equals/notEquals; string values support equals/notEquals/isEmpty/isNotEmpty/contains; number values support all numeric comparison operators.",
+                "isEmpty and isNotEmpty comparisons have no value field. contains takes a string value for case-insensitive substring matching.",
+                "Global value and characteristic type matching: when using valueRef in controlDevice or setFromCharacteristic in stateVariable, types MUST match. Boolean globals only with bool characteristics. Number globals only with numeric characteristics (uint8, uint16, uint32, uint64, int, float). String globals only with string characteristics. Datetime globals cannot be used with characteristics. Use list_devices to check characteristic formats and list_global_values to check global value types before linking them.",
+                "Datetime global values: store ISO 8601 date strings. Supported operations: set (ISO 8601 string), setToNow, addTime/subtractTime (with amount and unit: seconds/minutes/hours/days). For engineState conditions, datetime values support equals/notEquals/greaterThan (after)/lessThan (before)/greaterThanOrEqual/lessThanOrEqual. Use the special value '__now__' to compare against the current time."
             ]
         ]
 
@@ -1533,7 +1541,7 @@ final class MCPRequestHandler: Sendable {
         return " (\(parts.joined(separator: ", ")))"
     }
 
-    // MARK: - State Variable Tool Handlers
+    // MARK: - Global Value Tool Handlers
 
     private func resolveStateVariable(arguments: [String: Any]) async -> StateVariable? {
         guard let storage = stateVariableStorage else { return nil }
@@ -1548,25 +1556,25 @@ final class MCPRequestHandler: Sendable {
 
     private func handleListStateVariables(id: JSONRPCId?) async -> JSONRPCResponse {
         guard let storage = stateVariableStorage else {
-            return toolResult(text: "State variable storage not available.", isError: true, id: id)
+            return toolResult(text: "Global value storage not available.", isError: true, id: id)
         }
         let variables = await storage.getAll()
         if variables.isEmpty {
-            return toolResult(text: "No state variables found. Use create_state_variable to create one.", id: id)
+            return toolResult(text: "No global values found. Use create_global_value to create one.", id: id)
         }
         return toolResult(encoding: variables, id: id)
     }
 
     private func handleGetStateVariable(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
         guard let variable = await resolveStateVariable(arguments: arguments) else {
-            return toolResult(text: "State variable not found. Provide a valid variable_id or name.", isError: true, id: id)
+            return toolResult(text: "Global value not found. Provide a valid variable_id or name.", isError: true, id: id)
         }
         return toolResult(encoding: variable, id: id)
     }
 
     private func handleCreateStateVariable(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
         guard let storage = stateVariableStorage else {
-            return toolResult(text: "State variable storage not available.", isError: true, id: id)
+            return toolResult(text: "Global value storage not available.", isError: true, id: id)
         }
         guard let name = arguments["name"] as? String, !name.isEmpty else {
             return toolResult(text: "Missing required argument: name", isError: true, id: id)
@@ -1579,41 +1587,41 @@ final class MCPRequestHandler: Sendable {
             return toolResult(text: "Missing required argument: value", isError: true, id: id)
         }
         if await storage.getByName(name) != nil {
-            return toolResult(text: "A state variable named '\(name)' already exists.", isError: true, id: id)
+            return toolResult(text: "A global value named '\(name)' already exists.", isError: true, id: id)
         }
         let variable = StateVariable(name: name, type: varType, value: AnyCodable(rawValue))
         let created = await storage.create(variable)
-        return toolResult(text: "State variable created.\nID: \(created.id.uuidString)\nName: \(created.name)\nType: \(created.type.rawValue)\nValue: \(created.displayValue)", id: id)
+        return toolResult(text: "Global value created.\nID: \(created.id.uuidString)\nName: \(created.name)\nType: \(created.type.rawValue)\nValue: \(created.displayValue)", id: id)
     }
 
     private func handleUpdateStateVariable(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
         guard let storage = stateVariableStorage else {
-            return toolResult(text: "State variable storage not available.", isError: true, id: id)
+            return toolResult(text: "Global value storage not available.", isError: true, id: id)
         }
         guard let variable = await resolveStateVariable(arguments: arguments) else {
-            return toolResult(text: "State variable not found. Provide a valid variable_id or name.", isError: true, id: id)
+            return toolResult(text: "Global value not found. Provide a valid variable_id or name.", isError: true, id: id)
         }
         guard let rawValue = arguments["value"] else {
             return toolResult(text: "Missing required argument: value", isError: true, id: id)
         }
         guard let updated = await storage.update(id: variable.id, value: AnyCodable(rawValue)) else {
-            return toolResult(text: "Failed to update state variable.", isError: true, id: id)
+            return toolResult(text: "Failed to update global value.", isError: true, id: id)
         }
-        return toolResult(text: "State variable updated.\nID: \(updated.id.uuidString)\nName: \(updated.name)\nValue: \(updated.displayValue)", id: id)
+        return toolResult(text: "Global value updated.\nID: \(updated.id.uuidString)\nName: \(updated.name)\nValue: \(updated.displayValue)", id: id)
     }
 
     private func handleDeleteStateVariable(id: JSONRPCId?, arguments: [String: Any]) async -> JSONRPCResponse {
         guard let storage = stateVariableStorage else {
-            return toolResult(text: "State variable storage not available.", isError: true, id: id)
+            return toolResult(text: "Global value storage not available.", isError: true, id: id)
         }
         guard let variable = await resolveStateVariable(arguments: arguments) else {
-            return toolResult(text: "State variable not found. Provide a valid variable_id or name.", isError: true, id: id)
+            return toolResult(text: "Global value not found. Provide a valid variable_id or name.", isError: true, id: id)
         }
         let deleted = await storage.delete(id: variable.id)
         if deleted {
-            return toolResult(text: "State variable '\(variable.name)' deleted.", id: id)
+            return toolResult(text: "Global value '\(variable.name)' deleted.", id: id)
         } else {
-            return toolResult(text: "Failed to delete state variable.", isError: true, id: id)
+            return toolResult(text: "Failed to delete global value.", isError: true, id: id)
         }
     }
 

@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState } from 'react';
+import { useMemo, useCallback, useState, useEffect } from 'react';
 import { Icon } from '@/components/Icon';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import { DevicePicker } from './DevicePicker';
@@ -7,7 +7,9 @@ import { CurrentValueIndicator } from './CurrentValueIndicator';
 import { useConfig } from '@/contexts/ConfigContext';
 import type { AutomationTriggerDraft, AutomationConditionDraft } from './automation-editor-types';
 import { newUUID } from './automation-editor-types';
-import { conditionAutoName } from './automation-editor-utils';
+import { conditionAutoName, type StateDisplayNames } from './automation-editor-utils';
+import { useApi } from '@/hooks/useApi';
+import type { StateVariable } from '@/lib/api';
 import './TriggerEditor.css';
 
 const SCHEDULE_TYPES = [
@@ -363,6 +365,20 @@ export function TriggerEditor({ draft, onChange, onOpenGuardPanel }: TriggerEdit
 // Per-trigger guard section (summary + open panel)
 function TriggerConditionsSection({ draft, onChange, onOpenGuardPanel }: { draft: AutomationTriggerDraft; onChange: (d: AutomationTriggerDraft) => void; onOpenGuardPanel?: () => void }) {
   const registry = useDeviceRegistry();
+  const api = useApi();
+
+  // Load global value display names for condition summaries
+  const [stateNames, setStateNames] = useState<StateDisplayNames>({});
+  useEffect(() => {
+    let cancelled = false;
+    api.getStateVariables().then((vars: StateVariable[]) => {
+      if (cancelled) return;
+      const map: StateDisplayNames = {};
+      for (const v of vars) map[v.name] = v.displayName || v.name;
+      setStateNames(map);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [api]);
 
   const hasConditions = draft.conditions && draft.conditions.length > 0 && draft.conditions[0];
   const root = hasConditions ? draft.conditions![0]! : null;
@@ -398,7 +414,7 @@ function TriggerConditionsSection({ draft, onChange, onOpenGuardPanel }: { draft
         >
           <Icon name="arrow-triangle-branch" size={14} style={{ opacity: 0.5 }} />
           <div className="trigger-guard-summary-info">
-            <span className="trigger-guard-summary-name">{conditionAutoName(root!, registry)}</span>
+            <span className="trigger-guard-summary-name">{conditionAutoName(root!, registry, undefined, stateNames)}</span>
             <span className="trigger-guard-summary-meta">{condCount} condition{condCount !== 1 ? 's' : ''} — tap to edit</span>
           </div>
           <span className="child-badge logic">

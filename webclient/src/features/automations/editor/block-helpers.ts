@@ -38,7 +38,7 @@ export const BLOCK_ICONS: Record<string, string> = {
 
 export const BLOCK_TYPE_LABELS: Record<string, string> = {
   controlDevice: 'Control Device', runScene: 'Run Scene', webhook: 'Webhook', log: 'Log',
-  stateVariable: 'Controller State',
+  stateVariable: 'Global Value',
   delay: 'Delay', waitForState: 'Wait for State', conditional: 'If / Else',
   repeat: 'Repeat', repeatWhile: 'Repeat While', group: 'Group', return: 'Return',
   executeAutomation: 'Execute Automation',

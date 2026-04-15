@@ -20,9 +20,9 @@ struct StateVariablesView: View {
                         Image(systemName: "cylinder.split.1x2")
                             .font(.system(size: 40))
                             .foregroundStyle(.teal)
-                        Text("No Controller States")
+                        Text("No Global Values")
                             .font(.headline)
-                        Text("Controller states store persistent data that automations can read and modify across executions.")
+                        Text("Global values store persistent data that automations can read and modify across executions.")
                             .font(.subheadline)
                             .foregroundColor(Theme.Text.secondary)
                             .multilineTextAlignment(.center)
@@ -50,7 +50,7 @@ struct StateVariablesView: View {
                 }
             }
         }
-        .navigationTitle("Controller States")
+        .navigationTitle("Global Values")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Close") { dismiss() }
@@ -63,7 +63,7 @@ struct StateVariablesView: View {
                 }
             }
         }
-        .alert("Delete Controller State?", isPresented: Binding(
+        .alert("Delete Global Value?", isPresented: Binding(
             get: { deleteTarget != nil },
             set: { if !$0 { deleteTarget = nil } }
         )) {
@@ -149,7 +149,7 @@ private func nameValidationError(_ name: String) -> String? {
     return nil
 }
 
-// MARK: - Add Controller State Sheet
+// MARK: - Add Global Value Sheet
 
 private struct AddControllerStateSheet: View {
     let storageService: StateVariableStorageService
@@ -162,6 +162,7 @@ private struct AddControllerStateSheet: View {
     @State private var numberText: String = "0"
     @State private var stringValue: String = ""
     @State private var boolValue: Bool = false
+    @State private var dateValue: Date = Date()
     @State private var numberError: String?
 
     private var nameError: String? { nameValidationError(name) }
@@ -227,10 +228,12 @@ private struct AddControllerStateSheet: View {
                         TextField("Enter text...", text: $stringValue)
                     case .boolean:
                         Toggle("Value", isOn: $boolValue)
+                    case .datetime:
+                        DatePicker("Value", selection: $dateValue)
                     }
                 }
             }
-            .navigationTitle("New Controller State")
+            .navigationTitle("New Global Value")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -243,6 +246,7 @@ private struct AddControllerStateSheet: View {
                                 case .number: return numberValue
                                 case .string: return stringValue
                                 case .boolean: return boolValue
+                                case .datetime: return StateVariable.formatDateISO(dateValue)
                                 }
                             }()
                             let variable = StateVariable(name: name, displayName: displayName.isEmpty ? nil : displayName, type: variableType, value: AnyCodable(value))
@@ -257,7 +261,7 @@ private struct AddControllerStateSheet: View {
     }
 }
 
-// MARK: - Edit Controller State Sheet
+// MARK: - Edit Global Value Sheet
 
 private struct EditControllerStateSheet: View {
     let storageService: StateVariableStorageService
@@ -271,6 +275,7 @@ private struct EditControllerStateSheet: View {
     @State private var numberText: String
     @State private var stringValue: String
     @State private var boolValue: Bool
+    @State private var dateValue: Date
     @State private var numberError: String?
 
     private var nameError: String? { nameValidationError(name) }
@@ -287,6 +292,7 @@ private struct EditControllerStateSheet: View {
         _numberText = State(initialValue: variable.type == .number ? variable.displayValue : "0")
         _stringValue = State(initialValue: variable.stringValue ?? "")
         _boolValue = State(initialValue: variable.boolValue ?? false)
+        _dateValue = State(initialValue: variable.dateValue ?? Date())
     }
 
     var body: some View {
@@ -344,6 +350,8 @@ private struct EditControllerStateSheet: View {
                         TextField("Enter text...", text: $stringValue)
                     case .boolean:
                         Toggle("Value", isOn: $boolValue)
+                    case .datetime:
+                        DatePicker("Value", selection: $dateValue)
                     }
                 }
 
@@ -380,7 +388,7 @@ private struct EditControllerStateSheet: View {
                     }
                 }
             }
-            .navigationTitle("Edit Controller State")
+            .navigationTitle("Edit Global Value")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -393,6 +401,7 @@ private struct EditControllerStateSheet: View {
                                 case .number: return numberValue
                                 case .string: return stringValue
                                 case .boolean: return boolValue
+                                case .datetime: return StateVariable.formatDateISO(dateValue)
                                 }
                             }()
                             await storageService.updateVariable(id: variable.id) { v in

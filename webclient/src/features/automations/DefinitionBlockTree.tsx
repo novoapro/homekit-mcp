@@ -83,7 +83,12 @@ export function DefinitionBlockTree({ block, depth = 0, index, isLast = true, is
           : undefined;
         const parts: string[] = [];
         if (device?.room) parts.push(device.room);
-        if (char) parts.push(`${char.name} → ${block.value ?? '?'}`);
+        if (char) {
+          const valDisplay = block.valueRef?.name
+            ? `${block.valueRef.name} (Global)`
+            : String(block.value ?? '?');
+          parts.push(`${char.name} → ${valDisplay}`);
+        }
         return parts.join(' · ') || undefined;
       }
       case 'delay':

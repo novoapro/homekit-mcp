@@ -356,7 +356,7 @@ export function AutomationsPage() {
         />
       )}
 
-      {/* Controller States access row */}
+      {/* Global Values access row */}
       {!selectionMode && !isLoading && automations.length > 0 && (
         <div style={{ padding: '0 var(--spacing-md)' }}>
           <div
@@ -367,7 +367,7 @@ export function AutomationsPage() {
               background: 'color-mix(in srgb, teal 5%, var(--bg-card))',
               borderLeft: '3px solid teal',
             }}
-            onClick={() => navigate('/state-variables')}
+            onClick={() => navigate('/global-values')}
           >
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -377,8 +377,8 @@ export function AutomationsPage() {
               <Icon name="state-variable" size={18} style={{ color: 'teal' }} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Controller States</div>
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Manage persistent state for your automations</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Global Values</div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Manage persistent values for your automations</div>
             </div>
             <Icon name="chevron-right" size={14} style={{ color: 'var(--text-tertiary)' }} />
           </div>

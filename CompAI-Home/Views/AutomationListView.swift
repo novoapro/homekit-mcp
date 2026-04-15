@@ -60,7 +60,7 @@ struct AutomationListView: View {
                             }
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Controller States")
+                                Text("Global Values")
                                     .font(.headline)
                                     .foregroundColor(Theme.Text.primary)
                                 Text("Manage persistent state for your automations")
@@ -224,7 +224,7 @@ struct AutomationListView: View {
         for ref in sceneRefs {
             if !sceneIds.contains(ref.sceneId) { return true }
         }
-        // Check for references to deleted controller states
+        // Check for references to deleted global values
         if !stateNames.isEmpty {
             let referencedNames = StateVariableReferenceScanner.collectReferencedStateNames(in: automation)
             for name in referencedNames {

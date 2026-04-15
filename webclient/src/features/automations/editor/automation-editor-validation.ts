@@ -78,6 +78,8 @@ function isConditionComplete(condition: AutomationBlockDraft['condition']): bool
       return !!condition.mode;
     case 'blockResult':
       return !!(condition.blockResultScope && condition.expectedStatus);
+    case 'engineState':
+      return !!(condition.variableRef?.name || condition.variableRef?.id);
     case 'and':
     case 'or':
       return (condition.conditions?.length ?? 0) > 0 && condition.conditions!.every(isConditionComplete);

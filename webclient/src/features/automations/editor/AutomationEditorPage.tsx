@@ -29,7 +29,7 @@ import { AddBlockSheet } from './AddBlockSheet';
 import { AddTriggerSheet } from './AddTriggerSheet';
 import { newBlockDraft, containerTargets, moveBlockToContainer, cloneBlockDraft, BLOCK_TYPE_LABELS, BLOCK_ICONS } from './block-helpers';
 import { validateDraft } from './automation-editor-validation';
-import { draftToPayload, definitionToDraft, triggerAutoName, conditionAutoName, collectAllBlockInfos } from './automation-editor-utils';
+import { draftToPayload, definitionToDraft, triggerAutoName, conditionAutoName, collectAllBlockInfos, type StateDisplayNames } from './automation-editor-utils';
 import type { BlockInfo } from './automation-editor-utils';
 import { newUUID } from './automation-editor-types';
 import type { AutomationTriggerDraft, AutomationConditionDraft, AutomationBlockDraft } from './automation-editor-types';
@@ -99,6 +99,19 @@ export function AutomationEditorPage() {
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [nestingStack, setNestingStack] = useState<NestingFrame[]>([]);
   const [showAddTriggerSheet, setShowAddTriggerSheet] = useState(false);
+
+  // Global value display names for condition summaries
+  const [stateDisplayNames, setStateDisplayNames] = useState<StateDisplayNames>({});
+  useEffect(() => {
+    let cancelled = false;
+    api.getStateVariables().then(vars => {
+      if (cancelled) return;
+      const map: StateDisplayNames = {};
+      for (const v of vars) map[v.name] = v.displayName || v.name;
+      setStateDisplayNames(map);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [api]);
   const [expandedTriggerId, setExpandedTriggerId] = useState<string | null>(null);
 
   // Auto-expand newly added trigger
@@ -928,7 +941,7 @@ export function AutomationEditorPage() {
               <Icon name="arrow-triangle-branch" size={14} style={{ opacity: 0.5 }} />
               <div className="trigger-guard-summary-info">
                 <span className="trigger-guard-summary-name">
-                  {conditionAutoName(draft.conditions[0], registry, allBlocks)}
+                  {conditionAutoName(draft.conditions[0], registry, allBlocks, stateDisplayNames)}
                 </span>
                 <span className="trigger-guard-summary-meta">
                   {(() => {

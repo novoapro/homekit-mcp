@@ -857,7 +857,17 @@ actor AutomationEngine: AutomationEngineProtocol {
                     let charName = CharacteristicTypes.displayName(for: resolvedCharType)
                     let svcName = await self.resolveServiceDisplayName(deviceId: a.deviceId, serviceId: a.serviceId)
                     let svcSuffix = svcName.map { " (\($0))" } ?? ""
-                    result.detail = "Set \(charName) to \(a.value.value) on \(deviceName)\(svcSuffix)"
+                    let valueDesc: String
+                    if let ref = a.valueRef {
+                        if let variable = await self.stateVariableStorage.resolve(ref) {
+                            valueDesc = "\(variable.value.value) (from global value '\(variable.name)')"
+                        } else {
+                            valueDesc = "\(a.value.value) (global value \(ref.displayDescription) not found, used default)"
+                        }
+                    } else {
+                        valueDesc = "\(a.value.value)"
+                    }
+                    result.detail = "Set \(charName) to \(valueDesc) on \(deviceName)\(svcSuffix)"
                 case let .webhook(a):
                     try await self.executeWebhook(a)
                     result.detail = "\(a.method) \(a.url)"
@@ -892,13 +902,26 @@ actor AutomationEngine: AutomationEngineProtocol {
             ?? CharacteristicTypes.characteristicType(forName: action.characteristicId)
             ?? action.characteristicId
 
+        // Resolve value — from Global Value ref (with fallback) or Local value
+        let resolvedValue: Any
+        if let ref = action.valueRef {
+            if let variable = await stateVariableStorage.resolve(ref) {
+                resolvedValue = variable.value.value
+            } else {
+                // Global Value was deleted or unavailable — use the configured default
+                resolvedValue = action.value.value
+            }
+        } else {
+            resolvedValue = action.value.value
+        }
+
         // Validate value against characteristic metadata
         let device: DeviceModel? = await MainActor.run { homeKitManager.getDeviceState(id: action.deviceId) }
         if let device {
             let resolvedServiceId = action.serviceId.map { registry?.readHomeKitServiceId($0) ?? $0 }
             let targetServices = resolvedServiceId != nil ? device.services.filter({ $0.id == resolvedServiceId }) : device.services
             if let characteristic = targetServices.flatMap(\.characteristics).first(where: { $0.type == resolvedType }) {
-                try CharacteristicValidator.validate(value: action.value.value, against: characteristic)
+                try CharacteristicValidator.validate(value: resolvedValue, against: characteristic)
             }
         } else {
             await logOrphan(
@@ -909,11 +932,11 @@ actor AutomationEngine: AutomationEngineProtocol {
         }
 
         // Convert temperature from user's preferred unit back to Celsius for HomeKit
-        var effectiveValue: Any = action.value.value as Any
+        var effectiveValue: Any = resolvedValue
         if TemperatureConversion.isFahrenheit && TemperatureConversion.isTemperatureCharacteristic(resolvedType) {
-            if let doubleVal = action.value.value as? Double {
+            if let doubleVal = resolvedValue as? Double {
                 effectiveValue = TemperatureConversion.fahrenheitToCelsius(doubleVal)
-            } else if let intVal = action.value.value as? Int {
+            } else if let intVal = resolvedValue as? Int {
                 effectiveValue = TemperatureConversion.fahrenheitToCelsius(Double(intVal))
             }
         }
@@ -1052,6 +1075,63 @@ actor AutomationEngine: AutomationEngineProtocol {
             let newVal = !current
             await stateVariableStorage.update(id: variable.id, value: AnyCodable(newVal))
             return "NOT '\(variable.name)' → \(newVal)"
+
+        case let .setFromCharacteristic(ref, deviceId, characteristicId, serviceId):
+            guard let variable = await stateVariableStorage.resolve(ref) else {
+                throw AutomationEngineError.stateVariableError("Global value \(ref.displayDescription) not found")
+            }
+            guard let device: DeviceModel = await MainActor.run(body: { homeKitManager.getDeviceState(id: deviceId) }) else {
+                throw AutomationEngineError.stateVariableError("Device '\(deviceId)' not found")
+            }
+            let resolvedType = registry?.readCharacteristicType(forStableId: characteristicId)
+                ?? CharacteristicTypes.characteristicType(forName: characteristicId)
+                ?? characteristicId
+            let resolvedServiceId = serviceId.map { registry?.readHomeKitServiceId($0) ?? $0 }
+            let targetServices = resolvedServiceId != nil ? device.services.filter({ $0.id == resolvedServiceId }) : device.services
+            guard let characteristic = targetServices.flatMap(\.characteristics).first(where: { $0.type == resolvedType }),
+                  let currentValue = characteristic.value else {
+                throw AutomationEngineError.stateVariableError("Characteristic '\(characteristicId)' not found or has no value")
+            }
+            await stateVariableStorage.update(id: variable.id, value: AnyCodable(currentValue.value))
+            return "Set '\(variable.name)' from device = \(currentValue.value)"
+
+        case let .setToNow(ref):
+            guard let variable = await stateVariableStorage.resolve(ref) else {
+                throw AutomationEngineError.stateVariableError("Global value \(ref.displayDescription) not found")
+            }
+            guard variable.type == .datetime else {
+                throw AutomationEngineError.stateVariableError("Variable '\(variable.name)' is not a datetime")
+            }
+            let now = Date()
+            let isoString = StateVariable.formatDateISO(now)
+            await stateVariableStorage.update(id: variable.id, value: AnyCodable(isoString))
+            return "Set '\(variable.name)' to now (\(StateVariable(name: "", type: .datetime, value: AnyCodable(isoString)).displayValue))"
+
+        case let .addTime(ref, amount, unit):
+            guard let variable = await stateVariableStorage.resolve(ref) else {
+                throw AutomationEngineError.stateVariableError("Global value \(ref.displayDescription) not found")
+            }
+            guard variable.type == .datetime, let current = variable.dateValue else {
+                throw AutomationEngineError.stateVariableError("Variable '\(variable.name)' is not a datetime or has no valid date")
+            }
+            let seconds = amount * unit.inSeconds
+            let newDate = current.addingTimeInterval(seconds)
+            let isoString = StateVariable.formatDateISO(newDate)
+            await stateVariableStorage.update(id: variable.id, value: AnyCodable(isoString))
+            return "Added \(amount) \(unit.rawValue) to '\(variable.name)'"
+
+        case let .subtractTime(ref, amount, unit):
+            guard let variable = await stateVariableStorage.resolve(ref) else {
+                throw AutomationEngineError.stateVariableError("Global value \(ref.displayDescription) not found")
+            }
+            guard variable.type == .datetime, let current = variable.dateValue else {
+                throw AutomationEngineError.stateVariableError("Variable '\(variable.name)' is not a datetime or has no valid date")
+            }
+            let seconds = amount * unit.inSeconds
+            let newDate = current.addingTimeInterval(-seconds)
+            let isoString = StateVariable.formatDateISO(newDate)
+            await stateVariableStorage.update(id: variable.id, value: AnyCodable(isoString))
+            return "Subtracted \(amount) \(unit.rawValue) from '\(variable.name)'"
         }
     }
 

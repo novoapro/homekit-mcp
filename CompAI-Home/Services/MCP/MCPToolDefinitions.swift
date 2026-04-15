@@ -414,48 +414,48 @@ enum MCPToolDefinitions {
         ],
     ]
 
-    // MARK: - State Variable Tools
+    // MARK: - Global Value Tools
 
     static let stateVariableTools: [[String: Any]] = [
         [
-            "name": "list_state_variables",
-            "description": "List all engine state variables with their current values, types, and metadata.",
+            "name": "list_global_values",
+            "description": "List all global values with their current values, types, and metadata.",
             "inputSchema": [
                 "type": "object",
                 "properties": [:] as [String: Any]
             ] as [String: Any]
         ],
         [
-            "name": "get_state_variable",
-            "description": "Get a specific state variable by ID or name.",
+            "name": "get_global_value",
+            "description": "Get a specific global value by ID or name.",
             "inputSchema": [
                 "type": "object",
                 "properties": [
                     "variable_id": [
                         "type": "string",
-                        "description": "UUID of the state variable"
+                        "description": "UUID of the global value"
                     ] as [String: Any],
                     "name": [
                         "type": "string",
-                        "description": "Name of the state variable (alternative to variable_id)"
+                        "description": "Name of the global value (alternative to variable_id)"
                     ] as [String: Any]
                 ] as [String: Any]
             ] as [String: Any]
         ],
         [
-            "name": "create_state_variable",
-            "description": "Create a new engine state variable. Types: 'number', 'string', 'boolean'.",
+            "name": "create_global_value",
+            "description": "Create a new global value. Types: 'number', 'string', 'boolean'.",
             "inputSchema": [
                 "type": "object",
                 "properties": [
                     "name": [
                         "type": "string",
-                        "description": "Name of the state variable (must be unique)"
+                        "description": "Name of the global value (must be unique)"
                     ] as [String: Any],
                     "type": [
                         "type": "string",
-                        "description": "Variable type: 'number', 'string', or 'boolean'",
-                        "enum": ["number", "string", "boolean"]
+                        "description": "Value type: 'number', 'string', 'boolean', or 'datetime'",
+                        "enum": ["number", "string", "boolean", "datetime"]
                     ] as [String: Any],
                     "value": [
                         "description": "Initial value. Must match the declared type."
@@ -465,39 +465,39 @@ enum MCPToolDefinitions {
             ] as [String: Any]
         ],
         [
-            "name": "update_state_variable",
-            "description": "Update the value of an existing state variable. The new value must match the variable's type.",
+            "name": "update_global_value",
+            "description": "Update the value of an existing global value. The new value must match the value's type.",
             "inputSchema": [
                 "type": "object",
                 "properties": [
                     "variable_id": [
                         "type": "string",
-                        "description": "UUID of the state variable"
+                        "description": "UUID of the global value"
                     ] as [String: Any],
                     "name": [
                         "type": "string",
-                        "description": "Name of the state variable (alternative to variable_id)"
+                        "description": "Name of the global value (alternative to variable_id)"
                     ] as [String: Any],
                     "value": [
-                        "description": "New value. Must match the variable's type."
+                        "description": "New value. Must match the value's type."
                     ] as [String: Any]
                 ] as [String: Any],
                 "required": ["value"]
             ] as [String: Any]
         ],
         [
-            "name": "delete_state_variable",
-            "description": "Delete a state variable by ID or name.",
+            "name": "delete_global_value",
+            "description": "Delete a global value by ID or name.",
             "inputSchema": [
                 "type": "object",
                 "properties": [
                     "variable_id": [
                         "type": "string",
-                        "description": "UUID of the state variable"
+                        "description": "UUID of the global value"
                     ] as [String: Any],
                     "name": [
                         "type": "string",
-                        "description": "Name of the state variable (alternative to variable_id)"
+                        "description": "Name of the global value (alternative to variable_id)"
                     ] as [String: Any]
                 ] as [String: Any]
             ] as [String: Any]

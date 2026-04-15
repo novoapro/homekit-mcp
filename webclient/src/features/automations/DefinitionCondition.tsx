@@ -55,7 +55,7 @@ export function DefinitionCondition({ condition, depth = 0, isLast = true, isFir
       case 'blockResult': return 'Block Result';
       case 'engineState': {
         const e = condition as EngineStateConditionDef;
-        return e.variableRef?.name || 'Controller State';
+        return e.variableRef?.name || 'Global Value';
       }
       case 'and': return 'All conditions (AND)';
       case 'or': return 'Any condition (OR)';

@@ -245,7 +245,11 @@ function blockDraftToPayload(b: AutomationBlockDraft, idMap?: Map<string, string
 
   switch (b.type) {
     case 'controlDevice':
-      return { ...shared, deviceId: b.deviceId, serviceId: b.serviceId, characteristicId: b.characteristicId, value: b.value };
+      return {
+        ...shared,
+        deviceId: b.deviceId, serviceId: b.serviceId, characteristicId: b.characteristicId, value: b.value,
+        ...(b.valueSource === 'global' && b.valueRef && { valueRef: b.valueRef }),
+      };
     case 'runScene':
       return { ...shared, sceneId: b.sceneId };
     case 'webhook':
@@ -464,6 +468,12 @@ function blockDefToDraft(b: AutomationBlockDef, blockIdMap?: Map<string, string>
       base.serviceId = b.serviceId;
       base.characteristicId = b.characteristicId;
       base.value = b.value;
+      if (b.valueRef) {
+        base.valueRef = b.valueRef;
+        base.valueSource = 'global';
+      } else {
+        base.valueSource = 'local';
+      }
       break;
     case 'runScene':
       base.sceneId = b.sceneId;
@@ -537,6 +547,16 @@ function formatAutoVal(val: unknown): string {
   if (val === undefined || val === null) return '?';
   if (val === true) return 'On';
   if (val === false) return 'Off';
+  if (typeof val === 'string') {
+    if (val === '__now__') return 'Now';
+    // Try to detect and format ISO 8601 datetime strings
+    if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
+      try {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      } catch { /* fall through */ }
+    }
+  }
   return String(val);
 }
 
@@ -615,7 +635,7 @@ export function triggerAutoName(t: AutomationTriggerDraft, registry: RegistryLik
   }
 }
 
-export function conditionAutoName(c: AutomationConditionDraft, registry: RegistryLike, allBlocks?: BlockInfo[]): string {
+export function conditionAutoName(c: AutomationConditionDraft, registry: RegistryLike, allBlocks?: BlockInfo[], stateNames?: StateDisplayNames): string {
   switch (c.type) {
     case 'deviceState': {
       if (!c.deviceId) return 'Device State';
@@ -663,7 +683,8 @@ export function conditionAutoName(c: AutomationConditionDraft, registry: Registr
       return `Any block = ${status}`;
     }
     case 'engineState': {
-      const varName = c.variableRef?.name || 'state';
+      const varKey = c.variableRef?.name || 'state';
+      const varName = (stateNames && varKey in stateNames) ? stateNames[varKey] : varKey;
       if (c.comparison) {
         const sym = COMPARISON_SYMBOLS[c.comparison.type] || '=';
         return `${varName} ${sym} ${formatAutoVal('value' in c.comparison ? c.comparison.value : undefined)}`;
@@ -671,15 +692,15 @@ export function conditionAutoName(c: AutomationConditionDraft, registry: Registr
       return `State: ${varName}`;
     }
     case 'and': {
-      const inner = (c.conditions || []).map((ch) => conditionAutoName(ch, registry, allBlocks));
+      const inner = (c.conditions || []).map((ch) => conditionAutoName(ch, registry, allBlocks, stateNames));
       return inner.length ? inner.join(' AND ') : 'All match';
     }
     case 'or': {
-      const inner = (c.conditions || []).map((ch) => conditionAutoName(ch, registry, allBlocks));
+      const inner = (c.conditions || []).map((ch) => conditionAutoName(ch, registry, allBlocks, stateNames));
       return inner.length ? inner.join(' OR ') : 'Any match';
     }
     case 'not': {
-      if (c.condition) return `NOT ${conditionAutoName(c.condition, registry, allBlocks)}`;
+      if (c.condition) return `NOT ${conditionAutoName(c.condition, registry, allBlocks, stateNames)}`;
       return 'NOT ...';
     }
     default:
@@ -687,7 +708,15 @@ export function conditionAutoName(c: AutomationConditionDraft, registry: Registr
   }
 }
 
-export function blockAutoName(b: AutomationBlockDraft, registry: RegistryLike): string {
+const ALL_OP_LABELS: Record<string, string> = {
+  remove: 'Remove', toggle: 'Toggle', addState: 'Add State', subtractState: 'Subtract State',
+  andState: 'AND State', orState: 'OR State', notState: 'NOT State', setFromCharacteristic: 'Set from Device',
+};
+
+/** Map from global value name (key) to display label. */
+export type StateDisplayNames = Record<string, string>;
+
+export function blockAutoName(b: AutomationBlockDraft, registry: RegistryLike, stateNames?: StateDisplayNames): string {
   switch (b.type) {
     case 'controlDevice': {
       if (!b.deviceId) return 'Control Device';
@@ -696,6 +725,10 @@ export function blockAutoName(b: AutomationBlockDraft, registry: RegistryLike): 
       if (!b.characteristicId) return `Set ${devName}`;
       const char = registry.lookupCharacteristic(b.deviceId, b.characteristicId);
       const charName = char?.name || b.characteristicId;
+      if (b.valueSource === 'global' && b.valueRef?.name) {
+        const refLabel = stateNames?.[b.valueRef.name] || b.valueRef.name;
+        return `Set ${devName} ${charName} = ${refLabel} (Global)`;
+      }
       const valStr = b.value !== undefined ? ` = ${formatAutoVal(b.value)}` : '';
       return `Set ${devName} ${charName}${valStr}`;
     }
@@ -715,6 +748,35 @@ export function blockAutoName(b: AutomationBlockDraft, registry: RegistryLike): 
     }
     case 'log':
       return b.message ? `Log: ${b.message.substring(0, 30)}` : 'Log Message';
+    case 'stateVariable': {
+      const op = b.operation;
+      if (!op) return 'Global Value';
+      const varName = op.variableRef?.name;
+      const varDisplayName = varName ? (stateNames?.[varName] || varName) : undefined;
+      const varLabel = varDisplayName ? ` '${varDisplayName}'` : '';
+      switch (op.operation) {
+        case 'set':
+          return `Set${varLabel} = ${formatAutoVal(op.value)}`;
+        case 'setToNow':
+          return `Set${varLabel} to Now`;
+        case 'addTime':
+          return `Add ${op.amount ?? 1} ${op.unit || 'minutes'} to${varLabel}`;
+        case 'subtractTime':
+          return `Subtract ${op.amount ?? 1} ${op.unit || 'minutes'} from${varLabel}`;
+        case 'increment':
+          return `Increment${varLabel} by ${op.by ?? 1}`;
+        case 'decrement':
+          return `Decrement${varLabel} by ${op.by ?? 1}`;
+        case 'multiply':
+          return `Multiply${varLabel} by ${op.by ?? 1}`;
+        case 'create':
+          return `Create '${op.name || '?'}' (${op.variableType || 'number'})`;
+        default: {
+          const label = ALL_OP_LABELS[op.operation] || op.operation;
+          return `${label}${varLabel}`;
+        }
+      }
+    }
     case 'delay':
       return `Delay ${b.seconds ?? 1}s`;
     case 'waitForState': {

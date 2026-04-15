@@ -53,7 +53,7 @@ export interface StateVariable {
   id: string;
   name: string;
   displayName?: string;
-  type: 'number' | 'string' | 'boolean';
+  type: 'number' | 'string' | 'boolean' | 'datetime';
   value: unknown;
   createdAt: string;
   updatedAt: string;
@@ -264,29 +264,29 @@ export function createApiClient(
     },
 
     async getStateVariables() {
-      return requestJson<StateVariable[]>('/state-variables');
+      return requestJson<StateVariable[]>('/global-values');
     },
 
     async getStateVariable(id: string) {
-      return requestJson<StateVariable>(`/state-variables/${id}`);
+      return requestJson<StateVariable>(`/global-values/${id}`);
     },
 
     async createStateVariable(data: { name: string; displayName?: string; type: string; value: unknown }) {
-      return requestJson<StateVariable>('/state-variables', {
+      return requestJson<StateVariable>('/global-values', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
 
     async updateStateVariable(id: string, value: unknown) {
-      return requestJson<StateVariable>(`/state-variables/${id}`, {
+      return requestJson<StateVariable>(`/global-values/${id}`, {
         method: 'PUT',
         body: JSON.stringify({ value }),
       });
     },
 
     async deleteStateVariable(id: string) {
-      await requestVoid(`/state-variables/${id}`, { method: 'DELETE' });
+      await requestVoid(`/global-values/${id}`, { method: 'DELETE' });
     },
 
 };

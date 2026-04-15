@@ -6,6 +6,7 @@ enum StateVariableType: String, Codable, CaseIterable, Identifiable {
     case number
     case string
     case boolean
+    case datetime
 
     var id: String { rawValue }
 
@@ -14,6 +15,7 @@ enum StateVariableType: String, Codable, CaseIterable, Identifiable {
         case .number: return "Number"
         case .string: return "String"
         case .boolean: return "Boolean"
+        case .datetime: return "Date & Time"
         }
     }
 
@@ -22,6 +24,7 @@ enum StateVariableType: String, Codable, CaseIterable, Identifiable {
         case .number: return "number"
         case .string: return "textformat"
         case .boolean: return "switch.2"
+        case .datetime: return "calendar.badge.clock"
         }
     }
 
@@ -30,6 +33,7 @@ enum StateVariableType: String, Codable, CaseIterable, Identifiable {
         case .number: return "#"
         case .string: return "Aa"
         case .boolean: return "◉"
+        case .datetime: return "⏱"
         }
     }
 }
@@ -87,6 +91,12 @@ struct StateVariable: Identifiable, Codable {
         value.value as? String
     }
 
+    /// Returns the date value if this is a `.datetime` variable (stored as ISO 8601 string).
+    var dateValue: Date? {
+        guard let str = value.value as? String else { return nil }
+        return Self.dateFormatter.date(from: str) ?? Self.dateFormatterFractional.date(from: str)
+    }
+
     /// Human-readable display of the current value.
     var displayValue: String {
         switch type {
@@ -99,7 +109,50 @@ struct StateVariable: Identifiable, Codable {
             return stringValue ?? "\(value.value)"
         case .boolean:
             return boolValue == true ? "true" : "false"
+        case .datetime:
+            if let date = dateValue {
+                return Self.displayFormatter.string(from: date)
+            }
+            return stringValue ?? "\(value.value)"
         }
+    }
+
+    // MARK: - Date Formatters
+
+    private static let dateFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private static let dateFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let displayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+
+    /// Parses an ISO 8601 string to a Date. Also handles the special value "__now__".
+    static func parseDate(_ value: Any?) -> Date? {
+        if let str = value as? String {
+            if str == "__now__" { return Date() }
+            return dateFormatter.date(from: str) ?? dateFormatterFractional.date(from: str)
+        }
+        // Also handle epoch timestamps stored as numbers
+        if let d = value as? Double { return Date(timeIntervalSince1970: d) }
+        if let i = value as? Int { return Date(timeIntervalSince1970: Double(i)) }
+        return nil
+    }
+
+    /// Formats a Date as ISO 8601 string for storage.
+    static func formatDateISO(_ date: Date) -> String {
+        dateFormatter.string(from: date)
     }
 }
 
@@ -171,10 +224,42 @@ enum StateVariableOperation: Codable {
     case orState(variableRef: StateVariableRef, otherRef: StateVariableRef)
     case notState(variableRef: StateVariableRef)
 
+    // DateTime operations
+    case setToNow(variableRef: StateVariableRef)
+    case addTime(variableRef: StateVariableRef, amount: Double, unit: TimeUnit)
+    case subtractTime(variableRef: StateVariableRef, amount: Double, unit: TimeUnit)
+
+    // Device characteristic operations
+    case setFromCharacteristic(variableRef: StateVariableRef, deviceId: String, characteristicId: String, serviceId: String?)
+
+    /// Time unit for datetime arithmetic.
+    enum TimeUnit: String, Codable, CaseIterable, Identifiable {
+        case seconds, minutes, hours, days
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .seconds: return "Seconds"
+            case .minutes: return "Minutes"
+            case .hours: return "Hours"
+            case .days: return "Days"
+            }
+        }
+        var inSeconds: Double {
+            switch self {
+            case .seconds: return 1
+            case .minutes: return 60
+            case .hours: return 3600
+            case .days: return 86400
+            }
+        }
+    }
+
     private enum OperationType: String, Codable {
         case create, remove, set
         case increment, decrement, multiply, addState, subtractState
         case toggle, andState, orState, notState
+        case setToNow, addTime, subtractTime
+        case setFromCharacteristic
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -183,6 +268,8 @@ enum StateVariableOperation: Codable {
         case variableRef, value
         case by
         case otherRef
+        case amount, unit
+        case deviceId, characteristicId, serviceId
     }
 
     init(from decoder: Decoder) throws {
@@ -241,6 +328,27 @@ enum StateVariableOperation: Codable {
             )
         case .notState:
             self = try .notState(variableRef: container.decode(StateVariableRef.self, forKey: .variableRef))
+        case .setToNow:
+            self = try .setToNow(variableRef: container.decode(StateVariableRef.self, forKey: .variableRef))
+        case .addTime:
+            self = try .addTime(
+                variableRef: container.decode(StateVariableRef.self, forKey: .variableRef),
+                amount: container.decode(Double.self, forKey: .amount),
+                unit: container.decode(TimeUnit.self, forKey: .unit)
+            )
+        case .subtractTime:
+            self = try .subtractTime(
+                variableRef: container.decode(StateVariableRef.self, forKey: .variableRef),
+                amount: container.decode(Double.self, forKey: .amount),
+                unit: container.decode(TimeUnit.self, forKey: .unit)
+            )
+        case .setFromCharacteristic:
+            self = try .setFromCharacteristic(
+                variableRef: container.decode(StateVariableRef.self, forKey: .variableRef),
+                deviceId: container.decode(String.self, forKey: .deviceId),
+                characteristicId: container.decode(String.self, forKey: .characteristicId),
+                serviceId: container.decodeIfPresent(String.self, forKey: .serviceId)
+            )
         }
     }
 
@@ -293,6 +401,25 @@ enum StateVariableOperation: Codable {
         case let .notState(ref):
             try container.encode(OperationType.notState, forKey: .operation)
             try container.encode(ref, forKey: .variableRef)
+        case let .setToNow(ref):
+            try container.encode(OperationType.setToNow, forKey: .operation)
+            try container.encode(ref, forKey: .variableRef)
+        case let .addTime(ref, amount, unit):
+            try container.encode(OperationType.addTime, forKey: .operation)
+            try container.encode(ref, forKey: .variableRef)
+            try container.encode(amount, forKey: .amount)
+            try container.encode(unit, forKey: .unit)
+        case let .subtractTime(ref, amount, unit):
+            try container.encode(OperationType.subtractTime, forKey: .operation)
+            try container.encode(ref, forKey: .variableRef)
+            try container.encode(amount, forKey: .amount)
+            try container.encode(unit, forKey: .unit)
+        case let .setFromCharacteristic(ref, deviceId, characteristicId, serviceId):
+            try container.encode(OperationType.setFromCharacteristic, forKey: .operation)
+            try container.encode(ref, forKey: .variableRef)
+            try container.encode(deviceId, forKey: .deviceId)
+            try container.encode(characteristicId, forKey: .characteristicId)
+            try container.encodeIfPresent(serviceId, forKey: .serviceId)
         }
     }
 
@@ -301,6 +428,10 @@ enum StateVariableOperation: Codable {
         case .create: return "Create Variable"
         case .remove: return "Remove Variable"
         case .set: return "Set Value"
+        case .setFromCharacteristic: return "Set from Device"
+        case .setToNow: return "Set to Now"
+        case .addTime: return "Add Time"
+        case .subtractTime: return "Subtract Time"
         case .increment: return "Increment"
         case .decrement: return "Decrement"
         case .multiply: return "Multiply"
@@ -319,6 +450,9 @@ enum StateVariableOperation: Codable {
         case .create: return "create"
         case .remove: return "remove"
         case .set: return "set"
+        case .setToNow: return "setToNow"
+        case .addTime: return "addTime"
+        case .subtractTime: return "subtractTime"
         case .increment: return "increment"
         case .decrement: return "decrement"
         case .multiply: return "multiply"
@@ -328,6 +462,7 @@ enum StateVariableOperation: Codable {
         case .andState: return "andState"
         case .orState: return "orState"
         case .notState: return "notState"
+        case .setFromCharacteristic: return "setFromCharacteristic"
         }
     }
 }
@@ -388,8 +523,15 @@ enum StateVariableReferenceScanner {
     }
 
     private static func actionReferences(stateName: String, action: AutomationAction) -> Bool {
-        guard case let .stateVariable(a) = action else { return false }
-        return operationReferences(stateName: stateName, operation: a.operation)
+        switch action {
+        case let .stateVariable(a):
+            return operationReferences(stateName: stateName, operation: a.operation)
+        case let .controlDevice(a):
+            if let ref = a.valueRef { return refMatches(ref, name: stateName) }
+            return false
+        default:
+            return false
+        }
     }
 
     private static func operationReferences(stateName: String, operation: StateVariableOperation) -> Bool {
@@ -398,7 +540,9 @@ enum StateVariableReferenceScanner {
             return name == stateName
         case let .remove(ref), let .set(ref, _),
              let .increment(ref, _), let .decrement(ref, _), let .multiply(ref, _),
-             let .toggle(ref), let .notState(ref):
+             let .toggle(ref), let .notState(ref),
+             let .setToNow(ref), let .addTime(ref, _, _), let .subtractTime(ref, _, _),
+             let .setFromCharacteristic(ref, _, _, _):
             return refMatches(ref, name: stateName)
         case let .addState(ref, otherRef), let .subtractState(ref, otherRef),
              let .andState(ref, otherRef), let .orState(ref, otherRef):
@@ -493,6 +637,9 @@ enum StateVariableReferenceScanner {
                 if case let .stateVariable(a) = action {
                     collectNamesFromOperation(a.operation, into: &names)
                 }
+                if case let .controlDevice(a) = action, let ref = a.valueRef {
+                    if case let .byName(n) = ref { names.insert(n) }
+                }
             case let .flowControl(fc, _):
                 switch fc {
                 case let .conditional(b):
@@ -517,7 +664,9 @@ enum StateVariableReferenceScanner {
         case let .create(name, _, _): names.insert(name)
         case let .remove(ref), let .set(ref, _),
              let .increment(ref, _), let .decrement(ref, _), let .multiply(ref, _),
-             let .toggle(ref), let .notState(ref):
+             let .toggle(ref), let .notState(ref),
+             let .setToNow(ref), let .addTime(ref, _, _), let .subtractTime(ref, _, _),
+             let .setFromCharacteristic(ref, _, _, _):
             if case let .byName(n) = ref { names.insert(n) }
         case let .addState(ref, otherRef), let .subtractState(ref, otherRef),
              let .andState(ref, otherRef), let .orState(ref, otherRef):

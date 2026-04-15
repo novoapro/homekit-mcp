@@ -26,6 +26,7 @@ const TYPE_ICONS: Record<string, string> = {
   number: 'number',
   string: 'textformat',
   boolean: 'switch-2',
+  datetime: 'calendar-badge-clock',
 };
 
 function sanitizeName(input: string): string {
@@ -55,7 +56,7 @@ export function StateVariablesPage() {
   const [editStringValue, setEditStringValue] = useState('');
   const [editBoolValue, setEditBoolValue] = useState(false);
 
-  useSetTopBar('Controller States', variables.length > 0 ? variables.length : null, isLoading);
+  useSetTopBar('Global Values', variables.length > 0 ? variables.length : null, isLoading);
 
   const loadVariables = useCallback(async () => {
     try {
@@ -76,11 +77,21 @@ export function StateVariablesPage() {
   useEffect(() => { loadVariables(); }, [loadVariables]);
   useRegisterRefresh(loadVariables);
 
+  const [editDateValue, setEditDateValue] = useState('');
+
   const startEdit = (v: StateVariable) => {
     setEditingId(v.id);
     switch (v.type) {
       case 'number': setEditNumberValue(typeof v.value === 'number' ? v.value : 0); break;
       case 'boolean': setEditBoolValue(!!v.value); break;
+      case 'datetime': {
+        try {
+          setEditDateValue(new Date(String(v.value)).toISOString().slice(0, 16));
+        } catch {
+          setEditDateValue(new Date().toISOString().slice(0, 16));
+        }
+        break;
+      }
       default: setEditStringValue(String(v.value ?? '')); break;
     }
   };
@@ -90,6 +101,7 @@ export function StateVariablesPage() {
     switch (v.type) {
       case 'number': value = editNumberValue; break;
       case 'boolean': value = editBoolValue; break;
+      case 'datetime': value = new Date(editDateValue).toISOString(); break;
       default: value = editStringValue;
     }
     await api.updateStateVariable(v.id, value);
@@ -115,6 +127,13 @@ export function StateVariablesPage() {
 
   const displayValue = (v: StateVariable) => {
     if (v.type === 'boolean') return v.value ? 'true' : 'false';
+    if (v.type === 'datetime') {
+      try {
+        const d = new Date(String(v.value));
+        if (isNaN(d.getTime())) return String(v.value ?? '');
+        return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      } catch { return String(v.value ?? ''); }
+    }
     return String(v.value ?? '');
   };
 
@@ -125,11 +144,11 @@ export function StateVariablesPage() {
         <button className="sv-back-btn" onClick={() => navigate('/automations')} title="Back to Automations">
           <Icon name="chevron-left" size={18} />
         </button>
-        <h1 className="sv-page-title">Controller States</h1>
+        <h1 className="sv-page-title">Global Values</h1>
         {isLoading && <span className="wf-loading-dot" />}
         <button className="sv-new-btn" onClick={() => setShowCreateDialog(true)} type="button">
           <Icon name="plus" size={15} />
-          New State
+          New Value
         </button>
       </div>
 
@@ -139,8 +158,8 @@ export function StateVariablesPage() {
         {!isLoading && variables.length === 0 && (
           <EmptyState
             icon="state-variable"
-            title="No controller states"
-            message="Controller states store persistent data that automations can read and modify across executions. Tap New State to create one."
+            title="No global values"
+            message="Global values store persistent data that automations can read and modify across executions. Tap New Value to create one."
           />
         )}
 
@@ -185,6 +204,10 @@ export function StateVariablesPage() {
                           <span className="sv-toggle-label">{editBoolValue ? 'true' : 'false'}</span>
                         </label>
                       )}
+                      {v.type === 'datetime' && (
+                        <input className="sv-input sv-card-input" type="datetime-local" value={editDateValue}
+                          onChange={(e) => setEditDateValue(e.target.value)} autoFocus />
+                      )}
                       <div className="sv-card-edit-actions">
                         <button className="sv-btn sv-btn-sm" onClick={() => setEditingId(null)} type="button">Cancel</button>
                         <button className="sv-btn sv-btn-primary sv-btn-sm" onClick={() => handleUpdate(v)} type="button">Save</button>
@@ -214,7 +237,7 @@ export function StateVariablesPage() {
       {/* Delete confirmation */}
       <ConfirmDialog
         open={!!deleteTarget}
-        title="Delete Controller State"
+        title="Delete Global Value"
         message={deleteTargetRefs.length > 0
           ? `"${deleteTarget?.displayName || deleteTarget?.name}" is used in ${deleteTargetRefs.length} automation${deleteTargetRefs.length !== 1 ? 's' : ''}: ${deleteTargetRefs.map(a => a.name).join(', ')}. Those automations may fail after deletion.`
           : `Delete "${deleteTarget?.displayName || deleteTarget?.name}"? This cannot be undone.`
@@ -250,10 +273,11 @@ interface CreateStateDialogProps {
 function CreateStateDialog({ onClose, onCreate }: CreateStateDialogProps) {
   const [name, setName] = useState('');
   const [newDisplayName, setNewDisplayName] = useState('');
-  const [type, setType] = useState<'number' | 'string' | 'boolean'>('number');
+  const [type, setType] = useState<'number' | 'string' | 'boolean' | 'datetime'>('number');
   const [numberValue, setNumberValue] = useState(0);
   const [stringValue, setStringValue] = useState('');
   const [boolValue, setBoolValue] = useState(false);
+  const [dateValue, setDateValue] = useState(() => new Date().toISOString().slice(0, 16));
   const [isCreating, setIsCreating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -272,6 +296,7 @@ function CreateStateDialog({ onClose, onCreate }: CreateStateDialogProps) {
     switch (type) {
       case 'number': value = numberValue; break;
       case 'boolean': value = boolValue; break;
+      case 'datetime': value = new Date(dateValue).toISOString(); break;
       default: value = stringValue;
     }
     await onCreate(name.trim(), newDisplayName.trim(), type, value);
@@ -283,8 +308,8 @@ function CreateStateDialog({ onClose, onCreate }: CreateStateDialogProps) {
         <div className="sv-dialog-icon-wrap">
           <Icon name="state-variable" size={24} />
         </div>
-        <h3 className="sv-dialog-title">New Controller State</h3>
-        <p className="sv-dialog-desc">Create a persistent state that automations can read and modify.</p>
+        <h3 className="sv-dialog-title">New Global Value</h3>
+        <p className="sv-dialog-desc">Create a persistent value that automations can read and modify.</p>
 
         <div className="sv-dialog-fields">
           <div className="sv-dialog-field">
@@ -319,7 +344,7 @@ function CreateStateDialog({ onClose, onCreate }: CreateStateDialogProps) {
           <div className="sv-dialog-field">
             <label className="sv-dialog-label">Type</label>
             <div className="sv-type-selector">
-              {(['number', 'string', 'boolean'] as const).map((t) => (
+              {(['number', 'string', 'boolean', 'datetime'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -327,7 +352,7 @@ function CreateStateDialog({ onClose, onCreate }: CreateStateDialogProps) {
                   onClick={() => setType(t)}
                 >
                   <Icon name={TYPE_ICONS[t] || 'tag'} size={16} />
-                  <span>{t.charAt(0).toUpperCase() + t.slice(1)}</span>
+                  <span>{t === 'datetime' ? 'Date & Time' : t.charAt(0).toUpperCase() + t.slice(1)}</span>
                 </button>
               ))}
             </div>
@@ -355,6 +380,10 @@ function CreateStateDialog({ onClose, onCreate }: CreateStateDialogProps) {
                   false
                 </button>
               </div>
+            )}
+            {type === 'datetime' && (
+              <input className="sv-input" type="datetime-local" value={dateValue}
+                onChange={(e) => setDateValue(e.target.value)} />
             )}
           </div>
         </div>

@@ -21,7 +21,7 @@ const CONDITION_ICONS: Record<string, string> = {
 const LEAF_TYPE_OPTIONS = [
   { value: 'deviceState', label: 'Device State' },
   { value: 'timeCondition', label: 'Time Window' },
-  { value: 'engineState', label: 'Controller State' },
+  { value: 'engineState', label: 'Global Value' },
   { value: 'blockResult', label: 'Block Result' },
 ];
 

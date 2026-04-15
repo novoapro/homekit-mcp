@@ -66,7 +66,7 @@ struct BlockEditorSection: View {
                     Button("Run Scene", systemImage: "play.rectangle.fill") {
                         blocks.append(.newRunScene())
                     }
-                    Button("Controller State", systemImage: "cylinder.split.1x2") {
+                    Button("Global Value", systemImage: "cylinder.split.1x2") {
                         blocks.append(.newStateVariable())
                     }
                     Button("Delay", systemImage: "clock") {

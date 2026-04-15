@@ -267,7 +267,7 @@ struct BlockEditorRow: View {
 
 extension BlockEditorRow {
     private var controlDeviceContent: some View {
-        ControlDeviceEditor(block: $block, devices: devices)
+        ControlDeviceEditor(block: $block, devices: devices, controllerStates: controllerStates)
     }
 
     private var webhookContent: some View {
@@ -284,7 +284,7 @@ extension BlockEditorRow {
 
     @ViewBuilder
     private var stateVariableContent: some View {
-        StateVariableEditor(block: $block, controllerStates: controllerStates)
+        StateVariableEditor(block: $block, devices: devices, controllerStates: controllerStates)
     }
 }
 
@@ -330,6 +330,7 @@ private struct ControlDeviceEditor: View {
     @Binding var block: BlockDraft
 
     let devices: [DeviceModel]
+    var controllerStates: [StateVariable] = []
 
     private var draft: Binding<ControlDeviceDraft> {
         Binding(
@@ -339,6 +340,30 @@ private struct ControlDeviceEditor: View {
             },
             set: { block.blockType = .controlDevice($0) }
         )
+    }
+
+    private var valueSourceBinding: Binding<ControlDeviceDraft.ValueSource> {
+        Binding(
+            get: { draft.wrappedValue.valueSource },
+            set: { draft.wrappedValue.valueSource = $0 }
+        )
+    }
+
+    /// Maps a characteristic format to the compatible StateVariableType.
+    private var compatibleStateType: StateVariableType? {
+        guard let format = draft.wrappedValue.characteristicFormat else { return nil }
+        switch format {
+        case "bool": return .boolean
+        case "uint8", "uint16", "uint32", "uint64", "int", "float": return .number
+        case "string": return .string
+        default: return nil
+        }
+    }
+
+    /// Global values filtered to those compatible with the selected characteristic's type.
+    private var compatibleGlobalValues: [StateVariable] {
+        guard let requiredType = compatibleStateType else { return controllerStates }
+        return controllerStates.filter { $0.type == requiredType }
     }
 
     var body: some View {
@@ -356,17 +381,62 @@ private struct ControlDeviceEditor: View {
                 draft.wrappedValue.characteristicValidValues = char?.validValues
             }
         )
-        ValueEditor(
-            value: draft.value,
-            characteristicType: draft.wrappedValue.characteristicId,
-            devices: devices,
-            deviceId: draft.wrappedValue.deviceId,
-            fallbackFormat: draft.wrappedValue.characteristicFormat,
-            fallbackMinValue: draft.wrappedValue.characteristicMinValue,
-            fallbackMaxValue: draft.wrappedValue.characteristicMaxValue,
-            fallbackStepValue: draft.wrappedValue.characteristicStepValue,
-            fallbackValidValues: draft.wrappedValue.characteristicValidValues
-        )
+
+        // Value source toggle: Local vs Global
+        if !compatibleGlobalValues.isEmpty {
+            Picker("Value Source", selection: valueSourceBinding) {
+                Text("Local").tag(ControlDeviceDraft.ValueSource.local)
+                Text("Global").tag(ControlDeviceDraft.ValueSource.global)
+            }
+            .pickerStyle(.segmented)
+        }
+
+        if draft.wrappedValue.valueSource == .global && !compatibleGlobalValues.isEmpty {
+            // Global Value picker (filtered by compatible type)
+            Picker("Global Value", selection: Binding(
+                get: { draft.wrappedValue.valueRefName },
+                set: { newValue in
+                    draft.wrappedValue.valueRefName = newValue
+                    draft.wrappedValue.valueRefDisplayName = compatibleGlobalValues.first(where: { $0.name == newValue })?.label ?? ""
+                }
+            )) {
+                Text("-- Select --").tag("")
+                ForEach(compatibleGlobalValues) { state in
+                    Label(state.label, systemImage: state.type.icon)
+                        .tag(state.name)
+                }
+            }
+
+            // Default fallback value (required)
+            Section {
+                ValueEditor(
+                    value: draft.value,
+                    characteristicType: draft.wrappedValue.characteristicId,
+                    devices: devices,
+                    deviceId: draft.wrappedValue.deviceId,
+                    fallbackFormat: draft.wrappedValue.characteristicFormat,
+                    fallbackMinValue: draft.wrappedValue.characteristicMinValue,
+                    fallbackMaxValue: draft.wrappedValue.characteristicMaxValue,
+                    fallbackStepValue: draft.wrappedValue.characteristicStepValue,
+                    fallbackValidValues: draft.wrappedValue.characteristicValidValues
+                )
+            } header: {
+                Text("Default value (used if global value is removed)")
+            }
+        } else {
+            // Local value editor (existing behavior)
+            ValueEditor(
+                value: draft.value,
+                characteristicType: draft.wrappedValue.characteristicId,
+                devices: devices,
+                deviceId: draft.wrappedValue.deviceId,
+                fallbackFormat: draft.wrappedValue.characteristicFormat,
+                fallbackMinValue: draft.wrappedValue.characteristicMinValue,
+                fallbackMaxValue: draft.wrappedValue.characteristicMaxValue,
+                fallbackStepValue: draft.wrappedValue.characteristicStepValue,
+                fallbackValidValues: draft.wrappedValue.characteristicValidValues
+            )
+        }
     }
 }
 
@@ -465,6 +535,7 @@ private struct RunSceneEditor: View {
 
 private struct StateVariableEditor: View {
     @Binding var block: BlockDraft
+    var devices: [DeviceModel] = []
     var controllerStates: [StateVariable] = []
 
     private var draft: Binding<StateVariableDraft> {
@@ -521,6 +592,7 @@ private struct StateVariableEditor: View {
                             draft.wrappedValue.operationType = .set
                         }
                         draft.wrappedValue.variableName = newValue
+                        draft.wrappedValue.variableDisplayName = controllerStates.first(where: { $0.name == newValue })?.label ?? ""
                         // If the operation doesn't apply to this type, reset to .set
                         if let type = controllerStates.first(where: { $0.name == newValue })?.type {
                             let applicable = draft.wrappedValue.operationType.applicableTypes
@@ -532,7 +604,7 @@ private struct StateVariableEditor: View {
                 }
             )) {
                 ForEach(controllerStates) { state in
-                    Text("\(state.label) (\(state.type.symbol))").tag(state.name)
+                    Label(state.label, systemImage: state.type.icon).tag(state.name)
                 }
                 // Show the current variable name even if not in loaded states (e.g., states not loaded yet)
                 if !isCreateMode,
@@ -587,9 +659,43 @@ private struct StateVariableEditor: View {
                     Picker("Other State", selection: draft.otherVariableName) {
                         Text("Select...").tag("")
                         ForEach(controllerStates.filter { $0.name != draft.wrappedValue.variableName && (selectedStateType == nil || $0.type == selectedStateType) }) { state in
-                            Text("\(state.label) (\(state.type.symbol))").tag(state.name)
+                            Label(state.label, systemImage: state.type.icon).tag(state.name)
                         }
                     }
+                }
+
+                if draft.wrappedValue.operationType.requiresTimeAmount {
+                    HStack {
+                        Text("Amount")
+                            .foregroundColor(Theme.Text.secondary)
+                        Spacer()
+                        TextField("Amount", value: draft.timeAmount, format: .number)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 80)
+                    }
+                    Picker("Unit", selection: Binding(
+                        get: { draft.wrappedValue.timeUnit },
+                        set: { draft.wrappedValue.timeUnit = $0 }
+                    )) {
+                        ForEach(StateVariableOperation.TimeUnit.allCases) { unit in
+                            Text(unit.displayName).tag(unit)
+                        }
+                    }
+                }
+
+                if draft.wrappedValue.operationType.requiresDevice {
+                    DeviceCharacteristicPicker(
+                        devices: devices,
+                        selectedDeviceId: draft.sourceDeviceId,
+                        selectedServiceId: Binding(
+                            get: { draft.wrappedValue.sourceServiceId },
+                            set: { draft.wrappedValue.sourceServiceId = $0 }
+                        ),
+                        selectedCharacteristicType: draft.sourceCharacteristicId,
+                        requiredPermission: "read",
+                        allowedFormats: formatsForStateType(selectedStateType)
+                    )
                 }
             }
         }
@@ -608,6 +714,15 @@ private struct StateVariableEditor: View {
                 get: { draft.wrappedValue.value.lowercased() == "true" },
                 set: { draft.wrappedValue.value = $0 ? "true" : "false" }
             ))
+        case .datetime:
+            DatePicker("Initial Value", selection: Binding(
+                get: {
+                    if let str = draft.wrappedValue.value as String?,
+                       let date = StateVariable.parseDate(str) { return date }
+                    return Date()
+                },
+                set: { draft.wrappedValue.value = StateVariable.formatDateISO($0) }
+            ))
         }
     }
 
@@ -622,8 +737,27 @@ private struct StateVariableEditor: View {
                 get: { draft.wrappedValue.value.lowercased() == "true" },
                 set: { draft.wrappedValue.value = $0 ? "true" : "false" }
             ))
+        case .datetime:
+            DatePicker("Value", selection: Binding(
+                get: {
+                    if let date = StateVariable.parseDate(draft.wrappedValue.value) { return date }
+                    return Date()
+                },
+                set: { draft.wrappedValue.value = StateVariable.formatDateISO($0) }
+            ))
         case .string, .none:
             TextField("Value", text: draft.value)
+        }
+    }
+
+    /// Maps a StateVariableType to the set of characteristic formats that are compatible with it.
+    private func formatsForStateType(_ type: StateVariableType?) -> Set<String>? {
+        switch type {
+        case .boolean: return ["bool"]
+        case .number: return ["uint8", "uint16", "uint32", "uint64", "int", "float"]
+        case .string: return ["string"]
+        case .datetime: return nil // datetime is not used with characteristics
+        case .none: return nil
         }
     }
 }

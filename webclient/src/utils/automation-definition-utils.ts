@@ -105,7 +105,7 @@ export function formatRetriggerPolicy(policy: string): string {
 export function formatBlockType(type: string): string {
   const map: Record<string, string> = {
     controlDevice: 'Control Device',
-    stateVariable: 'Controller State',
+    stateVariable: 'Global Value',
     webhook: 'Webhook',
     log: 'Log Message',
     runScene: 'Run Scene',

@@ -117,8 +117,12 @@ const ICON_MAP: Record<string, IconEntry> = {
   'hk-blinds':               { ms: 'blinds_closed'                 },
   'hk-curtain':              { ms: 'curtains',           fill: 1  },
 
-  // Controller States
+  // Global Values
   'state-variable':          { ms: 'database',            fill: 1  },
+  'number':                  { ms: 'tag'                            },
+  'textformat':              { ms: 'text_fields'                    },
+  'switch-2':                { ms: 'toggle_on',           fill: 1  },
+  'calendar-badge-clock':    { ms: 'calendar_clock',      fill: 1  },
 };
 
 interface IconProps {

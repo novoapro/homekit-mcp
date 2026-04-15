@@ -195,7 +195,7 @@ enum AutomationAction: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case type, name
-        case deviceId, deviceName, roomName, serviceId, characteristicId, value
+        case deviceId, deviceName, roomName, serviceId, characteristicId, value, valueRef
         case url, method, headers, body
         case message
         case sceneId, sceneName
@@ -216,6 +216,7 @@ enum AutomationAction: Codable {
                 serviceId: container.decodeIfPresent(String.self, forKey: .serviceId),
                 characteristicId: charId,
                 value: container.decode(AnyCodable.self, forKey: .value),
+                valueRef: container.decodeIfPresent(StateVariableRef.self, forKey: .valueRef),
                 name: name
             ))
         case .webhook:
@@ -257,6 +258,7 @@ enum AutomationAction: Codable {
             try container.encodeIfPresent(action.serviceId, forKey: .serviceId)
             try container.encode(action.characteristicId, forKey: .characteristicId)
             try container.encode(action.value, forKey: .value)
+            try container.encodeIfPresent(action.valueRef, forKey: .valueRef)
         case let .webhook(action):
             try container.encode(ActionType.webhook, forKey: .type)
             try container.encodeIfPresent(action.name, forKey: .name)
@@ -298,15 +300,19 @@ struct ControlDeviceAction {
     let serviceId: String?
     let characteristicId: String
     let value: AnyCodable
+    /// When set, the value is resolved at runtime from this Global Value reference.
+    /// Falls back to `value` if the referenced Global Value is deleted or unavailable.
+    let valueRef: StateVariableRef?
     let name: String?
 
-    init(deviceId: String, deviceName: String? = nil, roomName: String? = nil, serviceId: String? = nil, characteristicId: String, value: AnyCodable, name: String? = nil) {
+    init(deviceId: String, deviceName: String? = nil, roomName: String? = nil, serviceId: String? = nil, characteristicId: String, value: AnyCodable, valueRef: StateVariableRef? = nil, name: String? = nil) {
         self.deviceId = deviceId
         self.deviceName = deviceName
         self.roomName = roomName
         self.serviceId = serviceId
         self.characteristicId = characteristicId
         self.value = value
+        self.valueRef = valueRef
         self.name = name
     }
 }

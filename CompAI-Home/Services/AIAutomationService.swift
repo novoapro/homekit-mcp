@@ -659,16 +659,37 @@ actor AIAutomationService {
 
         ```json
         { "block": "action", "type": "controlDevice", "name": "optional", "deviceId": "...", "deviceName": "Living Room Light", "roomName": "Living Room", "serviceId": "optional-service-uuid", "characteristicId": "<characteristic-uuid>", "value": true }
+        { "block": "action", "type": "controlDevice", "name": "optional", "deviceId": "...", "deviceName": "Sprinkler", "roomName": "Garden", "characteristicId": "<char-uuid>", "value": 180, "valueRef": { "type": "byName", "name": "sprinkler_duration" } }
         { "block": "action", "type": "runScene", "name": "optional", "sceneId": "scene-uuid", "sceneName": "Scene Name" }
         { "block": "action", "type": "webhook", "name": "optional", "url": "https://...", "method": "POST", "headers": {}, "body": {} }
         { "block": "action", "type": "log", "name": "optional", "message": "Something happened" }
         { "block": "action", "type": "stateVariable", "name": "optional", "operation": { "operation": "set", "variableRef": { "type": "byName", "name": "my_counter" }, "value": 42 } }
+        { "block": "action", "type": "stateVariable", "name": "optional", "operation": { "operation": "setFromCharacteristic", "variableRef": { "type": "byName", "name": "current_temp" }, "deviceId": "...", "characteristicId": "<char-uuid>" } }
         ```
+        controlDevice valueRef: optional. When set, the value is resolved at runtime from the referenced \
+        global value instead of using the literal "value" field. The "value" field still serves as the \
+        default fallback if the global value is deleted. \
         stateVariable operations: create (name, variableType, initialValue), remove (variableRef), \
-        set (variableRef, value), increment/decrement/multiply (variableRef, by), \
+        set (variableRef, value), setFromCharacteristic (variableRef, deviceId, characteristicId, serviceId?), \
+        increment/decrement/multiply (variableRef, by), \
         addState/subtractState (variableRef, otherRef) for numbers, \
-        toggle (variableRef), andState/orState (variableRef, otherRef), notState (variableRef) for booleans. \
-        variableRef format: {"type":"byName","name":"state_name"}. Use list_state_variables to discover existing states.
+        toggle (variableRef), andState/orState (variableRef, otherRef), notState (variableRef) for booleans, \
+        setToNow (variableRef), addTime/subtractTime (variableRef, amount, unit) for datetime. \
+        variableRef format: {"type":"byName","name":"value_name"}. Use list_global_values to discover existing global values.
+        Global value types: number, string, boolean, datetime. \
+        Datetime values are stored as ISO 8601 strings. Use setToNow to capture the current time, \
+        addTime/subtractTime (with unit: seconds/minutes/hours/days) for date arithmetic. \
+        In engineState conditions, datetime values support greaterThan (after), lessThan (before), \
+        and all numeric comparison operators. Use the special value "__now__" to compare against the current time.
+        CRITICAL type-matching rule for global values and characteristics: \
+        When using valueRef in controlDevice or setFromCharacteristic in stateVariable, \
+        the global value type MUST match the characteristic format. \
+        Boolean global values → only bool characteristics. \
+        Number global values → only numeric characteristics (uint8, uint16, uint32, uint64, int, float). \
+        String global values → only string characteristics. \
+        Datetime global values cannot be used with device characteristics. \
+        Always verify types match by checking the characteristic format from list_devices \
+        and the global value type from list_global_values before linking them.
 
         ### Flow Control Blocks
 
@@ -716,11 +737,11 @@ actor AIAutomationService {
         { "type": "or", "conditions": [ ... ] }
         { "type": "not", "condition": { ... } }
         ```
-        engineState compares a controller state's current value. variableRef: {"type":"byName","name":"state_name"}. \
-        For boolean states: equals/notEquals. For string states: equals/notEquals/isEmpty/isNotEmpty/contains. \
-        For number states: all numeric comparison operators (equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual). \
+        engineState compares a global value's current value. variableRef: {"type":"byName","name":"value_name"}. \
+        For boolean values: equals/notEquals. For string values: equals/notEquals/isEmpty/isNotEmpty/contains. \
+        For number values: all numeric comparison operators (equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual). \
         isEmpty and isNotEmpty have no value field. contains takes a string value for case-insensitive substring matching. \
-        Optional compareToStateRef compares against another state's value instead of a literal.
+        Optional compareToStateRef compares against another global value instead of a literal.
         The "comparison" in deviceState uses ComparisonOperator: "equals", "notEquals", \
         "greaterThan", "lessThan", "greaterThanOrEqual", "lessThanOrEqual" with "value".
         timeCondition modes: "beforeSunrise", "afterSunrise", "beforeSunset", "afterSunset", \

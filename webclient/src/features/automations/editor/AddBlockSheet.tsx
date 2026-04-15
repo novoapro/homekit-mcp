@@ -13,7 +13,7 @@ const ACTION_BLOCKS: BlockOption[] = [
   { type: 'runScene', label: 'Run Scene', description: 'Activate a HomeKit scene' },
   { type: 'webhook', label: 'Webhook', description: 'Send an HTTP request to a URL' },
   { type: 'log', label: 'Log', description: 'Write a message to the automation log' },
-  { type: 'stateVariable', label: 'Controller State', description: 'Create, update, or remove a controller state' },
+  { type: 'stateVariable', label: 'Global Value', description: 'Create, update, or remove a global value' },
 ];
 
 const FLOW_BLOCKS: BlockOption[] = [

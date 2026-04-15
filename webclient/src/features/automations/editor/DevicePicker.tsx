@@ -19,17 +19,19 @@ interface DevicePickerProps {
   writableOnly?: boolean;
   /** When true, only show characteristics with notify permission (for triggers that need state change events). */
   notifiableOnly?: boolean;
+  /** When set, only show characteristics whose format is in this set (e.g. new Set(['bool']) or new Set(['uint8','int','float'])). */
+  formatFilter?: Set<string>;
   onChange: (value: DevicePickerValue) => void;
 }
 
-export function DevicePicker({ initialDeviceId, initialServiceId, initialCharId, writableOnly = false, notifiableOnly = false, onChange }: DevicePickerProps) {
+export function DevicePicker({ initialDeviceId, initialServiceId, initialCharId, writableOnly = false, notifiableOnly = false, formatFilter, onChange }: DevicePickerProps) {
   const registry = useDeviceRegistry();
 
   const [selectedDeviceId, setSelectedDeviceId] = useState(initialDeviceId ?? '');
   const [selectedServiceId, setSelectedServiceId] = useState(initialServiceId ?? '');
   const [selectedCharId, setSelectedCharId] = useState(initialCharId ?? '');
 
-  // Filter helpers for writableOnly / notifiableOnly modes
+  // Filter helpers for writableOnly / notifiableOnly / formatFilter modes
   const hasWritableChar = useCallback(
     (svc: RESTService) => svc.characteristics.some((c) => c.permissions.includes('write')),
     [],
@@ -38,6 +40,11 @@ export function DevicePicker({ initialDeviceId, initialServiceId, initialCharId,
   const hasNotifiableChar = useCallback(
     (svc: RESTService) => svc.characteristics.some((c) => c.permissions.includes('notify')),
     [],
+  );
+
+  const hasMatchingFormat = useCallback(
+    (svc: RESTService) => !formatFilter || svc.characteristics.some((c) => formatFilter.has(c.format)),
+    [formatFilter],
   );
 
   const selectedDevice = useMemo<RESTDevice | undefined>(
@@ -59,9 +66,12 @@ export function DevicePicker({ initialDeviceId, initialServiceId, initialCharId,
       if (notifiableOnly) {
         devices = devices.filter((d) => d.services.some(hasNotifiableChar));
       }
+      if (formatFilter) {
+        devices = devices.filter((d) => d.services.some(hasMatchingFormat));
+      }
       return devices.map((d) => ({ id: d.id, label: d.name, secondary: d.room || undefined }));
     },
-    [registry.devices, writableOnly, notifiableOnly, hasWritableChar, hasNotifiableChar],
+    [registry.devices, writableOnly, notifiableOnly, formatFilter, hasWritableChar, hasNotifiableChar, hasMatchingFormat],
   );
 
   const serviceOptions = useMemo<SelectOption[]>(
@@ -73,13 +83,16 @@ export function DevicePicker({ initialDeviceId, initialServiceId, initialCharId,
       if (notifiableOnly) {
         services = services.filter(hasNotifiableChar);
       }
+      if (formatFilter) {
+        services = services.filter(hasMatchingFormat);
+      }
       return services.map((s) => ({
         id: s.id,
         label: s.name || s.type,
         secondary: s.name ? s.type : undefined,
       }));
     },
-    [selectedDevice, writableOnly, notifiableOnly, hasWritableChar, hasNotifiableChar],
+    [selectedDevice, writableOnly, notifiableOnly, formatFilter, hasWritableChar, hasNotifiableChar, hasMatchingFormat],
   );
 
   const charOptions = useMemo<SelectOption[]>(
@@ -91,13 +104,16 @@ export function DevicePicker({ initialDeviceId, initialServiceId, initialCharId,
       if (notifiableOnly) {
         chars = chars.filter((c) => c.permissions.includes('notify'));
       }
+      if (formatFilter) {
+        chars = chars.filter((c) => formatFilter.has(c.format));
+      }
       return chars.map((c) => ({
         id: c.id,
         label: c.name || c.id,
         secondary: c.type !== c.name ? c.type : undefined,
       }));
     },
-    [selectedService, writableOnly, notifiableOnly],
+    [selectedService, writableOnly, notifiableOnly, formatFilter],
   );
 
   const emit = useCallback(

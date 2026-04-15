@@ -71,6 +71,8 @@ export interface AutomationBlockDraft {
   serviceId?: string;
   characteristicId?: string;
   value?: unknown;
+  valueRef?: { type: string; name?: string; id?: string };
+  valueSource?: 'local' | 'global';
   url?: string;
   method?: string;
   headers?: Record<string, string>;
@@ -100,6 +102,13 @@ export interface AutomationBlockDraft {
     value?: unknown;
     by?: number;
     otherRef?: { type: string; name?: string; id?: string };
+    // datetime arithmetic (addTime, subtractTime)
+    amount?: number;
+    unit?: string;
+    // setFromCharacteristic
+    deviceId?: string;
+    characteristicId?: string;
+    serviceId?: string;
   };
 }
 

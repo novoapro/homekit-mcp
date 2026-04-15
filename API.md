@@ -687,19 +687,19 @@ See [automation](#automation) in Data Models for the full schema.
 
 ---
 
-### State Variables
+### Global Values
 
 Requires: **REST API enabled**
 
 | Method | Path | Description | Status | Response |
 |---|---|---|---|---|
-| `GET` | `/state-variables` | List all state variables | 200 | `stateVariable[]` |
-| `GET` | `/state-variables/:variableId` | Get a single state variable | 200 | `stateVariable` |
-| `POST` | `/state-variables` | Create a new state variable | 201 | `stateVariable` |
-| `PUT` | `/state-variables/:variableId` | Update a state variable's value | 200 | `stateVariable` |
-| `DELETE` | `/state-variables/:variableId` | Delete a state variable | 204 | (empty) |
+| `GET` | `/global-values` | List all global values | 200 | `globalValue[]` |
+| `GET` | `/global-values/:variableId` | Get a single global value | 200 | `globalValue` |
+| `POST` | `/global-values` | Create a new global value | 201 | `globalValue` |
+| `PUT` | `/global-values/:variableId` | Update a global value | 200 | `globalValue` |
+| `DELETE` | `/global-values/:variableId` | Delete a global value | 204 | (empty) |
 
-**POST /state-variables — Create**
+**POST /global-values — Create**
 
 ```json
 {
@@ -709,9 +709,9 @@ Requires: **REST API enabled**
 }
 ```
 
-Required fields: `name` (string, unique), `type` (`"number"`, `"string"`, or `"boolean"`), `value` (must match the declared type).
+Required fields: `name` (string, unique), `type` (`"number"`, `"string"`, `"boolean"`, or `"datetime"`), `value` (must match the declared type; datetime values are ISO 8601 strings).
 
-**PUT /state-variables/:variableId — Update**
+**PUT /global-values/:variableId — Update**
 
 ```json
 {
@@ -721,13 +721,13 @@ Required fields: `name` (string, unique), `type` (`"number"`, `"string"`, or `"b
 
 Only `value` can be updated. The type is immutable after creation.
 
-**State Variable Model:**
+**Global Value Model:**
 
 | Field | Type | Description |
 |---|---|---|
 | `id` | UUID | Auto-generated |
 | `name` | string | Unique name |
-| `type` | string | `"number"`, `"string"`, or `"boolean"` |
+| `type` | string | `"number"`, `"string"`, `"boolean"`, or `"datetime"` |
 | `value` | any | Current value (type-specific) |
 | `createdAt` | ISO 8601 | Creation timestamp |
 | `updatedAt` | ISO 8601 | Last update timestamp |
@@ -1139,57 +1139,57 @@ Returns success message with scene name, or error with reason.
 
 ---
 
-#### State Variable Tools
+#### Global Value Tools
 
 Requires automations enabled + Pro subscription.
 
-##### list_state_variables
+##### list_global_values
 
-List all engine state variables with their current values and types.
+List all global values with their current values and types.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | *(none)* | | | |
 
-Returns JSON array of all state variables.
+Returns JSON array of all global values.
 
-##### get_state_variable
+##### get_global_value
 
-Get a specific state variable by ID or name.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `variable_id` | string | No | UUID of the state variable |
-| `name` | string | No | Name of the state variable (alternative) |
-
-##### create_state_variable
-
-Create a new engine state variable.
+Get a specific global value by ID or name.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | Yes | Unique name for the variable |
+| `variable_id` | string | No | UUID of the global value |
+| `name` | string | No | Name of the global value (alternative) |
+
+##### create_global_value
+
+Create a new global value.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | Yes | Unique name for the value |
 | `type` | string | Yes | `"number"`, `"string"`, or `"boolean"` |
 | `value` | any | Yes | Initial value matching the declared type |
 
-##### update_state_variable
+##### update_global_value
 
-Update the value of an existing state variable.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `variable_id` | string | No | UUID of the state variable |
-| `name` | string | No | Name of the state variable (alternative) |
-| `value` | any | Yes | New value matching the variable's type |
-
-##### delete_state_variable
-
-Delete a state variable by ID or name.
+Update the value of an existing global value.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `variable_id` | string | No | UUID of the state variable |
-| `name` | string | No | Name of the state variable (alternative) |
+| `variable_id` | string | No | UUID of the global value |
+| `name` | string | No | Name of the global value (alternative) |
+| `value` | any | Yes | New value matching the value's type |
+
+##### delete_global_value
+
+Delete a global value by ID or name.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `variable_id` | string | No | UUID of the global value |
+| `name` | string | No | Name of the global value (alternative) |
 
 ---
 
@@ -1616,9 +1616,14 @@ All blocks accept an optional `name` field.
 | `roomName` | string | yes | For migration |
 | `serviceId` | string | no | Target specific service |
 | `characteristicId` | string | yes | Stable characteristic ID (resolvable via device registry) |
-| `value` | any | yes | Value to set |
+| `value` | any | yes | Value to set (Local mode), or default fallback value when `valueRef` is used |
+| `valueRef` | StateVariableRef | no | When set, the value is resolved at runtime from the referenced global value. Falls back to `value` if the global value is deleted. Example: `{"type": "byName", "name": "sprinkler_duration"}` |
 
 **Permission requirement:** The referenced characteristic must have `"write"` permission. The server validates this on automation create/update.
+
+**Value source modes:**
+- **Local** (default): Uses the `value` field directly, as a hardcoded value in the workflow.
+- **Global**: When `valueRef` is set, the value is resolved at runtime from the referenced global value. The `value` field serves as a default fallback if the global value is deleted or unavailable.
 
 ##### runScene
 
@@ -1647,7 +1652,7 @@ All blocks accept an optional `name` field.
 
 ##### stateVariable
 
-Operate on engine state variables (create, update, remove, arithmetic, boolean logic).
+Operate on global values (create, update, remove, arithmetic, boolean logic, read from device).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -1658,20 +1663,24 @@ Operate on engine state variables (create, update, remove, arithmetic, boolean l
 
 | Operation | Fields | Description |
 |---|---|---|
-| `create` | `name`, `variableType`, `initialValue` | Create a new variable |
-| `remove` | `variableRef` | Delete a variable |
-| `set` | `variableRef`, `value` | Set a variable's value |
-| `increment` | `variableRef`, `by` | Add `by` to a number variable |
-| `decrement` | `variableRef`, `by` | Subtract `by` from a number variable |
-| `multiply` | `variableRef`, `by` | Multiply a number variable by `by` |
-| `addState` | `variableRef`, `otherRef` | Add another variable's value to this one |
-| `subtractState` | `variableRef`, `otherRef` | Subtract another variable's value |
-| `toggle` | `variableRef` | Flip a boolean variable |
-| `andState` | `variableRef`, `otherRef` | Boolean AND with another variable |
-| `orState` | `variableRef`, `otherRef` | Boolean OR with another variable |
+| `create` | `name`, `variableType`, `initialValue` | Create a new global value |
+| `remove` | `variableRef` | Delete a global value |
+| `set` | `variableRef`, `value` | Set a global value |
+| `setFromCharacteristic` | `variableRef`, `deviceId`, `characteristicId`, `serviceId` (optional) | Read a device characteristic's current value into a global value |
+| `setToNow` | `variableRef` | Set a datetime global value to the current date/time |
+| `addTime` | `variableRef`, `amount`, `unit` | Add time to a datetime value. Unit: `seconds`, `minutes`, `hours`, `days` |
+| `subtractTime` | `variableRef`, `amount`, `unit` | Subtract time from a datetime value. Unit: `seconds`, `minutes`, `hours`, `days` |
+| `increment` | `variableRef`, `by` | Add `by` to a number value |
+| `decrement` | `variableRef`, `by` | Subtract `by` from a number value |
+| `multiply` | `variableRef`, `by` | Multiply a number value by `by` |
+| `addState` | `variableRef`, `otherRef` | Add another global value to this one |
+| `subtractState` | `variableRef`, `otherRef` | Subtract another global value |
+| `toggle` | `variableRef` | Flip a boolean value |
+| `andState` | `variableRef`, `otherRef` | Boolean AND with another value |
+| `orState` | `variableRef`, `otherRef` | Boolean OR with another value |
 | `notState` | `variableRef` | Boolean NOT |
 
-**StateVariableRef** identifies a variable by name or ID: `{"type": "byName", "name": "counter"}` or `{"type": "byId", "id": "uuid"}`.
+**StateVariableRef** identifies a global value by name or ID: `{"type": "byName", "name": "counter"}` or `{"type": "byId", "id": "uuid"}`.
 
 #### Flow Control Blocks (`"block": "flowControl"`)
 
@@ -1794,7 +1803,7 @@ Requires `continueOnError = true` on the automation.
 
 #### engineState
 
-Compare an engine state variable's current value.
+Compare a global value's current value.
 
 | Field | Type | Required | Description |
 |---|---|---|---|

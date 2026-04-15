@@ -7,6 +7,8 @@ struct DeviceCharacteristicPicker: View {
     @Binding var selectedCharacteristicType: String
     /// When set, only characteristics with this permission are shown (e.g. "write", "notify").
     var requiredPermission: String? = nil
+    /// When set, only characteristics whose format is in this set are shown (e.g. ["bool"] or ["uint8","int","float"]).
+    var allowedFormats: Set<String>? = nil
     var onCharacteristicSelected: ((CharacteristicModel?) -> Void)? = nil
 
     @State private var showDevicePicker = false
@@ -45,7 +47,8 @@ struct DeviceCharacteristicPicker: View {
                     selectedServiceId: $selectedServiceId,
                     selectedCharacteristicType: $selectedCharacteristicType,
                     categoryIcon: categoryIcon,
-                    requiredPermission: requiredPermission
+                    requiredPermission: requiredPermission,
+                    allowedFormats: allowedFormats
                 )
             }
 
@@ -178,6 +181,7 @@ struct DeviceCharacteristicPicker: View {
         device.services.flatMap { service in
             service.characteristics.compactMap { characteristic in
                 if let perm = requiredPermission, !characteristic.permissions.contains(perm) { return nil }
+                if let formats = allowedFormats, !formats.contains(characteristic.format) { return nil }
                 return CharacteristicItem(
                     serviceId: service.id,
                     serviceName: service.effectiveDisplayName,
@@ -197,6 +201,7 @@ private struct DevicePickerSheet: View {
     @Binding var selectedCharacteristicType: String
     let categoryIcon: (String) -> String
     var requiredPermission: String? = nil
+    var allowedFormats: Set<String>? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -215,6 +220,13 @@ private struct DevicePickerSheet: View {
         if let perm = requiredPermission {
             candidates = candidates.filter { device in
                 device.services.flatMap(\.characteristics).contains { $0.permissions.contains(perm) }
+            }
+        }
+
+        // Only show devices that have at least one characteristic with an allowed format
+        if let formats = allowedFormats {
+            candidates = candidates.filter { device in
+                device.services.flatMap(\.characteristics).contains { formats.contains($0.format) }
             }
         }
 

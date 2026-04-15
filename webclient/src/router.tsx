@@ -67,7 +67,7 @@ export function AppRoutes() {
           element={<ConfigGuard><AutomationExecutionListPage /></ConfigGuard>}
         />
         <Route
-          path="/state-variables"
+          path="/global-values"
           element={<ConfigGuard><StateVariablesPage /></ConfigGuard>}
         />
         <Route path="/upgrade" element={<ConfigGuard><UpgradePage /></ConfigGuard>} />

@@ -754,33 +754,33 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             return try await self.handleRestImproveAutomation(req)
         }
 
-        // MARK: - State Variable REST Endpoints
+        // MARK: - Global Value REST Endpoints
 
-        protected.on(.GET, "state-variables") { [weak self] req async throws -> Response in
+        protected.on(.GET, "global-values") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
             return try await self.handleRestGetStateVariables(req)
         }
 
-        protected.on(.GET, "state-variables", ":variableId") { [weak self] req async throws -> Response in
+        protected.on(.GET, "global-values", ":variableId") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
             return try await self.handleRestGetStateVariable(req)
         }
 
-        protected.on(.POST, "state-variables", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
+        protected.on(.POST, "global-values", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
             return try await self.handleRestCreateStateVariable(req)
         }
 
-        protected.on(.PUT, "state-variables", ":variableId", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
+        protected.on(.PUT, "global-values", ":variableId", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
             return try await self.handleRestUpdateStateVariable(req)
         }
 
-        protected.on(.DELETE, "state-variables", ":variableId") { [weak self] req async throws -> Response in
+        protected.on(.DELETE, "global-values", ":variableId") { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
             return try await self.handleRestDeleteStateVariable(req)
@@ -1424,7 +1424,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         guard let storage = stateVariableStorage else { throw Abort(.serviceUnavailable) }
         let variables = await storage.getAll()
         let data = try JSONEncoder.iso8601.encode(variables)
-        logRESTCall(method: "GET", path: "/state-variables", statusCode: 200,
+        logRESTCall(method: "GET", path: "/global-values", statusCode: 200,
                     resultSummary: "\(variables.count) variables",
                     req: req, responseBody: String(data: data, encoding: .utf8))
         return jsonResponse(data: data)
@@ -1440,7 +1440,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             throw Abort(.notFound, reason: "State variable not found")
         }
         let data = try JSONEncoder.iso8601.encode(variable)
-        logRESTCall(method: "GET", path: "/state-variables/\(idStr)", statusCode: 200,
+        logRESTCall(method: "GET", path: "/global-values/\(idStr)", statusCode: 200,
                     resultSummary: variable.name,
                     req: req, responseBody: String(data: data, encoding: .utf8))
         return jsonResponse(data: data)
@@ -1464,7 +1464,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             throw Abort(.badRequest, reason: "Missing required field: value")
         }
         if await storage.getByName(name) != nil {
-            throw Abort(.conflict, reason: "A state variable named '\(name)' already exists")
+            throw Abort(.conflict, reason: "A global value named '\(name)' already exists")
         }
         if dict["id"] == nil { dict["id"] = UUID().uuidString }
         if dict["createdAt"] == nil { dict["createdAt"] = ISO8601DateFormatter().string(from: Date()) }
@@ -1473,7 +1473,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         let variable = try JSONDecoder.iso8601.decode(StateVariable.self, from: normalizedData)
         let created = await storage.create(variable)
         let data = try JSONEncoder.iso8601.encode(created)
-        logRESTCall(method: "POST", path: "/state-variables", statusCode: 201,
+        logRESTCall(method: "POST", path: "/global-values", statusCode: 201,
                     resultSummary: "Created: \(created.name)",
                     req: req, responseBody: String(data: data, encoding: .utf8))
         return jsonResponse(data: data, status: .created)
@@ -1497,7 +1497,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             throw Abort(.notFound, reason: "State variable not found")
         }
         let data = try JSONEncoder.iso8601.encode(updated)
-        logRESTCall(method: "PUT", path: "/state-variables/\(idStr)", statusCode: 200,
+        logRESTCall(method: "PUT", path: "/global-values/\(idStr)", statusCode: 200,
                     resultSummary: updated.name,
                     req: req, responseBody: String(data: data, encoding: .utf8))
         return jsonResponse(data: data)
@@ -1512,7 +1512,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         guard await storage.delete(id: variableId) else {
             throw Abort(.notFound, reason: "State variable not found")
         }
-        logRESTCall(method: "DELETE", path: "/state-variables/\(idStr)", statusCode: 204, resultSummary: "Deleted")
+        logRESTCall(method: "DELETE", path: "/global-values/\(idStr)", statusCode: 204, resultSummary: "Deleted")
         return Response(status: .noContent)
     }
 
