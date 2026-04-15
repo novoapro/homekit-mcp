@@ -522,7 +522,7 @@ private struct ConditionLeafEditSheet: View {
 
             Picker("Comparison", selection: $condition.comparisonType) {
                 ForEach(Self.comparisonTypes(for: selectedType)) { ct in
-                    Text(ct.symbol).tag(ct)
+                    Text(ct.displayName(for: selectedType)).tag(ct)
                 }
             }
 

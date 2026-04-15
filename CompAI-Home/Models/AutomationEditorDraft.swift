@@ -97,6 +97,20 @@ enum ComparisonType: String, CaseIterable, Identifiable {
         default: return true
         }
     }
+
+    /// Context-aware display name for a given variable type.
+    func displayName(for type: StateVariableType?) -> String {
+        guard type == .datetime else { return displayName }
+        switch self {
+        case .equals: return "Equals"
+        case .notEquals: return "Not Equals"
+        case .greaterThan: return "After"
+        case .lessThan: return "Before"
+        case .greaterThanOrEqual: return "At or After"
+        case .lessThanOrEqual: return "At or Before"
+        default: return displayName
+        }
+    }
 }
 
 enum TriggerDraftType: String, CaseIterable, Identifiable {
@@ -410,6 +424,11 @@ extension ConditionDraft {
         case .engineState:
             let varName = stateVariableName.isEmpty ? "unknown" : stateVariableName
             let displayVal = Self.formatDisplayValue(comparisonValue)
+            // Use semantic labels for datetime conditions
+            if StateVariable.isDatetimeSentinel(comparisonValue) || datetimeCompareMode != .specific {
+                let verb = comparisonType.displayName(for: .datetime).lowercased()
+                return "'\(varName)' \(verb) \(displayVal)"
+            }
             return "'\(varName)' \(comparisonType.symbol) \(displayVal)"
         case .blockResult:
             let statusName = blockResultExpectedStatus.displayName

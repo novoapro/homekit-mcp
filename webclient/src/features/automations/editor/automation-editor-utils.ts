@@ -707,8 +707,16 @@ export function conditionAutoName(c: AutomationConditionDraft, registry: Registr
       const varKey = c.variableRef?.name || 'state';
       const varName = (stateNames && varKey in stateNames) ? stateNames[varKey] : varKey;
       if (c.comparison) {
+        const compVal = 'value' in c.comparison ? c.comparison.value : undefined;
+        const displayVal = c.dynamicDateValue ? formatAutoVal(c.dynamicDateValue) : formatAutoVal(compVal);
+        const isDt = c.dynamicDateValue || (typeof compVal === 'string' && compVal.startsWith('__now'));
+        if (isDt) {
+          const DT_VERBS: Record<string, string> = { greaterThan: 'after', lessThan: 'before', greaterThanOrEqual: 'at or after', lessThanOrEqual: 'at or before', equals: 'equals', notEquals: 'not equals' };
+          const verb = DT_VERBS[c.comparison.type] || c.comparison.type;
+          return `'${varName}' ${verb} ${displayVal}`;
+        }
         const sym = COMPARISON_SYMBOLS[c.comparison.type] || '=';
-        return `${varName} ${sym} ${formatAutoVal('value' in c.comparison ? c.comparison.value : undefined)}`;
+        return `${varName} ${sym} ${displayVal}`;
       }
       return `State: ${varName}`;
     }

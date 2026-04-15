@@ -31,6 +31,15 @@ const COMPARISON_OPS = [
 
 const NO_VALUE_OPS = new Set(['isEmpty', 'isNotEmpty']);
 
+const DATETIME_OP_LABELS: Record<string, string> = {
+  equals: 'Equals',
+  notEquals: 'Not Equals',
+  greaterThan: 'After',
+  lessThan: 'Before',
+  greaterThanOrEqual: 'At or After',
+  lessThanOrEqual: 'At or Before',
+};
+
 const TIME_MODES = [
   { value: 'timeRange', label: 'Between two times' },
   { value: 'beforeSunrise', label: 'Before Sunrise' },
@@ -364,7 +373,7 @@ export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChang
                       ? COMPARISON_OPS.filter(op => op.types.length === 0 || op.types.includes(selectedType))
                       : COMPARISON_OPS
                     ).map((op) => (
-                      <option key={op.value} value={op.value}>{op.label}</option>
+                      <option key={op.value} value={op.value}>{selectedType === 'datetime' ? (DATETIME_OP_LABELS[op.value] || op.label) : op.label}</option>
                     ))}
                   </select>
                 </div>
