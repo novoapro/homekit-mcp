@@ -217,7 +217,12 @@
   transition: border-color var(--transition-fast);
 }
 .sv-input:focus { border-color: var(--tint-main); }
-.sv-input[type="datetime-local"] { min-width: 0; }
+.sv-input[type="datetime-local"] {
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+}
 .sv-input.mono { font-family: var(--font-mono, 'SF Mono', monospace); }
 
 .sv-toggle-row {
@@ -418,15 +423,14 @@
 
 /* Type selector — pill group */
 .sv-type-selector {
-  display: flex;
-  gap: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--border-color);
 }
 
 .sv-type-option {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -439,10 +443,12 @@
   color: var(--text-secondary);
   border: none;
   border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
-.sv-type-option:last-child { border-right: none; }
+.sv-type-option:nth-child(2n) { border-right: none; }
+.sv-type-option:nth-last-child(-n+2) { border-bottom: none; }
 .sv-type-option.active {
   background: color-mix(in srgb, var(--tint-main) 12%, var(--bg-card));
   color: var(--tint-main);
