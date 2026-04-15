@@ -138,16 +138,73 @@ struct StateVariable: Identifiable, Codable {
         return f
     }()
 
-    /// Parses an ISO 8601 string to a Date. Also handles the special value "__now__".
+    /// Parses an ISO 8601 string to a Date. Also handles special sentinel values:
+    /// - `"__now__"` — current server time
+    /// - `"__now-24h__"` — 24 hours ago (supports: s, m, h, d units with +/- offset)
+    /// - `"__now+7d__"` — 7 days from now
     static func parseDate(_ value: Any?) -> Date? {
         if let str = value as? String {
             if str == "__now__" { return Date() }
+            // Relative time: __now±Xu__ where X is a number and u is s/m/h/d
+            if str.hasPrefix("__now") && str.hasSuffix("__") {
+                let inner = str.dropFirst(5).dropLast(2) // e.g. "-24h" or "+7d"
+                if let parsed = parseRelativeOffset(String(inner)) {
+                    return Date().addingTimeInterval(parsed)
+                }
+            }
             return dateFormatter.date(from: str) ?? dateFormatterFractional.date(from: str)
         }
         // Also handle epoch timestamps stored as numbers
         if let d = value as? Double { return Date(timeIntervalSince1970: d) }
         if let i = value as? Int { return Date(timeIntervalSince1970: Double(i)) }
         return nil
+    }
+
+    /// Parses a relative offset string like "-24h", "+7d", "-30m", "+3600s".
+    private static func parseRelativeOffset(_ offset: String) -> TimeInterval? {
+        guard !offset.isEmpty else { return nil }
+        let unitChar = offset.last!
+        let multiplier: Double
+        switch unitChar {
+        case "s": multiplier = 1
+        case "m": multiplier = 60
+        case "h": multiplier = 3600
+        case "d": multiplier = 86400
+        default: return nil
+        }
+        guard let amount = Double(offset.dropLast()) else { return nil }
+        return amount * multiplier
+    }
+
+    /// Returns true if the string is a datetime sentinel (__now__, __now-24h__, etc.)
+    static func isDatetimeSentinel(_ value: String) -> Bool {
+        value == "__now__" || (value.hasPrefix("__now") && value.hasSuffix("__"))
+    }
+
+    /// Human-readable description of a datetime sentinel.
+    static func describeSentinel(_ value: String) -> String? {
+        if value == "__now__" { return "Now" }
+        guard value.hasPrefix("__now") && value.hasSuffix("__") else { return nil }
+        let inner = String(value.dropFirst(5).dropLast(2))
+        guard !inner.isEmpty else { return nil }
+        let unitChar = inner.last!
+        let unitName: String
+        switch unitChar {
+        case "s": unitName = "second"
+        case "m": unitName = "minute"
+        case "h": unitName = "hour"
+        case "d": unitName = "day"
+        default: return nil
+        }
+        guard let amount = Double(inner.dropLast()) else { return nil }
+        let absAmount = abs(amount)
+        let amountStr = absAmount.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(absAmount)) : String(absAmount)
+        let plural = absAmount == 1 ? "" : "s"
+        if amount < 0 {
+            return "\(amountStr) \(unitName)\(plural) ago"
+        } else {
+            return "\(amountStr) \(unitName)\(plural) from now"
+        }
     }
 
     /// Formats a Date as ISO 8601 string for storage.
@@ -486,11 +543,15 @@ struct EngineStateCondition {
     let comparison: ComparisonOperator
     /// When set, compare against another variable's current value instead of the literal in `comparison`.
     let compareToStateRef: StateVariableRef?
+    /// When set (e.g. "__now__", "__now-24h__"), the comparison value is resolved dynamically
+    /// at evaluation time instead of using the static value in `comparison`.
+    let dynamicDateValue: String?
 
-    init(variableRef: StateVariableRef, comparison: ComparisonOperator, compareToStateRef: StateVariableRef? = nil) {
+    init(variableRef: StateVariableRef, comparison: ComparisonOperator, compareToStateRef: StateVariableRef? = nil, dynamicDateValue: String? = nil) {
         self.variableRef = variableRef
         self.comparison = comparison
         self.compareToStateRef = compareToStateRef
+        self.dynamicDateValue = dynamicDateValue
     }
 }
 

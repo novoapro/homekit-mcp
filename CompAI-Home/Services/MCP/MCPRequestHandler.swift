@@ -776,7 +776,9 @@ final class MCPRequestHandler: Sendable {
                             "comparison": ["type": "object", "required": true,
                                 "description": "ComparisonOperator. For booleans: equals/notEquals only. For strings: equals/notEquals. For numbers: all operators."],
                             "compareToStateRef": ["type": "object", "required": false,
-                                "description": "Optional. When set, compare against another global value instead of a literal."]
+                                "description": "Optional. When set, compare against another global value instead of a literal."],
+                            "dynamicDateValue": ["type": "string", "required": false,
+                                "description": "For datetime comparisons: a sentinel resolved at evaluation time. Values: '__now__', '__now-24h__', '__now+7d__', '__now-30m__', etc. Units: s (seconds), m (minutes), h (hours), d (days)."]
                         ] as [String: Any]
                     ],
                     [
@@ -843,7 +845,7 @@ final class MCPRequestHandler: Sendable {
                 "For engineState conditions: boolean values support equals/notEquals; string values support equals/notEquals/isEmpty/isNotEmpty/contains; number values support all numeric comparison operators.",
                 "isEmpty and isNotEmpty comparisons have no value field. contains takes a string value for case-insensitive substring matching.",
                 "Global value and characteristic type matching: when using valueRef in controlDevice or setFromCharacteristic in stateVariable, types MUST match. Boolean globals only with bool characteristics. Number globals only with numeric characteristics (uint8, uint16, uint32, uint64, int, float). String globals only with string characteristics. Datetime globals cannot be used with characteristics. Use list_devices to check characteristic formats and list_global_values to check global value types before linking them.",
-                "Datetime global values: store ISO 8601 date strings. Supported operations: set (ISO 8601 string), setToNow, addTime/subtractTime (with amount and unit: seconds/minutes/hours/days). For engineState conditions, datetime values support equals/notEquals/greaterThan (after)/lessThan (before)/greaterThanOrEqual/lessThanOrEqual. Use the special value '__now__' to compare against the current time."
+                "Datetime global values: store ISO 8601 date strings. Supported operations: set (ISO 8601 string), setToNow, addTime/subtractTime (with amount and unit: seconds/minutes/hours/days). For engineState conditions, datetime values support equals/notEquals/greaterThan (after)/lessThan (before)/greaterThanOrEqual/lessThanOrEqual. Use dynamicDateValue for runtime-resolved comparisons: '__now__' (current server time), '__now-24h__' (24 hours ago), '__now+7d__' (7 days from now), '__now-30m__' (30 minutes ago). Units: s/m/h/d. The dynamicDateValue field is resolved at evaluation time, not save time."
             ]
         ]
 

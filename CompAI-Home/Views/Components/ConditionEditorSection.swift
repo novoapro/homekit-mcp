@@ -545,19 +545,41 @@ private struct ConditionLeafEditSheet: View {
                         ))
                     case .datetime:
                         Picker("Compare Against", selection: Binding(
-                            get: { condition.comparisonValue == "__now__" ? "__now__" : "__custom__" },
-                            set: { newValue in
-                                if newValue == "__now__" {
+                            get: { condition.datetimeCompareMode },
+                            set: { newMode in
+                                condition.datetimeCompareMode = newMode
+                                switch newMode {
+                                case .now:
                                     condition.comparisonValue = "__now__"
-                                } else {
+                                case .relative:
+                                    condition.comparisonValue = "__now__" // placeholder, rebuilt by sentinel
+                                case .specific:
                                     condition.comparisonValue = StateVariable.formatDateISO(Date())
                                 }
                             }
                         )) {
-                            Text("Now (current time)").tag("__now__")
-                            Text("Specific date").tag("__custom__")
+                            ForEach(ConditionDraft.DatetimeCompareMode.allCases) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
                         }
-                        if condition.comparisonValue != "__now__" {
+                        if condition.datetimeCompareMode == .relative {
+                            HStack {
+                                TextField("Amount", value: $condition.datetimeRelativeAmount, format: .number)
+                                    .keyboardType(.decimalPad)
+                                    .frame(width: 60)
+                                Picker("Unit", selection: $condition.datetimeRelativeUnit) {
+                                    ForEach(StateVariableOperation.TimeUnit.allCases) { unit in
+                                        Text(unit.displayName).tag(unit)
+                                    }
+                                }
+                                Picker("Direction", selection: $condition.datetimeRelativeDirection) {
+                                    ForEach(ConditionDraft.DatetimeRelativeDirection.allCases) { dir in
+                                        Text(dir.displayName).tag(dir)
+                                    }
+                                }
+                            }
+                        }
+                        if condition.datetimeCompareMode == .specific {
                             DatePicker("Date", selection: Binding(
                                 get: {
                                     StateVariable.parseDate(condition.comparisonValue) ?? Date()

@@ -162,7 +162,7 @@ class ConditionEvaluator {
             return (false, "State variable \(condition.variableRef.displayDescription) not found")
         }
 
-        let comparison: ComparisonOperator
+        var comparison: ComparisonOperator
         if let otherRef = condition.compareToStateRef {
             // Compare against another state variable's current value
             guard let otherVar = await storage.resolve(otherRef) else {
@@ -174,8 +174,20 @@ class ConditionEvaluator {
             comparison = condition.comparison
         }
 
+        // For datetime variables with a dynamic sentinel (e.g. __now__, __now-24h__),
+        // resolve the comparison value at evaluation time (server time).
+        if let sentinel = condition.dynamicDateValue,
+           StateVariable.isDatetimeSentinel(sentinel),
+           let resolvedDate = StateVariable.parseDate(sentinel) {
+            let epoch = resolvedDate.timeIntervalSince1970
+            comparison = Self.rebuildComparisonWithEpoch(comparison, epoch: epoch)
+        }
+
         let passed = Self.compare(variable.value.value, using: comparison)
-        let desc = "State '\(variable.name)' \(Self.comparisonDescription(comparison))"
+        let displaySentinel = condition.dynamicDateValue.flatMap { StateVariable.describeSentinel($0) }
+        let desc = displaySentinel != nil
+            ? "'\(variable.name)' \(Self.comparisonSymbol(comparison)) \(displaySentinel!)"
+            : "'\(variable.name)' \(Self.comparisonDescription(comparison))"
         return (passed, desc)
     }
 
@@ -507,6 +519,33 @@ class ConditionEvaluator {
         case .isEmpty: return "is empty"
         case .isNotEmpty: return "is not empty"
         case .contains(let v): return "contains \"\(v)\""
+        }
+    }
+
+    static func comparisonSymbol(_ comparison: ComparisonOperator) -> String {
+        switch comparison {
+        case .equals: return "=="
+        case .notEquals: return "!="
+        case .greaterThan: return ">"
+        case .lessThan: return "<"
+        case .greaterThanOrEqual: return ">="
+        case .lessThanOrEqual: return "<="
+        case .isEmpty: return "is empty"
+        case .isNotEmpty: return "is not empty"
+        case .contains: return "contains"
+        }
+    }
+
+    /// Rebuilds a comparison operator replacing its numeric value with an epoch timestamp.
+    static func rebuildComparisonWithEpoch(_ comparison: ComparisonOperator, epoch: Double) -> ComparisonOperator {
+        switch comparison {
+        case .equals: return .equals(AnyCodable(epoch))
+        case .notEquals: return .notEquals(AnyCodable(epoch))
+        case .greaterThan: return .greaterThan(epoch)
+        case .lessThan: return .lessThan(epoch)
+        case .greaterThanOrEqual: return .greaterThanOrEqual(epoch)
+        case .lessThanOrEqual: return .lessThanOrEqual(epoch)
+        default: return comparison
         }
     }
 }

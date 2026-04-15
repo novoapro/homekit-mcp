@@ -229,6 +229,7 @@ function conditionDraftToPayload(c: AutomationConditionDraft): AutomationConditi
         variableRef: c.variableRef ?? { type: 'byName', name: '' },
         comparison: c.comparison ?? { type: 'equals', value: '' },
         ...(c.stateCompareMode === 'stateRef' && c.compareToStateRef && { compareToStateRef: c.compareToStateRef }),
+        ...(c.dynamicDateValue && { dynamicDateValue: c.dynamicDateValue }),
       } as AutomationConditionDef;
   }
 }
@@ -445,6 +446,9 @@ function conditionDefToDraft(c: AutomationConditionDef): AutomationConditionDraf
       } else {
         base.stateCompareMode = 'literal';
       }
+      if (c.dynamicDateValue) {
+        base.dynamicDateValue = c.dynamicDateValue;
+      }
       break;
     case 'and':
     case 'or':
@@ -549,6 +553,11 @@ function formatAutoVal(val: unknown): string {
   if (val === false) return 'Off';
   if (typeof val === 'string') {
     if (val === '__now__') return 'Now';
+    // Relative datetime sentinels: __now-24h__, __now+7d__, etc.
+    if (val.startsWith('__now') && val.endsWith('__')) {
+      const desc = describeDateSentinel(val);
+      if (desc) return desc;
+    }
     // Try to detect and format ISO 8601 datetime strings
     if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
       try {
@@ -558,6 +567,18 @@ function formatAutoVal(val: unknown): string {
     }
   }
   return String(val);
+}
+
+function describeDateSentinel(val: string): string | undefined {
+  if (val === '__now__') return 'Now';
+  const inner = val.slice(5, -2); // e.g. "-24h" or "+7d"
+  const m = inner.match(/^([+-]?)(\d+(?:\.\d+)?)([smhd])$/);
+  if (!m) return undefined;
+  const units: Record<string, string> = { s: 'second', m: 'minute', h: 'hour', d: 'day' };
+  const amount = parseFloat(m[2]!);
+  const unit = units[m[3]!] || m[3];
+  const plural = amount === 1 ? '' : 's';
+  return m[1] === '+' ? `${amount} ${unit}${plural} from now` : `${amount} ${unit}${plural} ago`;
 }
 
 function pad2(n: number): string {

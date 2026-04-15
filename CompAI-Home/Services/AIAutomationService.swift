@@ -680,7 +680,12 @@ actor AIAutomationService {
         Datetime values are stored as ISO 8601 strings. Use setToNow to capture the current time, \
         addTime/subtractTime (with unit: seconds/minutes/hours/days) for date arithmetic. \
         In engineState conditions, datetime values support greaterThan (after), lessThan (before), \
-        and all numeric comparison operators. Use the special value "__now__" to compare against the current time.
+        and all numeric comparison operators. Use the dynamicDateValue field for runtime-resolved comparisons: \
+        "__now__" (current server time), "__now-24h__" (24 hours ago), "__now+7d__" (7 days from now). \
+        Units: s (seconds), m (minutes), h (hours), d (days). \
+        Example: to check if more than 24 hours have passed since a stored date, use \
+        comparison: {"type":"lessThan","value":0}, dynamicDateValue: "__now-24h__". \
+        The dynamicDateValue is resolved at evaluation time using server time, not at save time.
         CRITICAL type-matching rule for global values and characteristics: \
         When using valueRef in controlDevice or setFromCharacteristic in stateVariable, \
         the global value type MUST match the characteristic format. \

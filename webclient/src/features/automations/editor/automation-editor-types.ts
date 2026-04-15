@@ -56,6 +56,7 @@ export interface AutomationConditionDraft {
   variableRef?: { type: string; name?: string; id?: string };
   compareToStateRef?: { type: string; name?: string; id?: string };
   stateCompareMode?: 'literal' | 'stateRef';
+  dynamicDateValue?: string;
   // and / or
   conditions?: AutomationConditionDraft[];
   // not

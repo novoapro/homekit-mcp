@@ -1260,7 +1260,7 @@ indirect enum AutomationCondition: Codable {
         // blockResult fields
         case blockResultScope, expectedStatus
         // engineState fields
-        case variableRef, compareToStateRef
+        case variableRef, compareToStateRef, dynamicDateValue
     }
 
     init(from decoder: Decoder) throws {
@@ -1311,7 +1311,8 @@ indirect enum AutomationCondition: Codable {
             self = try .engineState(EngineStateCondition(
                 variableRef: container.decode(StateVariableRef.self, forKey: .variableRef),
                 comparison: container.decode(ComparisonOperator.self, forKey: .comparison),
-                compareToStateRef: container.decodeIfPresent(StateVariableRef.self, forKey: .compareToStateRef)
+                compareToStateRef: container.decodeIfPresent(StateVariableRef.self, forKey: .compareToStateRef),
+                dynamicDateValue: container.decodeIfPresent(String.self, forKey: .dynamicDateValue)
             ))
         case .and:
             self = try .and(container.decode([AutomationCondition].self, forKey: .conditions))
@@ -1353,6 +1354,7 @@ indirect enum AutomationCondition: Codable {
             try container.encode(cond.variableRef, forKey: .variableRef)
             try container.encode(cond.comparison, forKey: .comparison)
             try container.encodeIfPresent(cond.compareToStateRef, forKey: .compareToStateRef)
+            try container.encodeIfPresent(cond.dynamicDateValue, forKey: .dynamicDateValue)
         case let .and(conditions):
             try container.encode(ConditionType.and, forKey: .type)
             try container.encode(conditions, forKey: .conditions)

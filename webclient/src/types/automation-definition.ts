@@ -133,6 +133,7 @@ export interface EngineStateConditionDef {
   variableRef: { type: string; name?: string; id?: string };
   comparison: ComparisonOperator;
   compareToStateRef?: { type: string; name?: string; id?: string };
+  dynamicDateValue?: string;
 }
 
 export type AutomationConditionDef =

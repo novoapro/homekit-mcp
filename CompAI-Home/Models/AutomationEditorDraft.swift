@@ -433,7 +433,7 @@ extension ConditionDraft {
     /// Formats a comparison value for human-readable display.
     /// Handles "__now__" and ISO 8601 datetime strings.
     static func formatDisplayValue(_ value: String) -> String {
-        if value == "__now__" { return "Now" }
+        if let desc = StateVariable.describeSentinel(value) { return desc }
         if let date = StateVariable.parseDate(value) {
             let formatter = DateFormatter()
             formatter.dateStyle = .medium
@@ -762,6 +762,11 @@ struct ConditionDraft: Identifiable {
     var stateVariableId: String = ""
     var stateCompareToVariableName: String = ""
     var stateCompareMode: StateCompareMode = .literal
+    // Datetime comparison fields
+    var datetimeCompareMode: DatetimeCompareMode = .now
+    var datetimeRelativeAmount: Double = 24
+    var datetimeRelativeUnit: StateVariableOperation.TimeUnit = .hours
+    var datetimeRelativeDirection: DatetimeRelativeDirection = .ago
 
     enum StateCompareMode: String, CaseIterable, Identifiable {
         case literal
@@ -771,6 +776,32 @@ struct ConditionDraft: Identifiable {
             switch self {
             case .literal: return "Value"
             case .stateRef: return "State Variable"
+            }
+        }
+    }
+
+    enum DatetimeCompareMode: String, CaseIterable, Identifiable {
+        case now
+        case relative
+        case specific
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .now: return "Now"
+            case .relative: return "Relative to now"
+            case .specific: return "Specific date"
+            }
+        }
+    }
+
+    enum DatetimeRelativeDirection: String, CaseIterable, Identifiable {
+        case ago
+        case fromNow
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .ago: return "ago"
+            case .fromNow: return "from now"
             }
         }
     }
@@ -1877,6 +1908,34 @@ extension AutomationDraft {
                     draft.stateCompareToVariableName = name
                 }
             }
+            // Restore datetime comparison mode from dynamicDateValue
+            if let sentinel = c.dynamicDateValue {
+                if sentinel == "__now__" {
+                    draft.datetimeCompareMode = .now
+                    draft.comparisonValue = "__now__"
+                } else if sentinel.hasPrefix("__now") && sentinel.hasSuffix("__") {
+                    draft.datetimeCompareMode = .relative
+                    draft.comparisonValue = sentinel
+                    // Parse the offset: e.g. "-24h" or "+7d"
+                    let inner = String(sentinel.dropFirst(5).dropLast(2))
+                    if let unitChar = inner.last {
+                        switch unitChar {
+                        case "s": draft.datetimeRelativeUnit = .seconds
+                        case "m": draft.datetimeRelativeUnit = .minutes
+                        case "h": draft.datetimeRelativeUnit = .hours
+                        case "d": draft.datetimeRelativeUnit = .days
+                        default: break
+                        }
+                        if let amount = Double(inner.dropLast()) {
+                            draft.datetimeRelativeAmount = abs(amount)
+                            draft.datetimeRelativeDirection = amount < 0 ? .ago : .fromNow
+                        }
+                    }
+                }
+            } else if StateVariable.isDatetimeSentinel(compValue) {
+                // Legacy: comparisonValue itself is the sentinel
+                draft.datetimeCompareMode = compValue == "__now__" ? .now : .relative
+            }
             return .leaf(draft)
         case .not(let inner):
             // NOT always maps to a group with isNegated = true
@@ -2167,7 +2226,8 @@ extension ConditionDraft {
             base = .engineState(EngineStateCondition(
                 variableRef: ref,
                 comparison: toComparison(),
-                compareToStateRef: compareToRef
+                compareToStateRef: compareToRef,
+                dynamicDateValue: buildDatetimeSentinel()
             ))
         }
         return base
@@ -2175,6 +2235,35 @@ extension ConditionDraft {
 
     func toComparison() -> ComparisonOperator {
         comparisonType.toOperator(value: comparisonValue)
+    }
+
+    /// Builds the datetime sentinel string for dynamic resolution at evaluation time.
+    /// Returns nil for non-datetime conditions or when compare mode is stateRef.
+    func buildDatetimeSentinel() -> String? {
+        guard stateCompareMode == .literal else { return nil }
+        // Only produce a sentinel if the comparison value is a datetime sentinel
+        if StateVariable.isDatetimeSentinel(comparisonValue) {
+            return comparisonValue
+        }
+        // If using the datetime compare mode fields, build the sentinel
+        switch datetimeCompareMode {
+        case .now:
+            return "__now__"
+        case .relative:
+            let sign = datetimeRelativeDirection == .ago ? "-" : "+"
+            let unitChar: String
+            switch datetimeRelativeUnit {
+            case .seconds: unitChar = "s"
+            case .minutes: unitChar = "m"
+            case .hours: unitChar = "h"
+            case .days: unitChar = "d"
+            }
+            let amountStr = datetimeRelativeAmount.truncatingRemainder(dividingBy: 1) == 0
+                ? String(Int(datetimeRelativeAmount)) : String(datetimeRelativeAmount)
+            return "__now\(sign)\(amountStr)\(unitChar)__"
+        case .specific:
+            return nil // Specific dates use the static comparison value
+        }
     }
 }
 

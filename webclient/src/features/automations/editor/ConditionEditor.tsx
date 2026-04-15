@@ -394,20 +394,58 @@ export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChang
                             <span style={{ fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{(compVal === true || compVal === 'true') ? 'true' : 'false'}</span>
                           </>
                         )}
-                        {selectedType === 'datetime' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-                            <select className="editor-select" value={compVal === '__now__' ? '__now__' : 'custom'}
-                              onChange={(e) => patch({ comparison: { type: compType, value: e.target.value === '__now__' ? '__now__' : new Date().toISOString() } as unknown as typeof draft.comparison })}>
-                              <option value="__now__">Now (current time)</option>
-                              <option value="custom">Specific date</option>
-                            </select>
-                            {compVal !== '__now__' && (
-                              <input className="editor-input" type="datetime-local"
-                                value={(() => { try { return new Date(String(compVal)).toISOString().slice(0, 16); } catch { return ''; } })()}
-                                onChange={(e) => patch({ comparison: { type: compType, value: new Date(e.target.value).toISOString() } as unknown as typeof draft.comparison })} />
-                            )}
-                          </div>
-                        )}
+                        {selectedType === 'datetime' && (() => {
+                          const cv = String(compVal ?? '');
+                          const isNow = cv === '__now__';
+                          const isRelative = !isNow && cv.startsWith('__now') && cv.endsWith('__');
+                          const dtMode = isNow ? 'now' : isRelative ? 'relative' : 'specific';
+                          // Parse relative offset for UI
+                          let relAmount = 24, relUnit = 'h', relSign = '-';
+                          if (isRelative) {
+                            const inner = cv.slice(5, -2); // e.g. "-24h"
+                            const m = inner.match(/^([+-]?)(\d+(?:\.\d+)?)([smhd])$/);
+                            if (m) { relSign = m[1] || '+'; relAmount = parseFloat(m[2]!); relUnit = m[3]!; }
+                          }
+                          const buildSentinel = (sign: string, amt: number, unit: string) => `__now${sign}${amt}${unit}__`;
+                          const patchDt = (val: unknown) => patch({ comparison: { type: compType, value: val } as unknown as typeof draft.comparison, dynamicDateValue: typeof val === 'string' && (val === '__now__' || (val.startsWith('__now') && val.endsWith('__'))) ? val : undefined });
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                              <select className="editor-select" value={dtMode}
+                                onChange={(e) => {
+                                  if (e.target.value === 'now') patchDt('__now__');
+                                  else if (e.target.value === 'relative') patchDt(buildSentinel('-', 24, 'h'));
+                                  else patchDt(new Date().toISOString());
+                                }}>
+                                <option value="now">Now (current time)</option>
+                                <option value="relative">Relative to now</option>
+                                <option value="specific">Specific date</option>
+                              </select>
+                              {dtMode === 'relative' && (
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                  <input className="editor-input" type="number" min={0} step="any"
+                                    style={{ width: 70 }} value={relAmount}
+                                    onChange={(e) => patchDt(buildSentinel(relSign, parseFloat(e.target.value) || 0, relUnit))} />
+                                  <select className="editor-select" style={{ flex: 1 }} value={relUnit}
+                                    onChange={(e) => patchDt(buildSentinel(relSign, relAmount, e.target.value))}>
+                                    <option value="m">Minutes</option>
+                                    <option value="h">Hours</option>
+                                    <option value="d">Days</option>
+                                  </select>
+                                  <select className="editor-select" style={{ flex: 1 }} value={relSign === '-' ? 'ago' : 'from_now'}
+                                    onChange={(e) => patchDt(buildSentinel(e.target.value === 'ago' ? '-' : '+', relAmount, relUnit))}>
+                                    <option value="ago">ago</option>
+                                    <option value="from_now">from now</option>
+                                  </select>
+                                </div>
+                              )}
+                              {dtMode === 'specific' && (
+                                <input className="editor-input" type="datetime-local"
+                                  value={(() => { try { return new Date(cv).toISOString().slice(0, 16); } catch { return ''; } })()}
+                                  onChange={(e) => patchDt(new Date(e.target.value).toISOString())} />
+                              )}
+                            </div>
+                          );
+                        })()}
                         {(selectedType === 'string' || (!selectedType && selectedType !== 'datetime')) && (
                           <input className="editor-input" style={{ flex: 1 }} value={String(compVal)}
                             onChange={(e) => patch({ comparison: { type: compType, value: e.target.value } as unknown as typeof draft.comparison })} />
