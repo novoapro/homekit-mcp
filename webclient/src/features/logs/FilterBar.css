@@ -137,8 +137,6 @@
 }
 
 .date-input {
-  padding: 5px 8px;
-  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background: var(--bg-chip-inactive);
   color: var(--text-primary);
