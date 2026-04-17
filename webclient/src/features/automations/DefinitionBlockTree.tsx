@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Icon } from '@/components/Icon';
 import { useDeviceRegistry } from '@/contexts/DeviceRegistryContext';
 import type { AutomationBlockDef } from '@/types/automation-definition';
-import { formatBlockType, blockTypeIcon, isBlockingType, formatDurationShort, formatConditionSummary } from '@/utils/automation-definition-utils';
+import { formatBlockType, blockTypeIcon, isBlockingType, formatDurationLong, formatConditionSummary, formatCharValue } from '@/utils/automation-definition-utils';
 import './tree-common.css';
 
 const DEPTH_COLORS = [
@@ -54,7 +54,11 @@ export function DefinitionBlockTree({ block, depth = 0, index, isLast = true, is
     switch (block.type) {
       case 'controlDevice': {
         const device = block.deviceId ? registry.lookupDevice(block.deviceId) : undefined;
-        return device?.name || 'Control Device';
+        const devName = device?.name;
+        if (!devName) return 'Control Device';
+        if (block.value === true) return `Turn on ${devName}`;
+        if (block.value === false) return `Turn off ${devName}`;
+        return devName;
       }
       case 'timedControl': {
         return 'Timed Control';
@@ -86,10 +90,14 @@ export function DefinitionBlockTree({ block, depth = 0, index, isLast = true, is
           : undefined;
         const parts: string[] = [];
         if (device?.room) parts.push(device.room);
+        // For on/off blocks, the displayName already says "Turn on/off X" — only add room.
+        if (typeof block.value === 'boolean') {
+          return parts.join(' · ') || undefined;
+        }
         if (char) {
           const valDisplay = block.valueRef?.name
             ? `${block.valueRef.name} (Global)`
-            : String(block.value ?? '?');
+            : formatCharValue(block.value, char);
           parts.push(`${char.name} → ${valDisplay}`);
         }
         return parts.join(' · ') || undefined;
@@ -99,13 +107,13 @@ export function DefinitionBlockTree({ block, depth = 0, index, isLast = true, is
         const secs = block.durationRef?.name
           ? `${block.durationRef.name} (Global)`
           : block.durationSeconds != null
-            ? formatDurationShort(block.durationSeconds)
+            ? formatDurationLong(block.durationSeconds)
             : undefined;
         if (!secs) return `${count} change(s)`;
         return `${count} change(s) · hold ${secs}`;
       }
       case 'delay':
-        return block.seconds ? formatDurationShort(block.seconds) : undefined;
+        return block.seconds ? formatDurationLong(block.seconds) : undefined;
       case 'webhook':
         return block.url ? `${block.method || 'POST'} ${block.url}` : undefined;
       case 'log':

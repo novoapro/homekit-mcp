@@ -12,6 +12,7 @@ import type {
   AutomationBlockDraft,
 } from './automation-editor-types';
 import { newUUID } from './automation-editor-types';
+import { formatDurationLong } from '@/utils/automation-definition-utils';
 
 // --- Device registry interface (matches useDeviceRegistry) ---
 
@@ -807,14 +808,17 @@ export function blockAutoName(b: AutomationBlockDraft, registry: RegistryLike, s
         const refLabel = stateNames?.[b.valueRef.name] || b.valueRef.name;
         return `Set ${devName} ${charName} = ${refLabel} (Global)`;
       }
-      const valStr = b.value !== undefined ? ` = ${formatAutoVal(b.value)}` : '';
-      return `Set ${devName} ${charName}${valStr}`;
+      // Boolean → "Turn on X" / "Turn off X"
+      if (b.value === true) return `Turn on ${devName}`;
+      if (b.value === false) return `Turn off ${devName}`;
+      const valStr = b.value !== undefined ? formatAutoVal(b.value) : '';
+      return valStr ? `Set ${devName} ${charName} to ${valStr}` : `Set ${devName} ${charName}`;
     }
     case 'timedControl': {
       const count = b.changes?.length ?? 0;
       const secs = b.durationSource === 'global' && b.durationRef?.name
-        ? `${stateNames?.[b.durationRef.name] || b.durationRef.name}s`
-        : `${b.durationSeconds ?? 5}s`;
+        ? `${stateNames?.[b.durationRef.name] || b.durationRef.name}`
+        : formatDurationLong(b.durationSeconds ?? 5);
       if (count === 0) return `Timed Control (${secs})`;
       if (count === 1 && b.changes?.[0]?.deviceId) {
         const change = b.changes[0];

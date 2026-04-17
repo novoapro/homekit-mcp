@@ -223,3 +223,38 @@ export function formatDurationShort(seconds: number): string {
   }
   return `${seconds} second(s)`;
 }
+
+/// Formats a characteristic value for display, honoring units (%, °C, K, lux, °) and bool → On/Off.
+/// When `char` is unknown, falls back to String(val) with "on"/"off" for booleans.
+export function formatCharValue(
+  val: unknown,
+  char?: { name?: string; format?: string; units?: string },
+): string {
+  if (val === undefined || val === null) return '—';
+  if (typeof val === 'boolean') return val ? 'On' : 'Off';
+  // Unit hints from the server
+  const u = (char?.units || '').toLowerCase();
+  if (typeof val === 'number') {
+    if (u === 'percentage' || u === '%') return `${val}%`;
+    if (u === 'celsius' || u === '°c') return `${val}°C`;
+    if (u === 'fahrenheit' || u === '°f') return `${val}°F`;
+    if (u === 'kelvin' || u === 'k') return `${val}K`;
+    if (u === 'lux') return `${val} lux`;
+    if (u === 'arcdegrees' || u === '°') return `${val}°`;
+    return String(val);
+  }
+  return String(val);
+}
+
+/// Compact human duration, e.g. "30s", "1m 30s", "2m", "1h 5m".
+export function formatDurationLong(seconds: number): string {
+  if (seconds < 60) {
+    return seconds % 1 === 0 ? `${seconds}s` : `${seconds.toFixed(1)}s`;
+  }
+  const total = Math.floor(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}

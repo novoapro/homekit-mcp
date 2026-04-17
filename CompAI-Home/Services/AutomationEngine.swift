@@ -263,8 +263,18 @@ actor AutomationEngine: AutomationEngineProtocol {
             }
         }
 
+        let manualEvent = TriggerEvent(
+            deviceId: nil,
+            deviceName: nil,
+            serviceName: nil,
+            characteristicName: nil,
+            roomName: nil,
+            oldValue: nil,
+            newValue: nil,
+            triggerDescription: "Manually triggered"
+        )
         let task = Task { [weak self] () -> AutomationExecutionLog in
-            let result = await self?.executeAutomation(automation, change: nil) ?? AutomationExecutionLog(automationId: id, automationName: automation.name, triggerEvent: nil)
+            let result = await self?.executeAutomation(automation, change: nil, triggerEvent: manualEvent) ?? AutomationExecutionLog(automationId: id, automationName: automation.name, triggerEvent: manualEvent)
             if !Task.isCancelled {
                 await self?.removeRunning(id)
             }
@@ -864,32 +874,46 @@ actor AutomationEngine: AutomationEngineProtocol {
                     try await self.executeControlDevice(a, automationId: context.automation.id, automationName: context.automation.name)
                     let deviceName = await self.resolveDeviceName(a.deviceId)
                     let resolvedCharType = self.registry?.readCharacteristicType(forStableId: a.characteristicId) ?? a.characteristicId
-                    let charName = CharacteristicTypes.displayName(for: resolvedCharType)
                     let svcName = await self.resolveServiceDisplayName(deviceId: a.deviceId, serviceId: a.serviceId)
-                    let svcSuffix = svcName.map { " (\($0))" } ?? ""
-                    let valueDesc: String
+                    let fullDeviceName = svcName.map { "\(deviceName) (\($0))" } ?? deviceName
+                    // Resolve effective value (global ref with fallback) for display
+                    let effectiveValue: Any
+                    var globalNote: String = ""
                     if let ref = a.valueRef {
                         if let variable = await self.stateVariableStorage.resolve(ref) {
-                            valueDesc = "\(variable.value.value) (from global value '\(variable.name)')"
+                            effectiveValue = variable.value.value
+                            globalNote = " (from global value '\(variable.name)')"
                         } else {
-                            valueDesc = "\(a.value.value) (global value \(ref.displayDescription) not found, used default)"
+                            effectiveValue = a.value.value
+                            globalNote = " (global value \(ref.displayDescription) not found, used default)"
                         }
                     } else {
-                        valueDesc = "\(a.value.value)"
+                        effectiveValue = a.value.value
                     }
-                    result.detail = "Set \(charName) to \(valueDesc) on \(deviceName)\(svcSuffix)"
+                    let humanized = BlockHumanizer.describeControlDeviceChange(
+                        deviceName: fullDeviceName,
+                        characteristicType: resolvedCharType,
+                        value: effectiveValue
+                    )
+                    result.detail = humanized + globalNote
+                    // Override auto-title with humanized sentence when the user didn't set a custom name.
+                    if result.blockName == nil {
+                        result.blockName = humanized
+                    }
                 case let .timedControl(a):
-                    let finalDetail = try await self.executeTimedControl(
+                    let (finalDetail, nested) = try await self.executeTimedControl(
                         a,
                         automationId: context.automation.id,
                         automationName: context.automation.name,
-                        reportProgress: { progressDetail in
+                        reportProgress: { progressDetail, partialNested in
                             var interim = result
                             interim.detail = progressDetail
+                            interim.nestedResults = partialNested
                             await onUpdate(interim)
                         }
                     )
                     result.detail = finalDetail
+                    result.nestedResults = nested
                 case let .webhook(a):
                     try await self.executeWebhook(a)
                     result.detail = "\(a.method) \(a.url)"
@@ -973,16 +997,17 @@ actor AutomationEngine: AutomationEngineProtocol {
 
     /// Applies a list of characteristic changes, holds them for the configured duration, then reverts each
     /// change to the value it had immediately before the block ran (in the same forward order).
-    /// Rollback runs even if the hold is cancelled or throws. Returns a human-readable result detail.
+    /// Rollback runs even if the hold is cancelled or throws. Returns a human-readable result detail
+    /// plus a list of per-change nested BlockResults for display in the log tree.
     private func executeTimedControl(
         _ action: TimedControlAction,
         automationId: UUID,
         automationName: String,
-        reportProgress: @escaping (String) async -> Void
-    ) async throws -> String {
+        reportProgress: @escaping (String, [BlockResult]) async -> Void
+    ) async throws -> (String, [BlockResult]) {
         let totalCount = action.changes.count
         guard totalCount > 0 else {
-            return "Timed control has no changes configured"
+            return ("Timed control has no changes configured", [])
         }
 
         // Resolve hold duration (prefer global ref, fall back to local durationSeconds)
@@ -994,31 +1019,54 @@ actor AutomationEngine: AutomationEngineProtocol {
                 duration = Double(i)
             }
         }
+        let durationStr = BlockHumanizer.formatDurationLong(duration)
 
         struct AppliedChange {
             let change: TimedDeviceChange
             let resolvedType: String
             let originalValue: Any
+            let nestedIndex: Int
         }
 
+        var nested: [BlockResult] = []
         var applied: [AppliedChange] = []
 
-        // Capture originals and apply forward
-        for change in action.changes {
+        // Phase 1 — capture originals and apply forward; build one nested BlockResult per change
+        for (i, change) in action.changes.enumerated() {
             let resolvedType = registry?.readCharacteristicType(forStableId: change.characteristicId)
                 ?? CharacteristicTypes.characteristicType(forName: change.characteristicId)
                 ?? change.characteristicId
 
+            let deviceName = await resolveDeviceName(change.deviceId)
+            let svcName = await resolveServiceDisplayName(deviceId: change.deviceId, serviceId: change.serviceId)
+            let fullDeviceName = svcName.map { "\(deviceName) (\($0))" } ?? deviceName
+            let startedAt = Date()
+
             let device: DeviceModel? = await MainActor.run { homeKitManager.getDeviceState(id: change.deviceId) }
             guard let device else {
                 await logOrphan(automationId: automationId, automationName: automationName, location: "timedControl change for device \(change.deviceId)")
+                nested.append(BlockResult(
+                    blockIndex: i, blockKind: "action", blockType: "controlDevice",
+                    blockName: "Unknown device",
+                    status: .failure, startedAt: startedAt, completedAt: Date(),
+                    errorMessage: "Device not found: \(change.deviceId)"
+                ))
+                await reportProgress("Applying \(i + 1)/\(totalCount)…", nested)
                 continue
             }
+
             let resolvedServiceId = change.serviceId.map { registry?.readHomeKitServiceId($0) ?? $0 }
             let targetServices = resolvedServiceId != nil ? device.services.filter({ $0.id == resolvedServiceId }) : device.services
             guard let characteristic = targetServices.flatMap(\.characteristics).first(where: { $0.type == resolvedType }),
                   let currentValue = characteristic.value else {
                 AppLogger.automation.warning("[\(automationName)] timedControl: could not read current value for \(change.deviceId):\(resolvedType), skipping")
+                nested.append(BlockResult(
+                    blockIndex: i, blockKind: "action", blockType: "controlDevice",
+                    blockName: "\(fullDeviceName) — \(CharacteristicTypes.displayName(for: resolvedType))",
+                    status: .failure, startedAt: startedAt, completedAt: Date(),
+                    errorMessage: "Characteristic unavailable"
+                ))
+                await reportProgress("Applying \(i + 1)/\(totalCount)…", nested)
                 continue
             }
 
@@ -1030,11 +1078,25 @@ actor AutomationEngine: AutomationEngineProtocol {
                 resolvedValue = change.value.value
             }
 
+            let humanizedName = BlockHumanizer.describeControlDeviceChange(
+                deviceName: fullDeviceName,
+                characteristicType: resolvedType,
+                value: resolvedValue
+            )
+            let wasStr = CharacteristicTypes.formatValue(currentValue.value, characteristicType: resolvedType)
+
             // Validate against characteristic metadata
             do {
                 try CharacteristicValidator.validate(value: resolvedValue, against: characteristic)
             } catch {
                 AppLogger.automation.warning("[\(automationName)] timedControl: validation failed for \(change.deviceId):\(resolvedType) — \(error.localizedDescription)")
+                nested.append(BlockResult(
+                    blockIndex: i, blockKind: "action", blockType: "controlDevice",
+                    blockName: humanizedName,
+                    status: .failure, startedAt: startedAt, completedAt: Date(),
+                    detail: "was \(wasStr)", errorMessage: "Validation failed: \(error.localizedDescription)"
+                ))
+                await reportProgress("Applying \(i + 1)/\(totalCount)…", nested)
                 continue
             }
 
@@ -1055,20 +1117,33 @@ actor AutomationEngine: AutomationEngineProtocol {
                     value: effectiveValue,
                     serviceId: change.serviceId
                 )
-                applied.append(AppliedChange(change: change, resolvedType: resolvedType, originalValue: currentValue.value))
+                let idx = nested.count
+                nested.append(BlockResult(
+                    blockIndex: i, blockKind: "action", blockType: "controlDevice",
+                    blockName: humanizedName,
+                    status: .running, startedAt: startedAt, completedAt: nil,
+                    detail: "was \(wasStr) · holding \(durationStr)"
+                ))
+                applied.append(AppliedChange(change: change, resolvedType: resolvedType, originalValue: currentValue.value, nestedIndex: idx))
             } catch {
                 AppLogger.automation.warning("[\(automationName)] timedControl: apply failed for \(change.deviceId):\(resolvedType) — \(error.localizedDescription)")
+                nested.append(BlockResult(
+                    blockIndex: i, blockKind: "action", blockType: "controlDevice",
+                    blockName: humanizedName,
+                    status: .failure, startedAt: startedAt, completedAt: Date(),
+                    detail: "was \(wasStr)", errorMessage: error.localizedDescription
+                ))
             }
+            await reportProgress("Applying \(i + 1)/\(totalCount)…", nested)
         }
 
         if applied.isEmpty {
             throw AutomationEngineError.stateVariableError("timedControl: all \(totalCount) change(s) failed to apply")
         }
 
-        let durationStr = formatDuration(duration)
-        await reportProgress("Holding \(applied.count) change(s) for \(durationStr)…")
+        await reportProgress("Holding \(applied.count) change(s) for \(durationStr)…", nested)
 
-        // Sleep; capture cancellation so we can still roll back
+        // Phase 2 — sleep; capture cancellation so rollback still runs
         var sleepError: Error?
         do {
             try await Task.sleep(nanoseconds: UInt64(max(0, duration) * 1_000_000_000))
@@ -1076,9 +1151,13 @@ actor AutomationEngine: AutomationEngineProtocol {
             sleepError = error
         }
 
-        // Rollback in forward order
+        // Phase 3 — rollback in forward order; amend each nested result with revert outcome
         var rollbackFailures = 0
         for item in applied {
+            let revertTarget = BlockHumanizer.describeRevertTarget(characteristicType: item.resolvedType, originalValue: item.originalValue)
+            let idx = item.nestedIndex
+            var r = nested[idx]
+            let wasStr = (r.detail?.components(separatedBy: " · ").first ?? "")
             do {
                 try await homeKitManager.updateDevice(
                     id: item.change.deviceId,
@@ -1086,10 +1165,18 @@ actor AutomationEngine: AutomationEngineProtocol {
                     value: item.originalValue,
                     serviceId: item.change.serviceId
                 )
+                r.status = .success
+                r.detail = "\(wasStr) · held \(durationStr) · reverted to \(revertTarget)"
+                r.completedAt = Date()
             } catch {
                 rollbackFailures += 1
+                r.status = .failure
+                r.errorMessage = "Rollback failed: \(error.localizedDescription)"
+                r.detail = "\(wasStr) · held \(durationStr) · rollback to \(revertTarget) failed"
+                r.completedAt = Date()
                 AppLogger.automation.warning("[\(automationName)] timedControl: rollback failed for \(item.change.deviceId):\(item.resolvedType) — \(error.localizedDescription)")
             }
+            nested[idx] = r
         }
 
         if let error = sleepError { throw error }
@@ -1103,14 +1190,7 @@ actor AutomationEngine: AutomationEngineProtocol {
         if rollbackFailures > 0 {
             detail += " (rollback issues: \(rollbackFailures))"
         }
-        return detail
-    }
-
-    private func formatDuration(_ seconds: Double) -> String {
-        if seconds.truncatingRemainder(dividingBy: 1) == 0 {
-            return "\(Int(seconds))s"
-        }
-        return String(format: "%.1fs", seconds)
+        return (detail, nested)
     }
 
     /// Validates that a URL does not point to a private/internal IP address (SSRF protection).
@@ -1414,29 +1494,31 @@ actor AutomationEngine: AutomationEngineProtocol {
                 } else {
                     delaySecs = block.seconds
                 }
-                result.detail = "Waiting \(delaySecs)s..."
+                let delayStr = BlockHumanizer.formatDurationLong(delaySecs)
+                result.detail = "Waiting \(delayStr)…"
                 await onUpdate(result)
 
                 try await Task.sleep(nanoseconds: UInt64(max(0, delaySecs) * 1_000_000_000))
-                result.detail = "Delayed \(delaySecs)s"
+                result.detail = "Waited \(delayStr)"
                 result.status = .success
 
             case let .waitForState(block):
                 let waitDesc = waitForStateDescription(block)
-                result.detail = "Waiting for \(waitDesc)..."
+                let timeoutStr = BlockHumanizer.formatDurationLong(block.timeoutSeconds)
+                result.detail = "Waiting for \(waitDesc)…"
                 await onUpdate(result)
 
                 let matched = try await waitForState(block, automationId: context.automation.id, automationName: context.automation.name) { elapsedSeconds in
                     // Update parent with elapsed time while waiting
-                    result.detail = "Waiting for \(waitDesc)... (\(String(format: "%.1f", elapsedSeconds))s)"
+                    result.detail = "Waiting for \(waitDesc)… (\(BlockHumanizer.formatDurationLong(elapsedSeconds)) elapsed)"
                     await onUpdate(result)
                 }
                 result.detail = matched
-                    ? "Waited for \(waitDesc) — condition met"
-                    : "Waited for \(waitDesc) — timed out after \(block.timeoutSeconds)s"
+                    ? "\(waitDesc) — condition met"
+                    : "\(waitDesc) — timed out after \(timeoutStr)"
                 result.status = matched ? .success : .failure
                 if !matched {
-                    result.errorMessage = "Timed out after \(block.timeoutSeconds)s"
+                    result.errorMessage = "Timed out after \(timeoutStr)"
                 }
 
             case let .conditional(block):
@@ -1649,7 +1731,14 @@ actor AutomationEngine: AutomationEngineProtocol {
 
             case let .stop(block):
                 let msgSuffix = block.message.flatMap { $0.isEmpty ? nil : " — \($0)" } ?? ""
-                result.detail = "Returning: \(block.outcome.rawValue)\(msgSuffix)"
+                let outcomeLabel: String = {
+                    switch block.outcome {
+                    case .success: return "success"
+                    case .error: return "error"
+                    case .cancelled: return "cancelled"
+                    }
+                }()
+                result.detail = "Stopped with \(outcomeLabel)\(msgSuffix)"
                 result.status = .success
                 result.completedAt = Date()
                 await onUpdate(result)

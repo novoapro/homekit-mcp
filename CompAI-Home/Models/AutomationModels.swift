@@ -1815,7 +1815,7 @@ struct BlockResult: Identifiable, Codable {
     let blockIndex: Int
     let blockKind: String
     let blockType: String
-    let blockName: String?
+    var blockName: String?
     var status: ExecutionStatus
     let startedAt: Date
     var completedAt: Date?
