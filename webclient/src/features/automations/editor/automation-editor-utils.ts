@@ -262,6 +262,19 @@ function blockDraftToPayload(b: AutomationBlockDraft, idMap?: Map<string, string
         deviceId: b.deviceId, serviceId: b.serviceId, characteristicId: b.characteristicId, value: b.value,
         ...(b.valueSource === 'global' && b.valueRef && { valueRef: b.valueRef }),
       };
+    case 'timedControl':
+      return {
+        ...shared,
+        durationSeconds: b.durationSeconds ?? 5,
+        ...(b.durationSource === 'global' && b.durationRef && { durationRef: b.durationRef }),
+        changes: (b.changes ?? []).map((c) => ({
+          deviceId: c.deviceId ?? '',
+          ...(c.serviceId && { serviceId: c.serviceId }),
+          characteristicId: c.characteristicId ?? '',
+          value: c.value,
+          ...(c.valueSource === 'global' && c.valueRef && { valueRef: c.valueRef }),
+        })),
+      };
     case 'runScene':
       return { ...shared, sceneId: b.sceneId };
     case 'webhook':
@@ -489,6 +502,25 @@ function blockDefToDraft(b: AutomationBlockDef, blockIdMap?: Map<string, string>
       } else {
         base.valueSource = 'local';
       }
+      break;
+    case 'timedControl':
+      base.durationSeconds = b.durationSeconds ?? 5;
+      if (b.durationRef) {
+        base.durationRef = b.durationRef;
+        base.durationSource = 'global';
+      } else {
+        base.durationSource = 'local';
+      }
+      base.changes = (b.changes ?? []).map((c) => ({
+        _draftId: newUUID(),
+        deviceId: c.deviceId,
+        serviceId: c.serviceId,
+        characteristicId: c.characteristicId,
+        value: c.value,
+        ...(c.valueRef
+          ? { valueRef: c.valueRef, valueSource: 'global' as const }
+          : { valueSource: 'local' as const }),
+      }));
       break;
     case 'runScene':
       base.sceneId = b.sceneId;
@@ -777,6 +809,20 @@ export function blockAutoName(b: AutomationBlockDraft, registry: RegistryLike, s
       }
       const valStr = b.value !== undefined ? ` = ${formatAutoVal(b.value)}` : '';
       return `Set ${devName} ${charName}${valStr}`;
+    }
+    case 'timedControl': {
+      const count = b.changes?.length ?? 0;
+      const secs = b.durationSource === 'global' && b.durationRef?.name
+        ? `${stateNames?.[b.durationRef.name] || b.durationRef.name}s`
+        : `${b.durationSeconds ?? 5}s`;
+      if (count === 0) return `Timed Control (${secs})`;
+      if (count === 1 && b.changes?.[0]?.deviceId) {
+        const change = b.changes[0];
+        const device = change.deviceId ? registry.lookupDevice(change.deviceId) : undefined;
+        const devName = device?.name || change.deviceId || 'device';
+        return `Hold ${devName} for ${secs}`;
+      }
+      return `Hold ${count} changes for ${secs}`;
     }
     case 'runScene': {
       if (!b.sceneId) return 'Run Scene';

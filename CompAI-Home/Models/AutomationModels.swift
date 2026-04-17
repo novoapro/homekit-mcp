@@ -179,6 +179,7 @@ indirect enum AutomationBlock: Codable {
 
 enum AutomationAction: Codable {
     case controlDevice(ControlDeviceAction)
+    case timedControl(TimedControlAction)
     case webhook(WebhookActionConfig)
     case log(LogAction)
     case runScene(RunSceneAction)
@@ -186,6 +187,7 @@ enum AutomationAction: Codable {
 
     private enum ActionType: String, Codable {
         case controlDevice
+        case timedControl
         case webhook
         case log
         case runScene
@@ -200,6 +202,7 @@ enum AutomationAction: Codable {
         case message
         case sceneId, sceneName
         case operation
+        case durationSeconds, durationRef, changes
     }
 
     init(from decoder: Decoder) throws {
@@ -217,6 +220,13 @@ enum AutomationAction: Codable {
                 characteristicId: charId,
                 value: container.decode(AnyCodable.self, forKey: .value),
                 valueRef: container.decodeIfPresent(StateVariableRef.self, forKey: .valueRef),
+                name: name
+            ))
+        case .timedControl:
+            self = try .timedControl(TimedControlAction(
+                durationSeconds: container.decode(Double.self, forKey: .durationSeconds),
+                durationRef: container.decodeIfPresent(StateVariableRef.self, forKey: .durationRef),
+                changes: container.decode([TimedDeviceChange].self, forKey: .changes),
                 name: name
             ))
         case .webhook:
@@ -259,6 +269,12 @@ enum AutomationAction: Codable {
             try container.encode(action.characteristicId, forKey: .characteristicId)
             try container.encode(action.value, forKey: .value)
             try container.encodeIfPresent(action.valueRef, forKey: .valueRef)
+        case let .timedControl(action):
+            try container.encode(ActionType.timedControl, forKey: .type)
+            try container.encodeIfPresent(action.name, forKey: .name)
+            try container.encode(action.durationSeconds, forKey: .durationSeconds)
+            try container.encodeIfPresent(action.durationRef, forKey: .durationRef)
+            try container.encode(action.changes, forKey: .changes)
         case let .webhook(action):
             try container.encode(ActionType.webhook, forKey: .type)
             try container.encodeIfPresent(action.name, forKey: .name)
@@ -285,6 +301,7 @@ enum AutomationAction: Codable {
     var displayType: String {
         switch self {
         case .controlDevice: return "controlDevice"
+        case .timedControl: return "timedControl"
         case .webhook: return "webhook"
         case .log: return "log"
         case .runScene: return "runScene"
@@ -339,6 +356,49 @@ struct LogAction {
 
     init(message: String, name: String? = nil) {
         self.message = message
+        self.name = name
+    }
+}
+
+/// A single device/characteristic assignment that is part of a TimedControlAction.
+/// Unlike ControlDeviceAction this has no name and no confirmation fields —
+/// it is a pure value change that will be applied, held, then reverted.
+struct TimedDeviceChange: Codable {
+    let deviceId: String
+    let deviceName: String?
+    let roomName: String?
+    let serviceId: String?
+    let characteristicId: String
+    /// Local value, or fallback when `valueRef` is set but cannot be resolved.
+    let value: AnyCodable
+    /// Optional Global Value reference resolved at runtime, like ControlDeviceAction.
+    let valueRef: StateVariableRef?
+
+    init(deviceId: String, deviceName: String? = nil, roomName: String? = nil, serviceId: String? = nil, characteristicId: String, value: AnyCodable, valueRef: StateVariableRef? = nil) {
+        self.deviceId = deviceId
+        self.deviceName = deviceName
+        self.roomName = roomName
+        self.serviceId = serviceId
+        self.characteristicId = characteristicId
+        self.value = value
+        self.valueRef = valueRef
+    }
+}
+
+/// Applies one or more device characteristic changes, holds them for `durationSeconds`,
+/// then reverts each change to the value it had immediately before the block ran.
+/// Reversions run in the same forward order the changes were declared in.
+struct TimedControlAction {
+    let durationSeconds: Double
+    /// Optional Global Value reference; resolved at runtime, falls back to `durationSeconds`.
+    let durationRef: StateVariableRef?
+    let changes: [TimedDeviceChange]
+    let name: String?
+
+    init(durationSeconds: Double, durationRef: StateVariableRef? = nil, changes: [TimedDeviceChange], name: String? = nil) {
+        self.durationSeconds = durationSeconds
+        self.durationRef = durationRef
+        self.changes = changes
         self.name = name
     }
 }

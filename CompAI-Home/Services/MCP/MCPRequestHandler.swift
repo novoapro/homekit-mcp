@@ -619,6 +619,19 @@ final class MCPRequestHandler: Sendable {
                         ] as [String: Any]
                     ],
                     [
+                        "block": "action", "type": "timedControl",
+                        "description": "Sets one or more device characteristics for a configurable duration, then automatically reverts each change to the value it had before the block ran. Reversions run in the same forward order as the declared changes.",
+                        "fields": [
+                            "durationSeconds": ["type": "number", "required": true,
+                                "description": "Hold duration in seconds. Used as the fallback when durationRef is set."],
+                            "durationRef": ["type": "object", "required": false,
+                                "description": "Optional. {\"type\":\"byName\",\"name\":\"hold_seconds\"}. Global value must be of type number. Falls back to durationSeconds if unresolved."],
+                            "changes": ["type": "array", "required": true,
+                                "description": "Ordered list of characteristic changes. Each change object has the same fields as a controlDevice block (deviceId, deviceName, roomName, serviceId?, characteristicId, value, valueRef?). No inner block name."],
+                            "name": ["type": "string", "required": false]
+                        ] as [String: Any]
+                    ],
+                    [
                         "block": "action", "type": "runScene",
                         "fields": [
                             "sceneId": ["type": "string", "required": true],
@@ -1461,6 +1474,16 @@ final class MCPRequestHandler: Sendable {
                         deviceMap: deviceMap
                     ) {
                         return error
+                    }
+                } else if case .timedControl(let tc) = action {
+                    for change in tc.changes {
+                        if let error = checkCharacteristicPermission(
+                            deviceId: change.deviceId, characteristicId: change.characteristicId,
+                            requiredPermission: "write", context: "Timed Control block",
+                            deviceMap: deviceMap
+                        ) {
+                            return error
+                        }
                     }
                 }
             case .flowControl(let fc, _):

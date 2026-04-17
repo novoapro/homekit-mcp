@@ -95,6 +95,11 @@ export interface AutomationBlockDraft {
   outcome?: string;
   targetAutomationId?: string;
   executionMode?: string;
+  // timedControl
+  durationSeconds?: number;
+  durationRef?: { type: string; name?: string; id?: string };
+  durationSource?: 'local' | 'global';
+  changes?: TimedChangeDraft[];
   // stateVariable
   operation?: {
     operation: string;
@@ -113,6 +118,16 @@ export interface AutomationBlockDraft {
     characteristicId?: string;
     serviceId?: string;
   };
+}
+
+export interface TimedChangeDraft {
+  _draftId: string;
+  deviceId?: string;
+  serviceId?: string;
+  characteristicId?: string;
+  value?: unknown;
+  valueRef?: { type: string; name?: string; id?: string };
+  valueSource?: 'local' | 'global';
 }
 
 export interface AutomationDraft {

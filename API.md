@@ -1625,6 +1625,37 @@ All blocks accept an optional `name` field.
 - **Local** (default): Uses the `value` field directly, as a hardcoded value in the workflow.
 - **Global**: When `valueRef` is set, the value is resolved at runtime from the referenced global value. The `value` field serves as a default fallback if the global value is deleted or unavailable.
 
+##### timedControl
+
+Applies one or more device characteristic changes, holds them for a configurable duration, then automatically reverts each change to the value it had immediately before the block ran. Reversions run in the **same forward order** the changes were declared. Rollback runs even if the block is cancelled or the sleep throws.
+
+This is equivalent to declaring `controlDevice` → `delay` → `controlDevice` (with the reverse value), but collapsed into a single cohesive block. For more flexibility (different timings per change, conditional reverts, etc.), use separate blocks instead.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `type` | `"timedControl"` | yes | |
+| `durationSeconds` | number | yes | Hold duration in seconds. Also the fallback when `durationRef` is unresolved. |
+| `durationRef` | StateVariableRef | no | When set, resolved at runtime from a number-typed global value. Falls back to `durationSeconds` if unresolved. |
+| `changes` | TimedDeviceChange[] | yes | Ordered list of characteristic changes to apply. |
+
+**TimedDeviceChange** fields:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `deviceId` | string | yes | Stable device ID |
+| `deviceName` | string | no | For migration |
+| `roomName` | string | no | For migration |
+| `serviceId` | string | no | Target specific service |
+| `characteristicId` | string | yes | Stable characteristic ID |
+| `value` | any | yes | Value to set. Also the default fallback when `valueRef` is set. |
+| `valueRef` | StateVariableRef | no | Optional global value reference. Falls back to `value` if unresolved. |
+
+**Permission requirement:** Each change's referenced characteristic must have `"write"` permission. The server validates this on automation create/update.
+
+**Behavior:**
+- For each change, the engine reads the characteristic's current value before applying the new one. Changes whose devices are unreachable or whose current values can't be read are skipped. If every change fails to apply, the block fails.
+- After the hold duration elapses (or the automation is cancelled), successfully-applied changes are reverted in the same forward order. Individual rollback failures are logged but do not abort other rollbacks.
+
 ##### runScene
 
 | Field | Type | Required | Description |
@@ -2022,7 +2053,7 @@ Embedded in `StateChangeLog` entries with `automation_execution` or `automation_
 | `id` | UUID | no | Block result ID |
 | `blockIndex` | integer | no | Position in the block list |
 | `blockKind` | string | no | `"action"` or `"flowControl"` |
-| `blockType` | string | no | Block type: `controlDevice`, `delay`, `conditional`, `repeat`, `repeatWhile`, `group`, `return`, `webhook`, `log`, `runScene`, `waitForState`, `executeAutomation` |
+| `blockType` | string | no | Block type: `controlDevice`, `timedControl`, `delay`, `conditional`, `repeat`, `repeatWhile`, `group`, `return`, `webhook`, `log`, `runScene`, `waitForState`, `executeAutomation` |
 | `blockName` | string | yes | Optional block display name |
 | `status` | ExecutionStatus | no | Block execution status |
 | `startedAt` | string (ISO 8601) | no | When block execution started |

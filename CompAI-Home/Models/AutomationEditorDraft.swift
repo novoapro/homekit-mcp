@@ -490,6 +490,8 @@ extension BlockDraft {
         switch blockType {
         case let .controlDevice(d):
             return d.autoName(devices: devices, stateLabel: stateLabel)
+        case let .timedControl(d):
+            return d.autoName(devices: devices, stateLabel: stateLabel)
         case let .webhook(d):
             return d.autoName()
         case let .log(d):
@@ -522,6 +524,7 @@ extension BlockDraft {
         let explicitName: String = {
             switch blockType {
             case let .controlDevice(d): return d.name
+            case let .timedControl(d): return d.name
             case let .webhook(d): return d.name
             case let .log(d): return d.name
             case let .runScene(d): return d.name
@@ -556,6 +559,28 @@ private extension ControlDeviceDraft {
     }
 }
 
+private extension TimedControlDraft {
+    func autoName(devices: [DeviceModel], stateLabel: (String) -> String = { $0 }) -> String {
+        let count = changes.count
+        let seconds: String
+        if valueSource == .global && !durationRefName.isEmpty {
+            seconds = "\(stateLabel(durationRefName))s"
+        } else {
+            seconds = durationSeconds.isInteger ? "\(Int(durationSeconds))s" : String(format: "%.1fs", durationSeconds)
+        }
+        if count == 0 { return "Timed Control (\(seconds))" }
+        if count == 1, let first = changes.first, !first.deviceId.isEmpty {
+            let devName = devices.resolvedName(deviceId: first.deviceId, serviceId: first.serviceId)
+            return "Hold \(devName) for \(seconds)"
+        }
+        return "Hold \(count) changes for \(seconds)"
+    }
+}
+
+private extension Double {
+    var isInteger: Bool { truncatingRemainder(dividingBy: 1) == 0 }
+}
+
 extension BlockDraft {
     /// Returns `true` when this block (or any nested child block) references a
     /// device or scene that is not present in the provided arrays.
@@ -569,6 +594,8 @@ extension BlockDraft {
         switch blockType {
         case let .controlDevice(d):
             return !d.deviceId.isEmpty && !deviceIds.contains(d.deviceId)
+        case let .timedControl(d):
+            return d.changes.contains { !$0.deviceId.isEmpty && !deviceIds.contains($0.deviceId) }
         case let .runScene(d):
             return !d.sceneId.isEmpty && !sceneIds.contains(d.sceneId)
         case let .waitForState(d):
@@ -908,6 +935,10 @@ struct BlockDraft: Identifiable {
         BlockDraft(id: UUID(), blockType: .controlDevice(ControlDeviceDraft()))
     }
 
+    static func newTimedControl() -> BlockDraft {
+        BlockDraft(id: UUID(), blockType: .timedControl(TimedControlDraft()))
+    }
+
     static func newWebhook() -> BlockDraft {
         BlockDraft(id: UUID(), blockType: .webhook(WebhookDraft()))
     }
@@ -959,6 +990,7 @@ struct BlockDraft: Identifiable {
 
 enum BlockDraftType {
     case controlDevice(ControlDeviceDraft)
+    case timedControl(TimedControlDraft)
     case webhook(WebhookDraft)
     case log(LogDraft)
     case runScene(RunSceneDraft)
@@ -975,6 +1007,7 @@ enum BlockDraftType {
     var displayName: String {
         switch self {
         case .controlDevice: return "Control Device"
+        case .timedControl: return "Timed Control"
         case .webhook: return "Webhook"
         case .log: return "Log Message"
         case .runScene: return "Run Scene"
@@ -993,6 +1026,7 @@ enum BlockDraftType {
     var icon: String {
         switch self {
         case .controlDevice: return "house.fill"
+        case .timedControl: return "timer"
         case .webhook: return "globe"
         case .log: return "text.bubble"
         case .runScene: return "play.rectangle.fill"
@@ -1050,6 +1084,35 @@ struct ControlDeviceDraft {
     var characteristicMaxValue: Double?
     var characteristicStepValue: Double?
     var characteristicValidValues: [Int]?
+}
+
+/// Editable draft for a single change inside a TimedControlDraft.
+/// Mirrors the editable fields of ControlDeviceDraft minus the name (owned by the parent block).
+struct TimedChangeDraft: Identifiable {
+    let id: UUID = UUID()
+    var deviceId: String = ""
+    var serviceId: String?
+    var characteristicId: String = ""
+    var value: String = ""
+
+    var valueSource: ControlDeviceDraft.ValueSource = .local
+    var valueRefName: String = ""
+    var valueRefDisplayName: String = ""
+
+    // Cached characteristic metadata for UI rendering when device isn't available
+    var characteristicFormat: String?
+    var characteristicMinValue: Double?
+    var characteristicMaxValue: Double?
+    var characteristicStepValue: Double?
+    var characteristicValidValues: [Int]?
+}
+
+struct TimedControlDraft {
+    var name: String = ""
+    var durationSeconds: Double = 5.0
+    var valueSource: ControlDeviceDraft.ValueSource = .local
+    var durationRefName: String = ""
+    var changes: [TimedChangeDraft] = [TimedChangeDraft()]
 }
 
 struct WebhookDraft {
@@ -1400,7 +1463,7 @@ extension BlockDraft {
 extension BlockDraftType {
     func deepCopy() -> BlockDraftType {
         switch self {
-        case .controlDevice, .webhook, .log, .runScene, .stateVariable, .delay, .waitForState, .stop, .executeAutomation:
+        case .controlDevice, .timedControl, .webhook, .log, .runScene, .stateVariable, .delay, .waitForState, .stop, .executeAutomation:
             return self // value types with no nested blocks
         case .conditional(var d):
             d.thenBlocks = d.thenBlocks.map { $0.deepCopy() }
@@ -2025,6 +2088,35 @@ extension AutomationDraft {
                 if case let .byName(name) = ref { draft.valueRefName = name }
             }
             return BlockDraft(id: blockId, blockType: .controlDevice(draft))
+        case let .timedControl(a):
+            var draft = TimedControlDraft(
+                name: a.name ?? "",
+                durationSeconds: a.durationSeconds
+            )
+            if let ref = a.durationRef {
+                draft.valueSource = .global
+                if case let .byName(name) = ref { draft.durationRefName = name }
+            }
+            draft.changes = a.changes.map { change in
+                let meta = lookupCharacteristicMeta(deviceId: change.deviceId, characteristicId: change.characteristicId, in: devices)
+                var c = TimedChangeDraft(
+                    deviceId: change.deviceId,
+                    serviceId: change.serviceId,
+                    characteristicId: change.characteristicId,
+                    value: stringFromAny(change.value.value),
+                    characteristicFormat: meta.format,
+                    characteristicMinValue: meta.minValue,
+                    characteristicMaxValue: meta.maxValue,
+                    characteristicStepValue: meta.stepValue,
+                    characteristicValidValues: meta.validValues
+                )
+                if let ref = change.valueRef {
+                    c.valueSource = .global
+                    if case let .byName(name) = ref { c.valueRefName = name }
+                }
+                return c
+            }
+            return BlockDraft(id: blockId, blockType: .timedControl(draft))
         case let .webhook(a):
             return BlockDraft(id: blockId, blockType: .webhook(WebhookDraft(
                 name: a.name ?? "",
@@ -2362,6 +2454,26 @@ extension BlockDraft {
                 characteristicId: d.characteristicId,
                 value: parseValue(d.value),
                 valueRef: valueRef,
+                name: d.name.isEmpty ? nil : d.name
+            )), blockId: id)
+        case let .timedControl(d):
+            let durationRef: StateVariableRef? = d.valueSource == .global && !d.durationRefName.isEmpty
+                ? .byName(d.durationRefName) : nil
+            let changes: [TimedDeviceChange] = d.changes.map { c in
+                let changeRef: StateVariableRef? = c.valueSource == .global && !c.valueRefName.isEmpty
+                    ? .byName(c.valueRefName) : nil
+                return TimedDeviceChange(
+                    deviceId: c.deviceId,
+                    serviceId: c.serviceId,
+                    characteristicId: c.characteristicId,
+                    value: parseValue(c.value),
+                    valueRef: changeRef
+                )
+            }
+            return .action(.timedControl(TimedControlAction(
+                durationSeconds: d.durationSeconds,
+                durationRef: durationRef,
+                changes: changes,
                 name: d.name.isEmpty ? nil : d.name
             )), blockId: id)
         case let .webhook(d):

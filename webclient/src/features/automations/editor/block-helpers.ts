@@ -8,11 +8,16 @@ function newConditionDraft(): AutomationConditionDraft {
 export function newBlockDraft(type: string): AutomationBlockDraft {
   const base: AutomationBlockDraft = {
     _draftId: newUUID(),
-    block: ['controlDevice', 'runScene', 'webhook', 'log', 'stateVariable'].includes(type) ? 'action' : 'flowControl',
+    block: ['controlDevice', 'timedControl', 'runScene', 'webhook', 'log', 'stateVariable'].includes(type) ? 'action' : 'flowControl',
     type,
   };
   switch (type) {
     case 'controlDevice': base.value = true; break;
+    case 'timedControl':
+      base.durationSeconds = 5;
+      base.durationSource = 'local';
+      base.changes = [{ _draftId: newUUID(), valueSource: 'local', value: true }];
+      break;
     case 'webhook': base.url = ''; base.method = 'POST'; break;
     case 'log': base.message = ''; break;
     case 'delay': base.seconds = 1; break;
@@ -29,7 +34,7 @@ export function newBlockDraft(type: string): AutomationBlockDraft {
 }
 
 export const BLOCK_ICONS: Record<string, string> = {
-  controlDevice: 'house', runScene: 'sparkles', webhook: 'link', log: 'doc-text',
+  controlDevice: 'house', timedControl: 'clock', runScene: 'sparkles', webhook: 'link', log: 'doc-text',
   stateVariable: 'state-variable',
   delay: 'clock', waitForState: 'clock', conditional: 'arrow-triangle-branch',
   repeat: 'arrow-2-squarepath', repeatWhile: 'arrow-2-squarepath',
@@ -37,7 +42,8 @@ export const BLOCK_ICONS: Record<string, string> = {
 };
 
 export const BLOCK_TYPE_LABELS: Record<string, string> = {
-  controlDevice: 'Control Device', runScene: 'Run Scene', webhook: 'Webhook', log: 'Log',
+  controlDevice: 'Control Device', timedControl: 'Timed Control',
+  runScene: 'Run Scene', webhook: 'Webhook', log: 'Log',
   stateVariable: 'Global Value',
   delay: 'Delay', waitForState: 'Wait for State', conditional: 'If / Else',
   repeat: 'Repeat', repeatWhile: 'Repeat While', group: 'Group', return: 'Return',

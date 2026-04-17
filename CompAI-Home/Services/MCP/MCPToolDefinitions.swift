@@ -230,8 +230,10 @@ enum MCPToolDefinitions {
                 (makes this automation callable by others)
 
                 BLOCK TYPES (blocks array, use "block" discriminator):
-                Action blocks: { "block":"action", "type":"controlDevice"|"runScene"|"webhook"|"log", ... }
+                Action blocks: { "block":"action", "type":"controlDevice"|"timedControl"|"runScene"|"webhook"|"log", ... }
                 • controlDevice: + deviceId, deviceName, roomName, serviceId?, characteristicId, value
+                • timedControl: + durationSeconds, durationRef?, changes (array of {deviceId, deviceName, roomName, serviceId?, characteristicId, value, valueRef?}) \
+                Sets each change for durationSeconds, then reverts each to its pre-block value in the same forward order.
                 • runScene: + sceneId, sceneName (optional, cached display name)
                 • webhook: + url, method, headers?, body?
                 • log: + message
@@ -308,7 +310,7 @@ enum MCPToolDefinitions {
                 The schema for triggers, blocks, and conditions is identical to create_automation. \
                 Trigger types: deviceStateChange, schedule, sunEvent, webhook, automation. \
                 Block types (use "block":"action"|"flowControl" discriminator): \
-                controlDevice, runScene, webhook, log, delay, waitForState, conditional, repeat, \
+                controlDevice, timedControl, runScene, webhook, log, delay, waitForState, conditional, repeat, \
                 repeatWhile, group, return, executeAutomation. \
                 Condition types (AutomationCondition, nestable via and/or/not): \
                 deviceState, timeCondition, sceneActive, and, or, not (execution guards, per-trigger guards, and block level); \

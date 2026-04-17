@@ -782,6 +782,8 @@ extension AutomationMigrationService {
         case .action(let action, _):
             switch action {
             case .controlDevice(let a): types.insert(a.characteristicId)
+            case .timedControl(let a):
+                for change in a.changes { types.insert(change.characteristicId) }
             default: break
             }
         case .flowControl(let fc, _):
@@ -967,6 +969,10 @@ extension AutomationMigrationService {
             switch action {
             case .controlDevice(let a):
                 refs.insert(CharRef(deviceId: a.deviceId, characteristicId: a.characteristicId))
+            case .timedControl(let a):
+                for change in a.changes {
+                    refs.insert(CharRef(deviceId: change.deviceId, characteristicId: change.characteristicId))
+                }
             default: break
             }
         case .flowControl(let fc, _):

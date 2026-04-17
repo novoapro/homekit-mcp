@@ -196,6 +196,7 @@ struct BlockEditorRow: View {
             get: {
                 switch block.blockType {
                 case let .controlDevice(d): return d.name
+                case let .timedControl(d): return d.name
                 case let .webhook(d): return d.name
                 case let .log(d): return d.name
                 case let .runScene(d): return d.name
@@ -213,6 +214,7 @@ struct BlockEditorRow: View {
             set: { newName in
                 switch block.blockType {
                 case .controlDevice(var d): d.name = newName; block.blockType = .controlDevice(d)
+                case .timedControl(var d): d.name = newName; block.blockType = .timedControl(d)
                 case .webhook(var d): d.name = newName; block.blockType = .webhook(d)
                 case .log(var d): d.name = newName; block.blockType = .log(d)
                 case .runScene(var d): d.name = newName; block.blockType = .runScene(d)
@@ -235,6 +237,8 @@ struct BlockEditorRow: View {
         switch block.blockType {
         case .controlDevice:
             controlDeviceContent
+        case .timedControl:
+            timedControlContent
         case .webhook:
             webhookContent
         case .log:
@@ -268,6 +272,10 @@ struct BlockEditorRow: View {
 extension BlockEditorRow {
     private var controlDeviceContent: some View {
         ControlDeviceEditor(block: $block, devices: devices, controllerStates: controllerStates)
+    }
+
+    private var timedControlContent: some View {
+        TimedControlEditor(block: $block, devices: devices, controllerStates: controllerStates)
     }
 
     private var webhookContent: some View {
@@ -342,13 +350,6 @@ private struct ControlDeviceEditor: View {
         )
     }
 
-    private var valueSourceBinding: Binding<ControlDeviceDraft.ValueSource> {
-        Binding(
-            get: { draft.wrappedValue.valueSource },
-            set: { draft.wrappedValue.valueSource = $0 }
-        )
-    }
-
     /// Maps a characteristic format to the compatible StateVariableType.
     private var compatibleStateType: StateVariableType? {
         guard let format = draft.wrappedValue.characteristicFormat else { return nil }
@@ -382,59 +383,211 @@ private struct ControlDeviceEditor: View {
             }
         )
 
-        // Value source toggle: Local vs Global
+        // Single combined picker: "Use local value only" + globals
         if !compatibleGlobalValues.isEmpty {
-            Picker("Value Source", selection: valueSourceBinding) {
-                Text("Local").tag(ControlDeviceDraft.ValueSource.local)
-                Text("Global").tag(ControlDeviceDraft.ValueSource.global)
-            }
-            .pickerStyle(.segmented)
-        }
-
-        if draft.wrappedValue.valueSource == .global && !compatibleGlobalValues.isEmpty {
-            // Global Value picker (filtered by compatible type)
-            Picker("Global Value", selection: Binding(
-                get: { draft.wrappedValue.valueRefName },
+            Picker("Value", selection: Binding(
+                get: { draft.wrappedValue.valueSource == .global ? draft.wrappedValue.valueRefName : "" },
                 set: { newValue in
-                    draft.wrappedValue.valueRefName = newValue
-                    draft.wrappedValue.valueRefDisplayName = compatibleGlobalValues.first(where: { $0.name == newValue })?.label ?? ""
+                    if newValue.isEmpty {
+                        draft.wrappedValue.valueSource = .local
+                        draft.wrappedValue.valueRefName = ""
+                        draft.wrappedValue.valueRefDisplayName = ""
+                    } else {
+                        draft.wrappedValue.valueSource = .global
+                        draft.wrappedValue.valueRefName = newValue
+                        draft.wrappedValue.valueRefDisplayName = compatibleGlobalValues.first(where: { $0.name == newValue })?.label ?? ""
+                    }
                 }
             )) {
-                Text("-- Select --").tag("")
+                Text("Use local value only").tag("")
                 ForEach(compatibleGlobalValues) { state in
-                    Label(state.label, systemImage: state.type.icon)
-                        .tag(state.name)
+                    Label(state.label, systemImage: state.type.icon).tag(state.name)
+                }
+            }
+        }
+
+        // One value input. It's the local value when no global is chosen,
+        // and the fallback when a global is selected.
+        ValueEditor(
+            value: draft.value,
+            characteristicType: draft.wrappedValue.characteristicId,
+            devices: devices,
+            deviceId: draft.wrappedValue.deviceId,
+            fallbackFormat: draft.wrappedValue.characteristicFormat,
+            fallbackMinValue: draft.wrappedValue.characteristicMinValue,
+            fallbackMaxValue: draft.wrappedValue.characteristicMaxValue,
+            fallbackStepValue: draft.wrappedValue.characteristicStepValue,
+            fallbackValidValues: draft.wrappedValue.characteristicValidValues
+        )
+    }
+}
+
+// MARK: - Timed Control Editor
+
+private struct TimedControlEditor: View {
+    @Binding var block: BlockDraft
+    let devices: [DeviceModel]
+    var controllerStates: [StateVariable] = []
+
+    private var draft: Binding<TimedControlDraft> {
+        Binding(
+            get: {
+                if case .timedControl(let d) = block.blockType { return d }
+                return TimedControlDraft()
+            },
+            set: { block.blockType = .timedControl($0) }
+        )
+    }
+
+    private var numberStates: [StateVariable] {
+        controllerStates.filter { $0.type == .number }
+    }
+
+    var body: some View {
+        // Duration: single combined picker + one text field below
+        if !numberStates.isEmpty {
+            Picker("Duration", selection: Binding(
+                get: { draft.wrappedValue.valueSource == .global ? draft.wrappedValue.durationRefName : "" },
+                set: { newValue in
+                    if newValue.isEmpty {
+                        draft.wrappedValue.valueSource = .local
+                        draft.wrappedValue.durationRefName = ""
+                    } else {
+                        draft.wrappedValue.valueSource = .global
+                        draft.wrappedValue.durationRefName = newValue
+                    }
+                }
+            )) {
+                Text("Use local value only").tag("")
+                ForEach(numberStates) { state in
+                    Label(state.label, systemImage: state.type.icon).tag(state.name)
+                }
+            }
+        }
+
+        HStack {
+            Text("Hold seconds")
+            Spacer()
+            TextField("5.0", value: draft.durationSeconds, format: .number)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 80)
+                .textFieldStyle(.roundedBorder)
+        }
+
+        // Changes list
+        Section {
+            ForEach(Array(draft.wrappedValue.changes.enumerated()), id: \.element.id) { index, _ in
+                TimedChangeRow(
+                    change: Binding(
+                        get: { draft.wrappedValue.changes[index] },
+                        set: { draft.wrappedValue.changes[index] = $0 }
+                    ),
+                    devices: devices,
+                    controllerStates: controllerStates,
+                    index: index + 1,
+                    canDelete: draft.wrappedValue.changes.count > 1,
+                    onDelete: {
+                        draft.wrappedValue.changes.remove(at: index)
+                    }
+                )
+            }
+            Button {
+                draft.wrappedValue.changes.append(TimedChangeDraft())
+            } label: {
+                Label("Add Change", systemImage: "plus.circle.fill")
+            }
+        } header: {
+            Text("Applied when the block runs · reverted in the same order when time is up")
+        }
+    }
+}
+
+private struct TimedChangeRow: View {
+    @Binding var change: TimedChangeDraft
+    let devices: [DeviceModel]
+    let controllerStates: [StateVariable]
+    let index: Int
+    let canDelete: Bool
+    let onDelete: () -> Void
+
+    private var compatibleStateType: StateVariableType? {
+        guard let format = change.characteristicFormat else { return nil }
+        switch format {
+        case "bool": return .boolean
+        case "uint8", "uint16", "uint32", "uint64", "int", "float": return .number
+        case "string": return .string
+        default: return nil
+        }
+    }
+
+    private var compatibleGlobalValues: [StateVariable] {
+        guard let required = compatibleStateType else { return controllerStates }
+        return controllerStates.filter { $0.type == required }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Change \(index)")
+                    .font(.caption)
+                    .foregroundColor(Theme.Text.secondary)
+                Spacer()
+                if canDelete {
+                    Button(role: .destructive, action: onDelete) {
+                        Image(systemName: "minus.circle.fill")
+                    }
+                    .buttonStyle(.borderless)
                 }
             }
 
-            // Default fallback value (required)
-            Section {
-                ValueEditor(
-                    value: draft.value,
-                    characteristicType: draft.wrappedValue.characteristicId,
-                    devices: devices,
-                    deviceId: draft.wrappedValue.deviceId,
-                    fallbackFormat: draft.wrappedValue.characteristicFormat,
-                    fallbackMinValue: draft.wrappedValue.characteristicMinValue,
-                    fallbackMaxValue: draft.wrappedValue.characteristicMaxValue,
-                    fallbackStepValue: draft.wrappedValue.characteristicStepValue,
-                    fallbackValidValues: draft.wrappedValue.characteristicValidValues
-                )
-            } header: {
-                Text("Default value (used if global value is removed)")
-            }
-        } else {
-            // Local value editor (existing behavior)
-            ValueEditor(
-                value: draft.value,
-                characteristicType: draft.wrappedValue.characteristicId,
+            DeviceCharacteristicPicker(
                 devices: devices,
-                deviceId: draft.wrappedValue.deviceId,
-                fallbackFormat: draft.wrappedValue.characteristicFormat,
-                fallbackMinValue: draft.wrappedValue.characteristicMinValue,
-                fallbackMaxValue: draft.wrappedValue.characteristicMaxValue,
-                fallbackStepValue: draft.wrappedValue.characteristicStepValue,
-                fallbackValidValues: draft.wrappedValue.characteristicValidValues
+                selectedDeviceId: $change.deviceId,
+                selectedServiceId: $change.serviceId,
+                selectedCharacteristicType: $change.characteristicId,
+                requiredPermission: "write",
+                onCharacteristicSelected: { char in
+                    change.characteristicFormat = char?.format
+                    change.characteristicMinValue = char?.minValue
+                    change.characteristicMaxValue = char?.maxValue
+                    change.characteristicStepValue = char?.stepValue
+                    change.characteristicValidValues = char?.validValues
+                }
+            )
+
+            if !compatibleGlobalValues.isEmpty {
+                Picker("Value", selection: Binding(
+                    get: { change.valueSource == .global ? change.valueRefName : "" },
+                    set: { newValue in
+                        if newValue.isEmpty {
+                            change.valueSource = .local
+                            change.valueRefName = ""
+                            change.valueRefDisplayName = ""
+                        } else {
+                            change.valueSource = .global
+                            change.valueRefName = newValue
+                            change.valueRefDisplayName = compatibleGlobalValues.first(where: { $0.name == newValue })?.label ?? ""
+                        }
+                    }
+                )) {
+                    Text("Use local value only").tag("")
+                    ForEach(compatibleGlobalValues) { state in
+                        Label(state.label, systemImage: state.type.icon).tag(state.name)
+                    }
+                }
+            }
+
+            ValueEditor(
+                value: $change.value,
+                characteristicType: change.characteristicId,
+                devices: devices,
+                deviceId: change.deviceId,
+                fallbackFormat: change.characteristicFormat,
+                fallbackMinValue: change.characteristicMinValue,
+                fallbackMaxValue: change.characteristicMaxValue,
+                fallbackStepValue: change.characteristicStepValue,
+                fallbackValidValues: change.characteristicValidValues
             )
         }
     }
@@ -784,49 +937,33 @@ private struct DelayEditor: View {
 
     var body: some View {
         if !numberStates.isEmpty {
-            Picker("Duration Source", selection: Binding(
-                get: { draft.wrappedValue.valueSource },
-                set: { draft.wrappedValue.valueSource = $0 }
+            Picker("Duration", selection: Binding(
+                get: { draft.wrappedValue.valueSource == .global ? draft.wrappedValue.secondsRefName : "" },
+                set: { newValue in
+                    if newValue.isEmpty {
+                        draft.wrappedValue.valueSource = .local
+                        draft.wrappedValue.secondsRefName = ""
+                    } else {
+                        draft.wrappedValue.valueSource = .global
+                        draft.wrappedValue.secondsRefName = newValue
+                    }
+                }
             )) {
-                Text("Local").tag(ControlDeviceDraft.ValueSource.local)
-                Text("Global").tag(ControlDeviceDraft.ValueSource.global)
-            }
-            .pickerStyle(.segmented)
-        }
-
-        if draft.wrappedValue.valueSource == .global && !numberStates.isEmpty {
-            Picker("Global Value", selection: Binding(
-                get: { draft.wrappedValue.secondsRefName },
-                set: { draft.wrappedValue.secondsRefName = $0 }
-            )) {
-                Text("-- Select --").tag("")
+                Text("Use local value only").tag("")
                 ForEach(numberStates) { state in
                     Label(state.label, systemImage: state.type.icon).tag(state.name)
                 }
             }
-            Section {
-                HStack {
-                    Text("Default (seconds)")
-                    Spacer()
-                    TextField("1.0", value: draft.seconds, format: .number)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 80)
-                        .textFieldStyle(.roundedBorder)
-                }
-            } header: {
-                Text("Fallback if global value is removed")
-            }
-        } else {
-            HStack {
-                Text("Seconds")
-                Spacer()
-                TextField("1.0", value: draft.seconds, format: .number)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 80)
-                    .textFieldStyle(.roundedBorder)
-            }
+        }
+
+        HStack {
+            Text("Seconds")
+            Spacer()
+            TextField("1.0", value: draft.seconds, format: .number)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 80)
+                .textFieldStyle(.roundedBorder)
         }
     }
 }

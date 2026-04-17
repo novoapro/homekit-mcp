@@ -56,6 +56,9 @@ export function DefinitionBlockTree({ block, depth = 0, index, isLast = true, is
         const device = block.deviceId ? registry.lookupDevice(block.deviceId) : undefined;
         return device?.name || 'Control Device';
       }
+      case 'timedControl': {
+        return 'Timed Control';
+      }
       case 'runScene': {
         const scene = block.sceneId ? registry.lookupScene(block.sceneId) : undefined;
         return scene?.name || 'Run Scene';
@@ -90,6 +93,16 @@ export function DefinitionBlockTree({ block, depth = 0, index, isLast = true, is
           parts.push(`${char.name} → ${valDisplay}`);
         }
         return parts.join(' · ') || undefined;
+      }
+      case 'timedControl': {
+        const count = block.changes?.length ?? 0;
+        const secs = block.durationRef?.name
+          ? `${block.durationRef.name} (Global)`
+          : block.durationSeconds != null
+            ? formatDurationShort(block.durationSeconds)
+            : undefined;
+        if (!secs) return `${count} change(s)`;
+        return `${count} change(s) · hold ${secs}`;
       }
       case 'delay':
         return block.seconds ? formatDurationShort(block.seconds) : undefined;

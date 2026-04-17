@@ -57,6 +57,9 @@ struct BlockEditorSection: View {
                     Button("Control Device", systemImage: "house.fill") {
                         blocks.append(.newControlDevice())
                     }
+                    Button("Timed Control", systemImage: "timer") {
+                        blocks.append(.newTimedControl())
+                    }
                     Button("Webhook", systemImage: "globe") {
                         blocks.append(.newWebhook())
                     }

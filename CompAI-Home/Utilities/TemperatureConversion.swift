@@ -182,6 +182,20 @@ enum TemperatureConversion {
                 serviceId: a.serviceId, characteristicId: a.characteristicId,
                 value: newValue, name: a.name
             ))
+        case .timedControl(let a):
+            let newChanges = a.changes.map { change -> TimedDeviceChange in
+                guard isTemperatureCharId(change.characteristicId, registry: registry) else { return change }
+                return TimedDeviceChange(
+                    deviceId: change.deviceId, deviceName: change.deviceName, roomName: change.roomName,
+                    serviceId: change.serviceId, characteristicId: change.characteristicId,
+                    value: convertAnyCodableValue(change.value, convert: convert),
+                    valueRef: change.valueRef
+                )
+            }
+            return .timedControl(TimedControlAction(
+                durationSeconds: a.durationSeconds, durationRef: a.durationRef,
+                changes: newChanges, name: a.name
+            ))
         default:
             return action
         }

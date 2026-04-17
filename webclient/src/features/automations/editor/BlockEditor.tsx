@@ -5,6 +5,7 @@ import { useApi } from '@/hooks/useApi';
 import { DevicePicker } from './DevicePicker';
 import { CharacteristicValueInput } from './CharacteristicValueInput';
 import type { AutomationBlockDraft } from './automation-editor-types';
+import { newUUID } from './automation-editor-types';
 import { blockAutoName, conditionAutoName } from './automation-editor-utils';
 import { SearchableSelect } from './SearchableSelect';
 import { HTTP_METHODS, OUTCOMES, EXEC_MODES } from './block-helpers';
@@ -34,7 +35,7 @@ export function BlockEditor({
 
   // Fetch global values for stateVariable, controlDevice (global mode), and engineState blocks
   const [controllerStates, setControllerStates] = useState<{ id: string; name: string; displayName?: string; type: string }[]>([]);
-  const needsGlobalValues = draft.type === 'stateVariable' || draft.type === 'controlDevice' || draft.type === 'delay';
+  const needsGlobalValues = draft.type === 'stateVariable' || draft.type === 'controlDevice' || draft.type === 'timedControl' || draft.type === 'delay';
   useEffect(() => {
     if (!needsGlobalValues) return;
     let cancelled = false;
@@ -135,7 +136,7 @@ export function BlockEditor({
             onChange={(val) => patch({ deviceId: val.deviceId, serviceId: val.serviceId, characteristicId: val.characteristicId })}
           />
 
-          {/* Value Source Toggle: Local vs Global */}
+          {/* Single combined value picker + one value input below */}
           {(() => {
             const char = draft.deviceId && draft.characteristicId
               ? registry.lookupCharacteristic(draft.deviceId, draft.characteristicId)
@@ -151,66 +152,160 @@ export function BlockEditor({
               ? controllerStates.filter(s => s.type === compatibleType)
               : controllerStates;
 
-            return compatibleStates.length > 0 ? (
-              <>
-                <div className="editor-field">
-                  <label>Value Source</label>
-                  <div className="char-toggle-wrap">
-                    <button type="button"
-                      className={`char-toggle-option${(draft.valueSource || 'local') === 'local' ? ' active' : ''}`}
-                      onClick={() => patch({ valueSource: 'local', valueRef: undefined })}>
-                      Local
-                    </button>
-                    <button type="button"
-                      className={`char-toggle-option${draft.valueSource === 'global' ? ' active' : ''}`}
-                      onClick={() => patch({ valueSource: 'global' })}>
-                      Global
-                    </button>
-                  </div>
-                </div>
-
-                {draft.valueSource === 'global' && (
-                  <div className="editor-field">
-                    <label>Global Value</label>
-                    <select className="editor-select"
-                      value={draft.valueRef?.name || ''}
-                      onChange={(e) => patch({ valueRef: e.target.value ? { type: 'byName', name: e.target.value } : undefined })}>
-                      <option value="">-- Select global value --</option>
-                      {compatibleStates.map(s => (
-                        <option key={s.id} value={s.name}>
-                          ({STATE_TYPE_SYMBOL[s.type] || s.type}) {s.displayName || s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </>
-            ) : null;
+            if (compatibleStates.length === 0) return null;
+            return (
+              <div className="editor-field">
+                <label>Value</label>
+                <select className="editor-select"
+                  value={draft.valueSource === 'global' ? (draft.valueRef?.name || '') : ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    patch(v
+                      ? { valueSource: 'global', valueRef: { type: 'byName', name: v } }
+                      : { valueSource: 'local', valueRef: undefined });
+                  }}>
+                  <option value="">Use local value only</option>
+                  {compatibleStates.map(s => (
+                    <option key={s.id} value={s.name}>
+                      ({STATE_TYPE_SYMBOL[s.type] || s.type}) {s.displayName || s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
           })()}
 
-          {draft.valueSource === 'global' ? (
-            <>
+          <CharacteristicValueInput
+            characteristic={draft.deviceId && draft.characteristicId
+              ? registry.lookupCharacteristic(draft.deviceId, draft.characteristicId)
+              : undefined}
+            value={draft.value}
+            onChange={(val) => patch({ value: val })}
+          />
+        </>
+      )}
 
-              {/* Default fallback value (required) */}
-              <CharacteristicValueInput
-                characteristic={draft.deviceId && draft.characteristicId
-                  ? registry.lookupCharacteristic(draft.deviceId, draft.characteristicId)
-                  : undefined}
-                value={draft.value}
-                onChange={(val) => patch({ value: val })}
-                label="Default Value"
-                placeholder="Fallback if global value is removed"
-              />
-            </>
-          ) : (
-            <CharacteristicValueInput
-              characteristic={draft.deviceId && draft.characteristicId
-                ? registry.lookupCharacteristic(draft.deviceId, draft.characteristicId)
-                : undefined}
-              value={draft.value}
-              onChange={(val) => patch({ value: val })}
-            />
+      {/* timedControl */}
+      {draft.type === 'timedControl' && (
+        <>
+          {/* Duration: single combined picker + one seconds field below */}
+          {controllerStates.filter(s => s.type === 'number').length > 0 && (
+            <div className="editor-field">
+              <label>Duration</label>
+              <select className="editor-select"
+                value={draft.durationSource === 'global' ? (draft.durationRef?.name || '') : ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  patch(v
+                    ? { durationSource: 'global', durationRef: { type: 'byName', name: v } }
+                    : { durationSource: 'local', durationRef: undefined });
+                }}>
+                <option value="">Use local value only</option>
+                {controllerStates.filter(s => s.type === 'number').map(s => (
+                  <option key={s.id} value={s.name}>
+                    ({STATE_TYPE_SYMBOL[s.type] || s.type}) {s.displayName || s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
+
+          <div className="editor-field">
+            <label>Hold seconds</label>
+            <input className="editor-input" type="number" min={0} step={0.5}
+              value={draft.durationSeconds ?? 5}
+              onChange={(e) => patch({ durationSeconds: +e.target.value || 5 })} />
+          </div>
+
+          {/* Changes list */}
+          <div className="editor-field">
+            <label>Changes · reverted in this order when time is up</label>
+            {(draft.changes ?? []).map((change, idx) => (
+              <div key={change._draftId} style={{ border: '1px solid var(--border-color, #ddd)', borderRadius: 8, padding: 8, marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <strong style={{ fontSize: 12 }}>Change {idx + 1}</strong>
+                  {(draft.changes?.length ?? 0) > 1 && (
+                    <button type="button" className="editor-button-secondary"
+                      onClick={() => {
+                        const next = [...(draft.changes ?? [])];
+                        next.splice(idx, 1);
+                        patch({ changes: next });
+                      }}>
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <DevicePicker
+                  initialDeviceId={change.deviceId}
+                  initialServiceId={change.serviceId}
+                  initialCharId={change.characteristicId}
+                  writableOnly
+                  onChange={(val) => {
+                    const next = [...(draft.changes ?? [])];
+                    next[idx] = { ...change, deviceId: val.deviceId, serviceId: val.serviceId, characteristicId: val.characteristicId };
+                    patch({ changes: next });
+                  }}
+                />
+                {(() => {
+                  const char = change.deviceId && change.characteristicId
+                    ? registry.lookupCharacteristic(change.deviceId, change.characteristicId)
+                    : undefined;
+                  const NUMERIC_FORMATS = new Set(['uint8', 'uint16', 'uint32', 'uint64', 'int', 'float']);
+                  const compatibleType = char
+                    ? char.format === 'bool' ? 'boolean'
+                      : NUMERIC_FORMATS.has(char.format) ? 'number'
+                      : char.format === 'string' ? 'string'
+                      : undefined
+                    : undefined;
+                  const compatibleStates = compatibleType
+                    ? controllerStates.filter(s => s.type === compatibleType)
+                    : controllerStates;
+
+                  if (compatibleStates.length === 0) return null;
+                  return (
+                    <div className="editor-field">
+                      <label>Value</label>
+                      <select className="editor-select"
+                        value={change.valueSource === 'global' ? (change.valueRef?.name || '') : ''}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const next = [...(draft.changes ?? [])];
+                          next[idx] = v
+                            ? { ...change, valueSource: 'global', valueRef: { type: 'byName', name: v } }
+                            : { ...change, valueSource: 'local', valueRef: undefined };
+                          patch({ changes: next });
+                        }}>
+                        <option value="">Use local value only</option>
+                        {compatibleStates.map(s => (
+                          <option key={s.id} value={s.name}>
+                            ({STATE_TYPE_SYMBOL[s.type] || s.type}) {s.displayName || s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })()}
+                <CharacteristicValueInput
+                  characteristic={change.deviceId && change.characteristicId
+                    ? registry.lookupCharacteristic(change.deviceId, change.characteristicId)
+                    : undefined}
+                  value={change.value}
+                  onChange={(val) => {
+                    const next = [...(draft.changes ?? [])];
+                    next[idx] = { ...change, value: val };
+                    patch({ changes: next });
+                  }}
+                />
+              </div>
+            ))}
+            <button type="button" className="editor-button-secondary"
+              onClick={() => {
+                const newChange = { _draftId: newUUID(), valueSource: 'local' as const, value: true };
+                patch({ changes: [...(draft.changes ?? []), newChange] });
+              }}>
+              + Add Change
+            </button>
+          </div>
         </>
       )}
 
@@ -480,51 +575,30 @@ export function BlockEditor({
           <>
             {numberStates.length > 0 && (
               <div className="editor-field">
-                <label>Duration Source</label>
-                <div className="char-toggle-wrap">
-                  <button type="button"
-                    className={`char-toggle-option${(draft.secondsSource || 'local') === 'local' ? ' active' : ''}`}
-                    onClick={() => patch({ secondsSource: 'local', secondsRef: undefined })}>
-                    Local
-                  </button>
-                  <button type="button"
-                    className={`char-toggle-option${draft.secondsSource === 'global' ? ' active' : ''}`}
-                    onClick={() => patch({ secondsSource: 'global' })}>
-                    Global
-                  </button>
-                </div>
+                <label>Duration</label>
+                <select className="editor-select"
+                  value={draft.secondsSource === 'global' ? (draft.secondsRef?.name || '') : ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    patch(v
+                      ? { secondsSource: 'global', secondsRef: { type: 'byName', name: v } }
+                      : { secondsSource: 'local', secondsRef: undefined });
+                  }}>
+                  <option value="">Use local value only</option>
+                  {numberStates.map(s => (
+                    <option key={s.id} value={s.name}>
+                      ({STATE_TYPE_SYMBOL[s.type] || s.type}) {s.displayName || s.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
-            {draft.secondsSource === 'global' ? (
-              <>
-                <div className="editor-field">
-                  <label>Global Value</label>
-                  <select className="editor-select"
-                    value={draft.secondsRef?.name || ''}
-                    onChange={(e) => patch({ secondsRef: e.target.value ? { type: 'byName', name: e.target.value } : undefined })}>
-                    <option value="">-- Select global value --</option>
-                    {numberStates.map(s => (
-                      <option key={s.id} value={s.name}>
-                        ({STATE_TYPE_SYMBOL[s.type] || s.type}) {s.displayName || s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="editor-field">
-                  <label>Default Duration (seconds)</label>
-                  <input className="editor-input" type="number" min={0} step={0.1}
-                    value={draft.seconds ?? 1}
-                    onChange={(e) => patch({ seconds: +e.target.value })} />
-                </div>
-              </>
-            ) : (
-              <div className="editor-field">
-                <label>Duration (seconds)</label>
-                <input className="editor-input" type="number" min={0} step={0.1}
-                  value={draft.seconds ?? 1}
-                  onChange={(e) => patch({ seconds: +e.target.value })} />
-              </div>
-            )}
+            <div className="editor-field">
+              <label>Duration (seconds)</label>
+              <input className="editor-input" type="number" min={0} step={0.1}
+                value={draft.seconds ?? 1}
+                onChange={(e) => patch({ seconds: +e.target.value })} />
+            </div>
           </>
         );
       })()}

@@ -105,6 +105,7 @@ export function formatRetriggerPolicy(policy: string): string {
 export function formatBlockType(type: string): string {
   const map: Record<string, string> = {
     controlDevice: 'Control Device',
+    timedControl: 'Timed Control',
     stateVariable: 'Global Value',
     webhook: 'Webhook',
     log: 'Log Message',
@@ -125,6 +126,7 @@ export function blockTypeIcon(type: string, kind: string): string {
   if (kind === 'action') {
     const map: Record<string, string> = {
       controlDevice: 'house',
+      timedControl: 'clock',
       webhook: 'link-circle-fill',
       log: 'cpu',
       runScene: 'play-circle-fill',

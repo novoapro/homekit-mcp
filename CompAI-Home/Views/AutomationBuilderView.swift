@@ -711,6 +711,7 @@ private struct BuilderActionBlockRow: View {
     private var actionIcon: String {
         switch action {
         case .controlDevice: return "house.fill"
+        case .timedControl: return "timer"
         case .webhook: return "globe"
         case .log: return "text.bubble"
         case .runScene: return "play.rectangle.fill"
@@ -721,6 +722,7 @@ private struct BuilderActionBlockRow: View {
     private var actionTitle: String {
         switch action {
         case .controlDevice(let a): return a.name ?? "Control Device"
+        case .timedControl(let a): return a.name ?? "Timed Control"
         case .webhook(let a): return a.name ?? "Webhook"
         case .log(let a): return a.name ?? "Log Message"
         case .runScene(let a): return a.name ?? "Run Scene"
@@ -732,6 +734,10 @@ private struct BuilderActionBlockRow: View {
         switch action {
         case .controlDevice(let a):
             return "Set \(devices.resolvedCharacteristicName(deviceId: a.deviceId, characteristicId: a.characteristicId)) = \(a.value.value) on \(devices.resolvedName(deviceId: a.deviceId, serviceId: a.serviceId))"
+        case .timedControl(let a):
+            let secs = a.durationSeconds
+            let secsStr = secs.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(secs))s" : String(format: "%.1fs", secs)
+            return "\(a.changes.count) change(s) · hold \(secsStr)"
         case .webhook(let a):
             return "\(a.method) \(a.url)"
         case .log(let a):

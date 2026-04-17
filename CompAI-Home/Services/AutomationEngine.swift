@@ -836,6 +836,7 @@ actor AutomationEngine: AutomationEngineProtocol {
         let actionName: String? = {
             switch action {
             case let .controlDevice(a): return a.name
+            case let .timedControl(a): return a.name
             case let .webhook(a): return a.name
             case let .log(a): return a.name
             case let .runScene(a): return a.name
@@ -847,8 +848,17 @@ actor AutomationEngine: AutomationEngineProtocol {
         // Notify that we are starting
         await onUpdate(result)
 
+        // Timed control holds the state for its configured duration, which can exceed the
+        // default blockTimeout. Expand the effective timeout based on the configured fallback.
+        let effectiveTimeout: TimeInterval = {
+            if case let .timedControl(a) = action {
+                return max(blockTimeout, a.durationSeconds + 15)
+            }
+            return blockTimeout
+        }()
+
         do {
-            try await withTimeout(seconds: blockTimeout) {
+            try await withTimeout(seconds: effectiveTimeout) {
                 switch action {
                 case let .controlDevice(a):
                     try await self.executeControlDevice(a, automationId: context.automation.id, automationName: context.automation.name)
@@ -868,6 +878,18 @@ actor AutomationEngine: AutomationEngineProtocol {
                         valueDesc = "\(a.value.value)"
                     }
                     result.detail = "Set \(charName) to \(valueDesc) on \(deviceName)\(svcSuffix)"
+                case let .timedControl(a):
+                    let finalDetail = try await self.executeTimedControl(
+                        a,
+                        automationId: context.automation.id,
+                        automationName: context.automation.name,
+                        reportProgress: { progressDetail in
+                            var interim = result
+                            interim.detail = progressDetail
+                            await onUpdate(interim)
+                        }
+                    )
+                    result.detail = finalDetail
                 case let .webhook(a):
                     try await self.executeWebhook(a)
                     result.detail = "\(a.method) \(a.url)"
@@ -947,6 +969,148 @@ actor AutomationEngine: AutomationEngineProtocol {
             value: effectiveValue,
             serviceId: action.serviceId
         )
+    }
+
+    /// Applies a list of characteristic changes, holds them for the configured duration, then reverts each
+    /// change to the value it had immediately before the block ran (in the same forward order).
+    /// Rollback runs even if the hold is cancelled or throws. Returns a human-readable result detail.
+    private func executeTimedControl(
+        _ action: TimedControlAction,
+        automationId: UUID,
+        automationName: String,
+        reportProgress: @escaping (String) async -> Void
+    ) async throws -> String {
+        let totalCount = action.changes.count
+        guard totalCount > 0 else {
+            return "Timed control has no changes configured"
+        }
+
+        // Resolve hold duration (prefer global ref, fall back to local durationSeconds)
+        var duration: Double = action.durationSeconds
+        if let ref = action.durationRef, let variable = await stateVariableStorage.resolve(ref) {
+            if let d = variable.value.value as? Double {
+                duration = d
+            } else if let i = variable.value.value as? Int {
+                duration = Double(i)
+            }
+        }
+
+        struct AppliedChange {
+            let change: TimedDeviceChange
+            let resolvedType: String
+            let originalValue: Any
+        }
+
+        var applied: [AppliedChange] = []
+
+        // Capture originals and apply forward
+        for change in action.changes {
+            let resolvedType = registry?.readCharacteristicType(forStableId: change.characteristicId)
+                ?? CharacteristicTypes.characteristicType(forName: change.characteristicId)
+                ?? change.characteristicId
+
+            let device: DeviceModel? = await MainActor.run { homeKitManager.getDeviceState(id: change.deviceId) }
+            guard let device else {
+                await logOrphan(automationId: automationId, automationName: automationName, location: "timedControl change for device \(change.deviceId)")
+                continue
+            }
+            let resolvedServiceId = change.serviceId.map { registry?.readHomeKitServiceId($0) ?? $0 }
+            let targetServices = resolvedServiceId != nil ? device.services.filter({ $0.id == resolvedServiceId }) : device.services
+            guard let characteristic = targetServices.flatMap(\.characteristics).first(where: { $0.type == resolvedType }),
+                  let currentValue = characteristic.value else {
+                AppLogger.automation.warning("[\(automationName)] timedControl: could not read current value for \(change.deviceId):\(resolvedType), skipping")
+                continue
+            }
+
+            // Resolve new value (global ref with fallback)
+            let resolvedValue: Any
+            if let ref = change.valueRef, let variable = await stateVariableStorage.resolve(ref) {
+                resolvedValue = variable.value.value
+            } else {
+                resolvedValue = change.value.value
+            }
+
+            // Validate against characteristic metadata
+            do {
+                try CharacteristicValidator.validate(value: resolvedValue, against: characteristic)
+            } catch {
+                AppLogger.automation.warning("[\(automationName)] timedControl: validation failed for \(change.deviceId):\(resolvedType) — \(error.localizedDescription)")
+                continue
+            }
+
+            // Temperature conversion
+            var effectiveValue: Any = resolvedValue
+            if TemperatureConversion.isFahrenheit && TemperatureConversion.isTemperatureCharacteristic(resolvedType) {
+                if let doubleVal = resolvedValue as? Double {
+                    effectiveValue = TemperatureConversion.fahrenheitToCelsius(doubleVal)
+                } else if let intVal = resolvedValue as? Int {
+                    effectiveValue = TemperatureConversion.fahrenheitToCelsius(Double(intVal))
+                }
+            }
+
+            do {
+                try await homeKitManager.updateDevice(
+                    id: change.deviceId,
+                    characteristicType: resolvedType,
+                    value: effectiveValue,
+                    serviceId: change.serviceId
+                )
+                applied.append(AppliedChange(change: change, resolvedType: resolvedType, originalValue: currentValue.value))
+            } catch {
+                AppLogger.automation.warning("[\(automationName)] timedControl: apply failed for \(change.deviceId):\(resolvedType) — \(error.localizedDescription)")
+            }
+        }
+
+        if applied.isEmpty {
+            throw AutomationEngineError.stateVariableError("timedControl: all \(totalCount) change(s) failed to apply")
+        }
+
+        let durationStr = formatDuration(duration)
+        await reportProgress("Holding \(applied.count) change(s) for \(durationStr)…")
+
+        // Sleep; capture cancellation so we can still roll back
+        var sleepError: Error?
+        do {
+            try await Task.sleep(nanoseconds: UInt64(max(0, duration) * 1_000_000_000))
+        } catch {
+            sleepError = error
+        }
+
+        // Rollback in forward order
+        var rollbackFailures = 0
+        for item in applied {
+            do {
+                try await homeKitManager.updateDevice(
+                    id: item.change.deviceId,
+                    characteristicType: item.resolvedType,
+                    value: item.originalValue,
+                    serviceId: item.change.serviceId
+                )
+            } catch {
+                rollbackFailures += 1
+                AppLogger.automation.warning("[\(automationName)] timedControl: rollback failed for \(item.change.deviceId):\(item.resolvedType) — \(error.localizedDescription)")
+            }
+        }
+
+        if let error = sleepError { throw error }
+
+        var detail: String
+        if applied.count == totalCount {
+            detail = "Held \(applied.count) change(s) for \(durationStr), reverted"
+        } else {
+            detail = "Held \(applied.count)/\(totalCount) change(s) for \(durationStr), reverted"
+        }
+        if rollbackFailures > 0 {
+            detail += " (rollback issues: \(rollbackFailures))"
+        }
+        return detail
+    }
+
+    private func formatDuration(_ seconds: Double) -> String {
+        if seconds.truncatingRemainder(dividingBy: 1) == 0 {
+            return "\(Int(seconds))s"
+        }
+        return String(format: "%.1fs", seconds)
     }
 
     /// Validates that a URL does not point to a private/internal IP address (SSRF protection).

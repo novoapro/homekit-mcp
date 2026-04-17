@@ -173,6 +173,20 @@ export interface AutomationBlockDef {
   targetAutomationId?: string;
   executionMode?: string;
   operation?: unknown;
+  // timedControl
+  durationSeconds?: number;
+  durationRef?: { type: string; name?: string; id?: string };
+  changes?: TimedDeviceChangeDef[];
+}
+
+export interface TimedDeviceChangeDef {
+  deviceId: string;
+  deviceName?: string;
+  roomName?: string;
+  serviceId?: string;
+  characteristicId: string;
+  value: unknown;
+  valueRef?: { type: string; name?: string; id?: string };
 }
 
 // Full Automation Definition

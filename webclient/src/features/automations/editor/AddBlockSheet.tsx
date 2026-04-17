@@ -10,6 +10,7 @@ interface BlockOption {
 
 const ACTION_BLOCKS: BlockOption[] = [
   { type: 'controlDevice', label: 'Control Device', description: 'Set a device characteristic value' },
+  { type: 'timedControl', label: 'Timed Control', description: 'Set characteristics, hold, then revert automatically' },
   { type: 'runScene', label: 'Run Scene', description: 'Activate a HomeKit scene' },
   { type: 'webhook', label: 'Webhook', description: 'Send an HTTP request to a URL' },
   { type: 'log', label: 'Log', description: 'Write a message to the automation log' },
