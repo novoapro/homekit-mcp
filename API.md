@@ -681,7 +681,20 @@ Send a full `automation` JSON body. The following fields are auto-generated and 
 
 Send a partial JSON body. Only included top-level fields are updated; omitted fields are preserved. Arrays (`triggers`, `conditions`, `blocks`) are replaced wholesale when provided.
 
-Updatable fields: `name`, `description`, `isEnabled`, `continueOnError`, `retriggerPolicy`, `triggers`, `conditions`, `blocks`.
+Updatable fields: `name`, `description`, `isEnabled`, `continueOnError`, `retriggerPolicy`, `loggingOverride`, `triggers`, `conditions`, `blocks`.
+
+**Logging override (`loggingOverride`)**
+
+Optional per-automation logging control. Overrides the global automation logging settings for this one automation. Accepted values:
+
+| Value | Behavior |
+|---|---|
+| _omitted_ / `null` | Follow the global automation logging settings from General preferences |
+| `"off"` | This automation never produces execution log entries |
+| `"executed"` | Log only executions that actually ran (guards passed). Skipped runs are not logged. |
+| `"all"` | Log every triggered execution, including ones skipped because of trigger or execution guards |
+
+On `PUT /automations/:automationId`, sending `"loggingOverride": null` (or omitting the field while sending any other field) clears a previously-set override and reverts the automation to following global settings.
 
 See [automation](#automation) in Data Models for the full schema.
 
@@ -1273,7 +1286,7 @@ Create a new automation.
 
 Auto-generated fields (omit from input): `id`, `createdAt`, `updatedAt`, `metadata`.
 
-Defaults: `isEnabled = true`, `continueOnError = false`, `retriggerPolicy = "ignoreNew"`.
+Defaults: `isEnabled = true`, `continueOnError = false`, `retriggerPolicy = "ignoreNew"`. Optional top-level `loggingOverride` (`"off"` | `"executed"` | `"all"`) overrides the global automation logging settings for this automation; omit or set to `null` to follow the global settings.
 
 Returns success message with the new automation's ID and name.
 
@@ -1478,6 +1491,7 @@ Private IP ranges are blocked by default (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0
 | `blocks` | AutomationBlock[] | no | Sequence of actions/flow control |
 | `continueOnError` | boolean | no | Skip failed blocks instead of stopping |
 | `retriggerPolicy` | string | no | Default concurrent execution policy (see below) |
+| `loggingOverride` | string | yes | Per-automation logging override: `"off"`, `"executed"`, or `"all"`. `null`/omitted = follow global automation logging settings. See [Logging override](#logging-override) below. |
 | `metadata` | AutomationMetadata | no | Execution statistics |
 | `createdAt` | string (ISO 8601) | no | Creation timestamp |
 | `updatedAt` | string (ISO 8601) | no | Last update timestamp |
@@ -1490,6 +1504,18 @@ Private IP ranges are blocked by default (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0
 | `cancelAndRestart` | Cancel current execution, start new |
 | `queueAndExecute` | Queue new trigger, execute after current finishes |
 | `cancelOnly` | Cancel current execution, don't restart |
+
+<a id="logging-override"></a>
+**Logging override values (`loggingOverride`):**
+
+| Value | Behavior |
+|---|---|
+| _omitted_ / `null` | Follow the global automation logging settings from General preferences |
+| `"off"` | This automation never produces execution log entries |
+| `"executed"` | Log only executions that actually ran (trigger and execution guards passed). Skipped runs are not logged. |
+| `"all"` | Log every triggered execution, including ones skipped because of trigger or execution guards |
+
+The override takes precedence over the global automation logging toggle and the global "log skipped automations" toggle, but is still gated by the global master logging switch — if the master switch is off, nothing is logged regardless of the override.
 
 **AutomationMetadata:**
 

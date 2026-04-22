@@ -130,11 +130,14 @@ export interface TimedChangeDraft {
   valueSource?: 'local' | 'global';
 }
 
+export type AutomationLoggingMode = 'off' | 'executed' | 'all';
+
 export interface AutomationDraft {
   name: string;
   description: string;
   isEnabled: boolean;
   continueOnError: boolean;
+  loggingOverride?: AutomationLoggingMode;
   tags: string[];
   triggers: AutomationTriggerDraft[];
   conditions: AutomationConditionDraft[];

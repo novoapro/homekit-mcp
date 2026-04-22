@@ -172,14 +172,41 @@ struct AutomationEditorView: View {
                 }
             ))
             .tint(Theme.Tint.main)
+
+            Picker("Logging", selection: Binding(
+                get: { draft.loggingOverride?.rawValue ?? "default" },
+                set: { newValue in
+                    draft.loggingOverride = newValue == "default" ? nil : AutomationLoggingMode(rawValue: newValue)
+                }
+            )) {
+                Text("Use Global Setting").tag("default")
+                Text("Off").tag(AutomationLoggingMode.off.rawValue)
+                Text("Executed").tag(AutomationLoggingMode.executed.rawValue)
+                Text("All").tag(AutomationLoggingMode.all.rawValue)
+            }
         } header: {
             Text("Details")
+        } footer: {
+            Text(loggingFooterText)
         }
         .listRowBackground(Theme.contentBackground)
         .alert("Cannot Disable", isPresented: $showContinueOnErrorAlert) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Remove all Block Result conditions from the automation before disabling Continue on Error.")
+        }
+    }
+
+    private var loggingFooterText: String {
+        switch draft.loggingOverride {
+        case .none:
+            return "Logging follows the global automation logging setting in General preferences."
+        case .off:
+            return "This automation will never produce execution log entries, regardless of global settings."
+        case .executed:
+            return "Only executions that actually run (guards passed) are logged. Skipped executions are not."
+        case .all:
+            return "Every triggered execution is logged, including ones skipped because of guard failures."
         }
     }
 

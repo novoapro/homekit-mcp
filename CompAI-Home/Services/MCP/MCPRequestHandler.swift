@@ -505,6 +505,9 @@ final class MCPRequestHandler: Sendable {
                 "isEnabled": ["type": "boolean", "required": false, "default": true],
                 "continueOnError": ["type": "boolean", "required": false, "default": false,
                     "description": "Must be true if using blockResult conditions"],
+                "loggingOverride": ["type": "string", "required": false,
+                    "enum": ["off", "executed", "all"],
+                    "description": "Per-automation logging override. 'off' never logs, 'executed' logs only runs where guards passed, 'all' logs every trigger (including skipped). Omit or set to null to follow the global logging settings."],
                 "triggers": ["type": "array", "required": true, "description": "Array of trigger objects"],
                 "conditions": ["type": "array", "required": false,
                     "description": "Optional execution guards (AND-ed). Evaluated after any trigger fires. Supports deviceState, timeCondition, engineState (no blockResult). Failure logs as conditionNotMet (skipped)."],
@@ -1194,6 +1197,15 @@ final class MCPRequestHandler: Sendable {
             if let coe = updates["continueOnError"] as? Bool { merged.continueOnError = coe }
             if let policyStr = updates["retriggerPolicy"] as? String,
                let policy = ConcurrentExecutionPolicy(rawValue: policyStr) { merged.retriggerPolicy = policy }
+            if updates.keys.contains("loggingOverride") {
+                if let overrideStr = updates["loggingOverride"] as? String,
+                   let mode = AutomationLoggingMode(rawValue: overrideStr) {
+                    merged.loggingOverride = mode
+                } else {
+                    // Explicit null (or any non-string) clears the override
+                    merged.loggingOverride = nil
+                }
+            }
 
             // For triggers/conditions/blocks, re-parse from JSON if provided
             if let triggersArray = updates["triggers"] {
@@ -1220,6 +1232,7 @@ final class MCPRequestHandler: Sendable {
                 automation.isEnabled = merged.isEnabled
                 automation.continueOnError = merged.continueOnError
                 automation.retriggerPolicy = merged.retriggerPolicy
+                automation.loggingOverride = merged.loggingOverride
                 automation.triggers = merged.triggers
                 automation.conditions = merged.conditions
                 automation.blocks = merged.blocks
@@ -1364,6 +1377,7 @@ final class MCPRequestHandler: Sendable {
                 blocks: improved.blocks,
                 continueOnError: improved.continueOnError,
                 retriggerPolicy: improved.retriggerPolicy,
+                loggingOverride: improved.loggingOverride,
                 metadata: existing.metadata,
                 createdAt: existing.createdAt,
                 updatedAt: Date()

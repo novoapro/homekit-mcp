@@ -203,6 +203,9 @@ enum MCPToolDefinitions {
 
                 TOP-LEVEL FIELDS: name (required), description, isEnabled (bool, default true), \
                 continueOnError (bool, default false), \
+                loggingOverride (optional; "off"|"executed"|"all", omit or null to follow the global \
+                logging setting — "off" never logs, "executed" logs only runs where guards passed, \
+                "all" logs every trigger including skipped ones), \
                 triggers (array), conditions (optional guard array), blocks (array). \
                 Omit id, createdAt, updatedAt, metadata — they are auto-generated.
 
@@ -302,7 +305,7 @@ enum MCPToolDefinitions {
                 Only top-level fields that are present in the submitted object are replaced; omitted fields \
                 remain unchanged. Triggers, conditions, and blocks arrays are replaced wholesale when provided.
 
-                Updatable fields: name, description, isEnabled, continueOnError, \
+                Updatable fields: name, description, isEnabled, continueOnError, loggingOverride, \
                 triggers, conditions, blocks. \
                 Per-trigger retriggerPolicy: set on each trigger object \
                 ("ignoreNew"|"cancelAndRestart"|"queueAndExecute"|"cancelOnly").

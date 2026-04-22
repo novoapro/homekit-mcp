@@ -195,6 +195,7 @@ class AutomationViewModel: ObservableObject {
             blocks: improved.blocks,
             continueOnError: improved.continueOnError,
             retriggerPolicy: improved.retriggerPolicy,
+            loggingOverride: improved.loggingOverride,
             metadata: automation.metadata,
             createdAt: automation.createdAt,
             updatedAt: Date()

@@ -877,6 +877,35 @@ export function AutomationEditorPage() {
               aria-checked={draft.continueOnError}
             />
           </div>
+          <div className="wfe-toggle-row">
+            <div>
+              <div className="wfe-toggle-label">Logging</div>
+              <div className="wfe-toggle-hint">
+                {draft.loggingOverride === 'off'
+                  ? 'Never logs this automation'
+                  : draft.loggingOverride === 'executed'
+                  ? 'Logs only executions that ran (guards passed)'
+                  : draft.loggingOverride === 'all'
+                  ? 'Logs every trigger, including skipped ones'
+                  : 'Follows the global automation logging setting'}
+              </div>
+            </div>
+            <select
+              className="editor-select"
+              value={draft.loggingOverride ?? 'default'}
+              onChange={(e) => {
+                const v = e.target.value;
+                patchDraft({
+                  loggingOverride: v === 'default' ? undefined : (v as 'off' | 'executed' | 'all'),
+                });
+              }}
+            >
+              <option value="default">Use Global Setting</option>
+              <option value="off">Off</option>
+              <option value="executed">Executed</option>
+              <option value="all">All</option>
+            </select>
+          </div>
         </div>
       </div>
 

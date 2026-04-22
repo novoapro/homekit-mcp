@@ -164,6 +164,7 @@ struct AutomationDetailView: View {
 
             LabeledContent("Executions", value: "\(automation.metadata.totalExecutions)")
             LabeledContent("Continue on Error", value: automation.continueOnError ? "Yes" : "No")
+            LabeledContent("Logging", value: automation.loggingOverride?.displayName ?? "Global")
 
             if let lastTriggered = automation.metadata.lastTriggeredAt {
                 LabeledContent("Last Triggered") {

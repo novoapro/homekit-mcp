@@ -214,6 +214,7 @@ struct AutomationDraft {
     var isEnabled: Bool
     var continueOnError: Bool
     var retriggerPolicy: ConcurrentExecutionPolicy
+    var loggingOverride: AutomationLoggingMode?
     var triggers: [TriggerDraft]
     var conditionRoot: ConditionGroupDraft
     var blocks: [BlockDraft]
@@ -226,6 +227,7 @@ struct AutomationDraft {
             isEnabled: true,
             continueOnError: false,
             retriggerPolicy: .ignoreNew,
+            loggingOverride: nil,
             triggers: [],
             conditionRoot: .empty(),
             blocks: []
@@ -1766,6 +1768,7 @@ extension AutomationDraft {
         isEnabled = automation.isEnabled
         continueOnError = automation.continueOnError
         retriggerPolicy = automation.retriggerPolicy
+        loggingOverride = automation.loggingOverride
         triggers = automation.triggers.compactMap { Self.convertTrigger($0, devices: devices) }
         conditionRoot = Self.convertConditionTree(automation.conditions ?? [], devices: devices)
         blocks = automation.blocks.map { Self.convertBlock($0, devices: devices) }
@@ -2216,6 +2219,7 @@ extension AutomationDraft {
             blocks: blocks.map { $0.toBlock(devices: devices) },
             continueOnError: continueOnError,
             retriggerPolicy: triggers.first?.retriggerPolicy ?? .ignoreNew,
+            loggingOverride: loggingOverride,
             metadata: existingMetadata ?? .empty,
             createdAt: createdAt ?? Date(),
             updatedAt: Date()

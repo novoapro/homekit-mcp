@@ -189,6 +189,9 @@ export interface TimedDeviceChangeDef {
   valueRef?: { type: string; name?: string; id?: string };
 }
 
+// Per-automation logging override. `undefined`/omitted = follow global settings.
+export type AutomationLoggingMode = 'off' | 'executed' | 'all';
+
 // Full Automation Definition
 export interface AutomationDefinition {
   id: string;
@@ -200,6 +203,7 @@ export interface AutomationDefinition {
   blocks: AutomationBlockDef[];
   continueOnError: boolean;
   retriggerPolicy: string;
+  loggingOverride?: AutomationLoggingMode;
   metadata: {
     createdBy?: string;
     tags?: string[];

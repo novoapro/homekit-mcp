@@ -140,6 +140,30 @@ actor AutomationEngine: AutomationEngineProtocol {
         await conditionEvaluator.evaluate(condition)
     }
 
+    // MARK: - Logging Policy Helpers
+
+    /// Whether any log entry should be written for `automation`. Consults the
+    /// per-automation `loggingOverride` first, falling back to global settings.
+    private nonisolated func shouldLogAutomation(_ automation: Automation) -> Bool {
+        guard storage.readLoggingEnabled() else { return false }
+        switch automation.loggingOverride {
+        case .off: return false
+        case .executed, .all: return true
+        case .none: return storage.readAutomationLoggingEnabled()
+        }
+    }
+
+    /// Whether to log skipped executions (trigger guard or execution guard failures)
+    /// for `automation`. Consults the per-automation override first, falling back to globals.
+    private nonisolated func shouldLogSkippedAutomation(_ automation: Automation) -> Bool {
+        guard storage.readLoggingEnabled() else { return false }
+        switch automation.loggingOverride {
+        case .off, .executed: return false
+        case .all: return true
+        case .none: return storage.readAutomationLoggingEnabled() && storage.readLogSkippedAutomations()
+        }
+    }
+
     private nonisolated func updateBlockResult(_ updated: BlockResult, in results: inout [BlockResult]) -> Bool {
         for i in 0 ..< results.count {
             if results[i].id == updated.id {
@@ -177,7 +201,7 @@ actor AutomationEngine: AutomationEngineProtocol {
 
             case .guardFailed(let condResults):
                 // Log trigger guard failure using the same mechanism as execution guards
-                if storage.readLoggingEnabled() && storage.readAutomationLoggingEnabled() && storage.readLogSkippedAutomations() {
+                if shouldLogSkippedAutomation(automation) {
                     let charName = CharacteristicTypes.displayName(for: change.characteristicType)
                     let triggerDesc = "\(change.deviceName) \(charName) changed"
                     var execLog = AutomationExecutionLog(
@@ -397,7 +421,7 @@ actor AutomationEngine: AutomationEngineProtocol {
         if let conditions = triggerConditions, !conditions.isEmpty {
             let (allPassed, condResults) = await conditionEvaluator.evaluateAll(conditions)
             if !allPassed {
-                if storage.readLoggingEnabled() && storage.readAutomationLoggingEnabled() && storage.readLogSkippedAutomations() {
+                if shouldLogSkippedAutomation(automation) {
                     var execLog = AutomationExecutionLog(
                         automationId: automation.id,
                         automationName: automation.name,
@@ -693,7 +717,7 @@ actor AutomationEngine: AutomationEngineProtocol {
                 let failedDescriptions = condResults.filter { !$0.passed }.map { $0.conditionDescription }
                 execLog.errorMessage = "Execution guard not met: \(failedDescriptions.joined(separator: "; "))"
                 execLog.completedAt = Date()
-                if storage.readLoggingEnabled() && storage.readAutomationLoggingEnabled() && storage.readLogSkippedAutomations() {
+                if shouldLogSkippedAutomation(automation) {
                     // Log the skipped execution as a completed entry (never "running")
                     await executionLogService.logEntry(execLog.toStateChangeLog())
                     await automationStorageService.updateMetadata(
@@ -709,7 +733,7 @@ actor AutomationEngine: AutomationEngineProtocol {
 
         // Execution guards passed (or none) — now the automation is truly running
         executionToAutomation[execLog.id] = automation.id
-        if storage.readLoggingEnabled() && storage.readAutomationLoggingEnabled() {
+        if shouldLogAutomation(automation) {
             await executionLogService.logEntry(execLog.toStateChangeLog())
         }
 
@@ -733,7 +757,7 @@ actor AutomationEngine: AutomationEngineProtocol {
                 // Block not yet in the array — append it so the UI can show it immediately
                 logBox.execLog.blockResults.append(updated)
             }
-            if self.storage.readLoggingEnabled() && storage.readAutomationLoggingEnabled() {
+            if self.shouldLogAutomation(automation) {
                 await self.executionLogService.updateEntry(logBox.execLog.toStateChangeLog())
             }
         }
@@ -757,7 +781,7 @@ actor AutomationEngine: AutomationEngineProtocol {
                 // but we append it here if it wasn't already in the top-level list.
                 if !logBox.execLog.blockResults.contains(where: { $0.id == result.id }) {
                     logBox.execLog.blockResults.append(result)
-                    if storage.readLoggingEnabled() && storage.readAutomationLoggingEnabled() {
+                    if shouldLogAutomation(automation) {
                         await executionLogService.updateEntry(logBox.execLog.toStateChangeLog())
                     }
                 }
@@ -814,7 +838,7 @@ actor AutomationEngine: AutomationEngineProtocol {
         executionToAutomation.removeValue(forKey: execLog.id)
 
         // Update the existing running log entry with the final result
-        if storage.readLoggingEnabled() && storage.readAutomationLoggingEnabled() {
+        if shouldLogAutomation(automation) {
             await executionLogService.updateEntry(execLog.toStateChangeLog())
         }
 

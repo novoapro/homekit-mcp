@@ -35,6 +35,29 @@ enum ConcurrentExecutionPolicy: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Automation Logging Override
+
+/// Per-automation logging level. When set, overrides the global automation-logging
+/// setting for this specific automation. `nil` means "follow global settings".
+enum AutomationLoggingMode: String, Codable, CaseIterable, Identifiable {
+    /// Do not log anything for this automation (skipped or executed).
+    case off
+    /// Log only when the automation actually runs (execution guards passed).
+    case executed
+    /// Log everything, including skipped executions (trigger/condition guard failures).
+    case all
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .off: return "Off"
+        case .executed: return "Executed"
+        case .all: return "All"
+        }
+    }
+}
+
 // MARK: - Automation (Top-Level)
 
 struct Automation: Identifiable, Codable {
@@ -47,6 +70,9 @@ struct Automation: Identifiable, Codable {
     var blocks: [AutomationBlock]
     var continueOnError: Bool
     var retriggerPolicy: ConcurrentExecutionPolicy
+    /// When set, overrides the global logging settings for this automation only.
+    /// `nil` → follow global settings.
+    var loggingOverride: AutomationLoggingMode?
     var metadata: AutomationMetadata
     let createdAt: Date
     var updatedAt: Date
@@ -61,6 +87,7 @@ struct Automation: Identifiable, Codable {
         blocks: [AutomationBlock],
         continueOnError: Bool = false,
         retriggerPolicy: ConcurrentExecutionPolicy = .ignoreNew,
+        loggingOverride: AutomationLoggingMode? = nil,
         metadata: AutomationMetadata = .empty,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
@@ -74,6 +101,7 @@ struct Automation: Identifiable, Codable {
         self.blocks = blocks
         self.continueOnError = continueOnError
         self.retriggerPolicy = retriggerPolicy
+        self.loggingOverride = loggingOverride
         self.metadata = metadata
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -82,7 +110,7 @@ struct Automation: Identifiable, Codable {
     /// Custom Codable to handle backward compatibility (missing retriggerPolicy defaults to .ignoreNew)
     private enum CodingKeys: String, CodingKey {
         case id, name, description, isEnabled, triggers, conditions, blocks
-        case continueOnError, retriggerPolicy, metadata, createdAt, updatedAt
+        case continueOnError, retriggerPolicy, loggingOverride, metadata, createdAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -96,6 +124,7 @@ struct Automation: Identifiable, Codable {
         blocks = try container.decode([AutomationBlock].self, forKey: .blocks)
         continueOnError = try container.decode(Bool.self, forKey: .continueOnError)
         retriggerPolicy = try container.decodeIfPresent(ConcurrentExecutionPolicy.self, forKey: .retriggerPolicy) ?? .ignoreNew
+        loggingOverride = try container.decodeIfPresent(AutomationLoggingMode.self, forKey: .loggingOverride)
         metadata = try container.decode(AutomationMetadata.self, forKey: .metadata)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)

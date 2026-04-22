@@ -85,6 +85,7 @@ export function AutomationDefinitionPage() {
         isEnabled: false,
         continueOnError: automation.continueOnError,
         retriggerPolicy: automation.retriggerPolicy,
+        loggingOverride: automation.loggingOverride,
         triggers: automation.triggers,
         conditions: automation.conditions,
         blocks: automation.blocks,

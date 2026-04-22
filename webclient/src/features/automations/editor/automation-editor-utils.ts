@@ -114,7 +114,7 @@ export function draftToPayload(draft: AutomationDraft): Partial<AutomationDefini
   if (conditions) rewritePayloadConditionBlockRefs(conditions, draftIdToBlockId);
   rewritePayloadBlockConditionRefs(blocks, draftIdToBlockId);
 
-  return {
+  const payload: Partial<AutomationDefinition> = {
     name: draft.name.trim(),
     description: draft.description.trim(),
     isEnabled: draft.isEnabled,
@@ -124,6 +124,10 @@ export function draftToPayload(draft: AutomationDraft): Partial<AutomationDefini
     conditions,
     blocks,
   };
+  if (draft.loggingOverride) {
+    payload.loggingOverride = draft.loggingOverride;
+  }
+  return payload;
 }
 
 function rewritePayloadConditionBlockRefs(conditions: AutomationConditionDef[], map: Map<string, string>): void {
@@ -370,6 +374,7 @@ export function definitionToDraft(wf: AutomationDefinition): AutomationDraft {
     description: wf.description ?? '',
     isEnabled: wf.isEnabled,
     continueOnError: wf.continueOnError,
+    loggingOverride: wf.loggingOverride,
     tags: wf.metadata?.tags ?? [],
     triggers: wf.triggers.map(triggerDefToDraft),
     conditions,

@@ -1337,6 +1337,14 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                 if let coe = updates["continueOnError"] as? Bool { automation.continueOnError = coe }
                 if let policyStr = updates["retriggerPolicy"] as? String,
                    let policy = ConcurrentExecutionPolicy(rawValue: policyStr) { automation.retriggerPolicy = policy }
+                if updates.keys.contains("loggingOverride") {
+                    if let overrideStr = updates["loggingOverride"] as? String,
+                       let mode = AutomationLoggingMode(rawValue: overrideStr) {
+                        automation.loggingOverride = mode
+                    } else {
+                        automation.loggingOverride = nil
+                    }
+                }
                 if let triggers = parsedTriggers { automation.triggers = triggers }
                 if let conditions = parsedConditions { automation.conditions = conditions }
                 if let blocks = parsedBlocks { automation.blocks = blocks }
@@ -1714,6 +1722,7 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             blocks: improved.blocks,
             continueOnError: improved.continueOnError,
             retriggerPolicy: improved.retriggerPolicy,
+            loggingOverride: improved.loggingOverride,
             metadata: existing.metadata,
             createdAt: existing.createdAt,
             updatedAt: Date()
