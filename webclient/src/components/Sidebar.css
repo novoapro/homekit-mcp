@@ -194,11 +194,15 @@
 .sidebar.collapsed .sidebar-sun-times {
   flex-direction: column;
   gap: 4px;
+  align-items: stretch;
 }
 
 .sidebar.collapsed .sidebar-sun-events {
-  align-items: center;
   padding: 0 0 var(--spacing-sm);
+}
+
+.sidebar.collapsed .sidebar-sun-row {
+  justify-content: center;
 }
 
 .sidebar.collapsed .sidebar-sun-time,
@@ -210,11 +214,13 @@
 .sidebar.collapsed .sidebar-nav-item {
   justify-content: center;
   padding: 10px;
+  gap: 0;
 }
 
 .sidebar.collapsed .sidebar-logo {
   justify-content: center;
   padding: var(--spacing-md) 0;
+  gap: 0;
 }
 
 .sidebar.collapsed .sidebar-divider {

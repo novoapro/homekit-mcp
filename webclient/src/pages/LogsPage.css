@@ -6,14 +6,14 @@
 }
 
 /* Page header */
-.page-header {
+.logs-page-header {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-lg) var(--spacing-md) var(--spacing-sm);
 }
 
-.page-title {
+.logs-page-title {
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-black);
   color: var(--text-primary);
@@ -130,7 +130,7 @@
 }
 
 @media (max-width: 768px) {
-  .page-header {
+  .logs-page-header {
     display: none;
   }
   .log-list {

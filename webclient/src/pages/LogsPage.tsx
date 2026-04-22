@@ -276,8 +276,8 @@ export function LogsPage() {
   return (
     <div className="logs-page">
       {/* Page header */}
-      <div className="page-header">
-        <h1 className="page-title">Activity Log</h1>
+      <div className="logs-page-header">
+        <h1 className="logs-page-title">Activity Log</h1>
         <span className="log-count-badge">{logCount}</span>
         {polling.isLoading && <span className="loading-dot" />}
       </div>

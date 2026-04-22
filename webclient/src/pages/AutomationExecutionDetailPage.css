@@ -1,6 +1,4 @@
 .wfed-page {
-  max-width: 800px;
-  margin: 0 auto;
   padding: var(--spacing-md) var(--spacing-md) calc(var(--spacing-3xl) + env(safe-area-inset-bottom, 0px));
   height: 100%;
   overflow-y: auto;

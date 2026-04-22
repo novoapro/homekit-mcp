@@ -365,10 +365,26 @@ input, select, textarea {
 }
 
 /* ── Sidebar content offset (desktop) ───────────────── */
+/* The outer frame (TopBar + main) is pushed right by the sidebar width so it
+   reaches the viewport's right edge. Inside, we also reserve the sidebar width
+   on the right of <main> via padding, so the scrollable content is centered
+   in the viewport while the top-bar frame still spans edge-to-edge. */
 
 @media (min-width: 769px) {
-  .content-offset-expanded { margin-left: var(--sidebar-width); }
-  .content-offset-collapsed { margin-left: var(--sidebar-collapsed-width); }
+  .content-offset-expanded {
+    --current-sidebar-offset: var(--sidebar-width);
+    margin-left: var(--current-sidebar-offset);
+  }
+  .content-offset-collapsed {
+    --current-sidebar-offset: var(--sidebar-collapsed-width);
+    margin-left: var(--current-sidebar-offset);
+  }
+
+  .content-offset-expanded > main,
+  .content-offset-collapsed > main {
+    padding-right: var(--current-sidebar-offset);
+    transition: padding-right var(--sidebar-transition);
+  }
 }
 
 /* ── Pro Guard overlay ───────────────── */

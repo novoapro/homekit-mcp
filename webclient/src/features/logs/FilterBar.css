@@ -206,7 +206,7 @@
   display: none;
   align-items: center;
   gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-md);
   background: transparent;
 }
 
