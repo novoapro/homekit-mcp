@@ -213,8 +213,9 @@ export function BlockEditor({
           <div className="editor-field">
             <label>Hold seconds</label>
             <input className="editor-input" type="number" min={0} step={0.5}
-              value={draft.durationSeconds ?? 5}
-              onChange={(e) => patch({ durationSeconds: +e.target.value || 5 })} />
+              value={draft.durationSeconds ?? ''}
+              placeholder="5"
+              onChange={(e) => patch({ durationSeconds: e.target.value === '' ? undefined : +e.target.value })} />
           </div>
 
           {/* Changes list */}
@@ -455,7 +456,10 @@ export function BlockEditor({
                 <div className="editor-field">
                   <label>Initial Value</label>
                   {(op.variableType || 'number') === 'number' && (
-                    <input className="editor-input" type="number" step="any" value={String(op.initialValue ?? 0)} onChange={(e) => patchOp({ initialValue: parseFloat(e.target.value) || 0 })} />
+                    <input className="editor-input" type="number" step="any"
+                      value={op.initialValue == null ? '' : String(op.initialValue)}
+                      placeholder="0"
+                      onChange={(e) => patchOp({ initialValue: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
                   )}
                   {(op.variableType || 'number') === 'string' && (
                     <input className="editor-input" value={String(op.initialValue ?? '')} onChange={(e) => patchOp({ initialValue: e.target.value })} />
@@ -499,7 +503,10 @@ export function BlockEditor({
                   <div className="editor-field">
                     <label>Value</label>
                     {selectedType === 'number' && (
-                      <input className="editor-input" type="number" step="any" value={String(op.value ?? '')} onChange={(e) => patchOp({ value: e.target.value })} />
+                      <input className="editor-input" type="number" step="any"
+                        value={op.value == null ? '' : String(op.value)}
+                        placeholder="0"
+                        onChange={(e) => patchOp({ value: e.target.value === '' ? undefined : e.target.value })} />
                     )}
                     {selectedType === 'boolean' && (
                       <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
@@ -520,15 +527,20 @@ export function BlockEditor({
                 {needsAmount && (
                   <div className="editor-field">
                     <label>Amount</label>
-                    <input className="editor-input" type="number" step="any" value={op.by ?? 1} onChange={(e) => patchOp({ by: parseFloat(e.target.value) || 0 })} />
+                    <input className="editor-input" type="number" step="any"
+                      value={op.by ?? ''}
+                      placeholder="1"
+                      onChange={(e) => patchOp({ by: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
                   </div>
                 )}
                 {needsTimeAmount && (
                   <>
                     <div className="editor-field">
                       <label>Amount</label>
-                      <input className="editor-input" type="number" step="any" min={0} value={op.amount ?? 1}
-                        onChange={(e) => patchOp({ amount: parseFloat(e.target.value) || 0 })} />
+                      <input className="editor-input" type="number" step="any" min={0}
+                        value={op.amount ?? ''}
+                        placeholder="1"
+                        onChange={(e) => patchOp({ amount: e.target.value === '' ? undefined : parseFloat(e.target.value) })} />
                     </div>
                     <div className="editor-field">
                       <label>Unit</label>
@@ -596,8 +608,9 @@ export function BlockEditor({
             <div className="editor-field">
               <label>Duration (seconds)</label>
               <input className="editor-input" type="number" min={0} step={0.1}
-                value={draft.seconds ?? 1}
-                onChange={(e) => patch({ seconds: +e.target.value })} />
+                value={draft.seconds ?? ''}
+                placeholder="1"
+                onChange={(e) => patch({ seconds: e.target.value === '' ? undefined : +e.target.value })} />
             </div>
           </>
         );
@@ -620,8 +633,9 @@ export function BlockEditor({
               className="editor-input"
               type="number"
               min={1}
-              value={draft.timeoutSeconds ?? 30}
-              onChange={(e) => patch({ timeoutSeconds: +e.target.value })}
+              value={draft.timeoutSeconds ?? ''}
+              placeholder="30"
+              onChange={(e) => patch({ timeoutSeconds: e.target.value === '' ? undefined : +e.target.value })}
             />
           </div>
         </>
@@ -661,11 +675,17 @@ export function BlockEditor({
           <div className="editor-field-row">
             <div className="editor-field">
               <label>Count</label>
-              <input className="editor-input" type="number" min={1} value={draft.count ?? 1} onChange={(e) => patch({ count: +e.target.value })} />
+              <input className="editor-input" type="number" min={1}
+                value={draft.count ?? ''}
+                placeholder="1"
+                onChange={(e) => patch({ count: e.target.value === '' ? undefined : +e.target.value })} />
             </div>
             <div className="editor-field">
               <label>Delay between (sec)</label>
-              <input className="editor-input" type="number" min={0} step={0.1} value={draft.delayBetweenSeconds ?? 0} onChange={(e) => patch({ delayBetweenSeconds: +e.target.value })} />
+              <input className="editor-input" type="number" min={0} step={0.1}
+                value={draft.delayBetweenSeconds ?? ''}
+                placeholder="0"
+                onChange={(e) => patch({ delayBetweenSeconds: e.target.value === '' ? undefined : +e.target.value })} />
             </div>
           </div>
           {onNavigateToNested && (
@@ -692,7 +712,10 @@ export function BlockEditor({
           )}
           <div className="editor-field">
             <label>Max iterations</label>
-            <input className="editor-input" type="number" min={1} value={draft.maxIterations ?? 10} onChange={(e) => patch({ maxIterations: +e.target.value })} />
+            <input className="editor-input" type="number" min={1}
+              value={draft.maxIterations ?? ''}
+              placeholder="10"
+              onChange={(e) => patch({ maxIterations: e.target.value === '' ? undefined : +e.target.value })} />
           </div>
           {onNavigateToNested && (
             <button className="nested-nav-btn" type="button" onClick={() => onNavigateToNested({ field: 'blocks', label: 'Loop Blocks' })}>

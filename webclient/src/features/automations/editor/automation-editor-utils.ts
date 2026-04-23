@@ -292,8 +292,26 @@ function blockDraftToPayload(b: AutomationBlockDraft, idMap?: Map<string, string
       };
     case 'log':
       return { ...shared, message: b.message };
-    case 'stateVariable':
-      return { ...shared, operation: b.operation };
+    case 'stateVariable': {
+      const op = b.operation ? { ...b.operation } : undefined;
+      if (op) {
+        // Backfill defaults so empty numeric fields don't ship as undefined
+        if (op.operation === 'declare' && op.initialValue == null) {
+          const vt = op.variableType || 'number';
+          op.initialValue = vt === 'number' ? 0 : vt === 'boolean' ? false : vt === 'datetime' ? new Date().toISOString() : '';
+        }
+        if (['increment', 'decrement', 'multiply'].includes(op.operation) && op.by == null) {
+          op.by = 1;
+        }
+        if (['addTime', 'subtractTime'].includes(op.operation) && op.amount == null) {
+          op.amount = 1;
+        }
+        if (op.operation === 'set' && op.value == null) {
+          op.value = 0;
+        }
+      }
+      return { ...shared, operation: op };
+    }
     case 'delay':
       return { ...shared, seconds: b.seconds ?? 1, ...(b.secondsSource === 'global' && b.secondsRef && { secondsRef: b.secondsRef }) };
     case 'waitForState':

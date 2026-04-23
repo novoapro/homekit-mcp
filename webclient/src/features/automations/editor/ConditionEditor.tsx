@@ -59,6 +59,30 @@ interface ConditionEditorProps {
   onChange: (updated: AutomationConditionDraft) => void;
 }
 
+function RelativeAmountInput({ amount, onCommit }: { amount: number; onCommit: (next: number) => void }) {
+  const [text, setText] = useState(String(amount));
+  useEffect(() => { setText(String(amount)); }, [amount]);
+  return (
+    <input
+      className="editor-input"
+      type="number"
+      min={0}
+      step="any"
+      style={{ width: 70 }}
+      value={text}
+      placeholder="0"
+      onChange={(e) => {
+        setText(e.target.value);
+        if (e.target.value !== '') {
+          const n = parseFloat(e.target.value);
+          if (!Number.isNaN(n)) onCommit(n);
+        }
+      }}
+      onBlur={() => { if (text === '') onCommit(0); }}
+    />
+  );
+}
+
 export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChange }: ConditionEditorProps) {
   const registry = useDeviceRegistry();
   const api = useApi();
@@ -393,8 +417,10 @@ export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChang
                     {(draft.stateCompareMode || 'literal') === 'literal' && (
                       <>
                         {selectedType === 'number' && (
-                          <input className="editor-input" style={{ flex: 1 }} type="number" step="any" value={String(compVal)}
-                            onChange={(e) => patch({ comparison: { type: compType, value: e.target.value } as unknown as typeof draft.comparison })} />
+                          <input className="editor-input" style={{ flex: 1 }} type="number" step="any"
+                            value={compVal == null || compVal === '' ? '' : String(compVal)}
+                            placeholder="0"
+                            onChange={(e) => patch({ comparison: { type: compType, value: e.target.value === '' ? undefined : e.target.value } as unknown as typeof draft.comparison })} />
                         )}
                         {selectedType === 'boolean' && (
                           <>
@@ -439,9 +465,10 @@ export function ConditionEditor({ draft, allBlocks, currentBlockDraftId, onChang
                               </select>
                               {dtMode === 'relative' && (
                                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                  <input className="editor-input" type="number" min={0} step="any"
-                                    style={{ width: 70 }} value={relAmount}
-                                    onChange={(e) => patchDt(buildSentinel(relSign, parseFloat(e.target.value) || 0, relUnit))} />
+                                  <RelativeAmountInput
+                                    amount={relAmount}
+                                    onCommit={(next) => patchDt(buildSentinel(relSign, next, relUnit))}
+                                  />
                                   <select className="editor-select" style={{ flex: 1 }} value={relUnit}
                                     onChange={(e) => patchDt(buildSentinel(relSign, relAmount, e.target.value))}>
                                     <option value="m">Minutes</option>

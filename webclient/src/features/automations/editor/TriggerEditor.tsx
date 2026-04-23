@@ -284,8 +284,9 @@ export function TriggerEditor({ draft, onChange, onOpenGuardPanel }: TriggerEdit
                   className="editor-input"
                   type="number"
                   min={1}
-                  value={draft.scheduleIntervalSeconds ?? 60}
-                  onChange={(e) => patch({ scheduleIntervalSeconds: +e.target.value })}
+                  value={draft.scheduleIntervalSeconds ?? ''}
+                  placeholder="60"
+                  onChange={(e) => patch({ scheduleIntervalSeconds: e.target.value === '' ? undefined : +e.target.value })}
                 />
               </div>
             )}
@@ -307,8 +308,8 @@ export function TriggerEditor({ draft, onChange, onOpenGuardPanel }: TriggerEdit
               <input
                 className="editor-input"
                 type="number"
-                value={draft.offsetMinutes ?? 0}
-                onChange={(e) => patch({ offsetMinutes: +e.target.value })}
+                value={draft.offsetMinutes ?? ''}
+                onChange={(e) => patch({ offsetMinutes: e.target.value === '' ? undefined : +e.target.value })}
                 placeholder="0 = exact, negative = before"
               />
             </div>
