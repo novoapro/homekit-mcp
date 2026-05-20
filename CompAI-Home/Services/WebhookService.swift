@@ -7,9 +7,12 @@ actor WebhookService: WebhookServiceProtocol {
     private let loggingService: LoggingService
     private let keychainService: KeychainService
     private let maxRetries = 3
-    private var cachedSecretData: Data?
+    private var cachedSecrets: [UUID: Data] = [:]
 
-    /// Observable status published on the main actor for UI consumption.
+    /// Per-endpoint status published on the main actor for UI consumption.
+    nonisolated let endpointStatusSubject = CurrentValueSubject<[UUID: WebhookStatus], Never>([:])
+
+    /// Aggregate status for backward compatibility (most recent send result).
     nonisolated let statusSubject = CurrentValueSubject<WebhookStatus, Never>(.idle)
 
     init(storage: StorageService, loggingService: LoggingService, keychainService: KeychainService) {
@@ -19,10 +22,9 @@ actor WebhookService: WebhookServiceProtocol {
     }
 
     func sendStateChange(_ change: StateChange) async {
-        let urlString = storage.readWebhookURL()
-        let webhookEnabled = storage.readWebhookEnabled()
-        guard webhookEnabled,
-              let urlString, !urlString.isEmpty, let url = URL(string: urlString) else { return }
+        let endpoints = storage.readWebhookEndpoints()
+        let matching = endpoints.filter { $0.enabled && !$0.url.isEmpty && $0.matches(deviceId: change.deviceId) }
+        guard !matching.isEmpty else { return }
 
         let displayName = CharacteristicTypes.displayName(for: change.characteristicType)
 
@@ -32,20 +34,25 @@ actor WebhookService: WebhookServiceProtocol {
             deviceName: change.deviceName,
             serviceId: change.serviceId,
             serviceName: change.serviceName,
+            characteristicId: change.characteristicId,
             characteristicType: change.characteristicType,
             characteristicName: displayName,
             oldValue: change.oldValue.map { AnyCodable($0) },
             newValue: change.newValue.map { AnyCodable($0) }
         )
 
-        await send(to: url, payload: payload, deviceName: change.deviceName, roomName: change.roomName)
+        for endpoint in matching {
+            guard let url = URL(string: endpoint.url) else { continue }
+            await send(to: url, payload: payload, endpointId: endpoint.id, endpointName: endpoint.name, deviceName: change.deviceName, roomName: change.roomName)
+        }
     }
 
-    /// Send a test webhook to verify the configured URL works.
-    func sendTest() async -> Bool {
-        let urlString = storage.readWebhookURL()
-        guard let urlString, !urlString.isEmpty, let url = URL(string: urlString) else {
-            statusSubject.send(.lastFailure(date: Date(), error: "No webhook URL configured"))
+    func sendTest(endpointId: UUID) async -> Bool {
+        let endpoints = storage.readWebhookEndpoints()
+        guard let endpoint = endpoints.first(where: { $0.id == endpointId }),
+              !endpoint.url.isEmpty,
+              let url = URL(string: endpoint.url) else {
+            updateStatus(.lastFailure(date: Date(), error: "No webhook URL configured"), forEndpoint: endpointId)
             return false
         }
 
@@ -55,21 +62,35 @@ actor WebhookService: WebhookServiceProtocol {
             deviceName: "Test Device",
             serviceId: nil,
             serviceName: nil,
+            characteristicId: nil,
             characteristicType: "test",
             characteristicName: "Test",
             oldValue: AnyCodable(false),
             newValue: AnyCodable(true)
         )
 
-        statusSubject.send(.sending)
-        return await sendOnce(to: url, payload: payload)
+        updateStatus(.sending, forEndpoint: endpointId)
+        return await sendOnce(to: url, payload: payload, endpointId: endpointId)
     }
 
-    private func send(to url: URL, payload: WebhookPayload, attempt: Int = 1, deviceName: String, roomName: String? = nil) async {
-        statusSubject.send(.sending)
+    // MARK: - Deprecated single-URL test (kept for protocol conformance)
+
+    func sendTest() async -> Bool {
+        let endpoints = storage.readWebhookEndpoints()
+        guard let first = endpoints.first(where: { $0.enabled && !$0.url.isEmpty }) else {
+            statusSubject.send(.lastFailure(date: Date(), error: "No webhook endpoints configured"))
+            return false
+        }
+        return await sendTest(endpointId: first.id)
+    }
+
+    // MARK: - Private Send Logic
+
+    private func send(to url: URL, payload: WebhookPayload, attempt: Int = 1, endpointId: UUID, endpointName: String, deviceName: String, roomName: String? = nil) async {
+        updateStatus(.sending, forEndpoint: endpointId)
 
         do {
-            let (_, response) = try await performRequest(url: url, payload: payload)
+            let (_, response) = try await performRequest(url: url, payload: payload, endpointId: endpointId)
 
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
@@ -77,9 +98,10 @@ actor WebhookService: WebhookServiceProtocol {
                 throw WebhookError.httpError(statusCode: statusCode)
             }
 
-            statusSubject.send(.lastSuccess(date: Date()))
+            updateStatus(.lastSuccess(date: Date()), forEndpoint: endpointId)
 
             if storage.readLoggingEnabled() && storage.readWebhookLoggingEnabled() {
+                let label = endpointName.isEmpty ? url.host ?? "webhook" : endpointName
                 let logEntry = StateChangeLog.webhookCall(
                     deviceId: payload.deviceId,
                     deviceName: deviceName,
@@ -90,7 +112,7 @@ actor WebhookService: WebhookServiceProtocol {
                     oldValue: payload.oldValue,
                     newValue: payload.newValue,
                     unit: CharacteristicTypes.unitForCharacteristicType(payload.characteristicType),
-                    summary: "POST \(deviceName) (\(payload.characteristicName))",
+                    summary: "POST [\(label)] \(deviceName) (\(payload.characteristicName))",
                     result: "HTTP \(httpResponse.statusCode) OK",
                     detailedRequest: detailedPayloadJSON(payload)
                 )
@@ -100,12 +122,13 @@ actor WebhookService: WebhookServiceProtocol {
             if attempt < maxRetries {
                 let delay = pow(2.0, Double(attempt))
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                await send(to: url, payload: payload, attempt: attempt + 1, deviceName: deviceName, roomName: roomName)
+                await send(to: url, payload: payload, attempt: attempt + 1, endpointId: endpointId, endpointName: endpointName, deviceName: deviceName, roomName: roomName)
             } else {
                 let errorDesc = error.localizedDescription
-                statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
+                updateStatus(.lastFailure(date: Date(), error: errorDesc), forEndpoint: endpointId)
 
                 if storage.readLoggingEnabled() && storage.readWebhookLoggingEnabled() {
+                    let label = endpointName.isEmpty ? url.host ?? "webhook" : endpointName
                     let logEntry = StateChangeLog.webhookError(
                         deviceId: payload.deviceId,
                         deviceName: deviceName,
@@ -116,7 +139,7 @@ actor WebhookService: WebhookServiceProtocol {
                         oldValue: payload.oldValue,
                         newValue: payload.newValue,
                         unit: CharacteristicTypes.unitForCharacteristicType(payload.characteristicType),
-                        summary: "POST \(deviceName) (\(payload.characteristicName))",
+                        summary: "POST [\(label)] \(deviceName) (\(payload.characteristicName))",
                         result: errorDesc,
                         errorDetails: "Failed after \(maxRetries) retries: \(errorDesc)",
                         detailedRequest: detailedPayloadJSON(payload)
@@ -127,16 +150,15 @@ actor WebhookService: WebhookServiceProtocol {
         }
     }
 
-    /// Single attempt, returns success/failure. Used for test sends.
-    private func sendOnce(to url: URL, payload: WebhookPayload) async -> Bool {
+    private func sendOnce(to url: URL, payload: WebhookPayload, endpointId: UUID) async -> Bool {
         do {
-            let (_, response) = try await performRequest(url: url, payload: payload)
+            let (_, response) = try await performRequest(url: url, payload: payload, endpointId: endpointId)
 
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
                 let errorDesc = "HTTP \(statusCode)"
-                statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
+                updateStatus(.lastFailure(date: Date(), error: errorDesc), forEndpoint: endpointId)
 
                 if storage.readLoggingEnabled() && storage.readWebhookLoggingEnabled() {
                     let logEntry = StateChangeLog.webhookError(
@@ -154,7 +176,7 @@ actor WebhookService: WebhookServiceProtocol {
                 return false
             }
 
-            statusSubject.send(.lastSuccess(date: Date()))
+            updateStatus(.lastSuccess(date: Date()), forEndpoint: endpointId)
 
             if storage.readLoggingEnabled() && storage.readWebhookLoggingEnabled() {
                 let logEntry = StateChangeLog.webhookCall(
@@ -171,7 +193,7 @@ actor WebhookService: WebhookServiceProtocol {
             return true
         } catch {
             let errorDesc = error.localizedDescription
-            statusSubject.send(.lastFailure(date: Date(), error: errorDesc))
+            updateStatus(.lastFailure(date: Date(), error: errorDesc), forEndpoint: endpointId)
 
             if storage.readLoggingEnabled() && storage.readWebhookLoggingEnabled() {
                 let logEntry = StateChangeLog.webhookError(
@@ -190,36 +212,42 @@ actor WebhookService: WebhookServiceProtocol {
         }
     }
 
-    /// Returns JSON-encoded payload string only when detailed webhook logs are enabled.
+    // MARK: - Status Helpers
+
+    private func updateStatus(_ status: WebhookStatus, forEndpoint endpointId: UUID) {
+        var current = endpointStatusSubject.value
+        current[endpointId] = status
+        endpointStatusSubject.send(current)
+        statusSubject.send(status)
+    }
+
+    // MARK: - Utilities
+
     private func detailedPayloadJSON(_ payload: WebhookPayload) -> String? {
         guard storage.readWebhookDetailedLogsEnabled(),
               let data = try? JSONEncoder.iso8601.encode(payload) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
-    /// Validates that a URL does not point to a private/internal IP address (SSRF protection).
     private func validateURLNotPrivate(_ url: URL) throws {
         guard let host = url.host else { return }
 
         let lowered = host.lowercased()
 
-        // Allow hosts matching the user-configured allow list (supports * wildcards)
         let allowlist = storage.readWebhookPrivateIPAllowlist()
         if allowlist.contains(where: { Self.matchesWildcard(host: lowered, pattern: $0.lowercased()) }) {
             return
         }
 
-        // Allow localhost (for the app's own endpoints)
         if lowered == "localhost" || lowered == "127.0.0.1" || lowered == "::1" {
             return
         }
 
-        // Resolve the hostname and check against private ranges
         let cfHost = CFHostCreateWithName(kCFAllocatorDefault, host as CFString).takeRetainedValue()
         var resolved = DarwinBoolean(false)
         CFHostStartInfoResolution(cfHost, .addresses, nil)
         guard let addresses = CFHostGetAddressing(cfHost, &resolved)?.takeUnretainedValue() as? [Data], resolved.boolValue else {
-            return // If resolution fails, let the request fail naturally
+            return
         }
 
         for addressData in addresses {
@@ -230,13 +258,12 @@ actor WebhookService: WebhookServiceProtocol {
                     let addr = sin.sin_addr.s_addr
                     let a = addr & 0xFF
                     let b = (addr >> 8) & 0xFF
-                    // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 127.0.0.0/8
                     if a == 10 { return true }
                     if a == 172 && (b >= 16 && b <= 31) { return true }
                     if a == 192 && b == 168 { return true }
                     if a == 169 && b == 254 { return true }
                     if a == 127 { return true }
-                    if addr == 0 { return true } // 0.0.0.0
+                    if addr == 0 { return true }
                 }
                 return false
             }
@@ -246,7 +273,7 @@ actor WebhookService: WebhookServiceProtocol {
         }
     }
 
-    private func performRequest(url: URL, payload: WebhookPayload) async throws -> (Data, URLResponse) {
+    private func performRequest(url: URL, payload: WebhookPayload, endpointId: UUID) async throws -> (Data, URLResponse) {
         try validateURLNotPrivate(url)
 
         var request = URLRequest(url: url)
@@ -257,12 +284,7 @@ actor WebhookService: WebhookServiceProtocol {
         let body = try JSONEncoder.iso8601.encode(payload)
         request.httpBody = body
 
-        // Sign the payload with HMAC-SHA256 (secret cached to avoid keychain I/O per send)
-        let secretData = cachedSecretData ?? {
-            let data = keychainService.getOrCreateWebhookSecret().data(using: .utf8)
-            cachedSecretData = data
-            return data
-        }()
+        let secretData = secretDataForEndpoint(endpointId)
         if let secretData {
             let signature = hmacSHA256(data: body, key: secretData)
             request.addValue("sha256=\(signature)", forHTTPHeaderField: "X-Signature-256")
@@ -271,8 +293,15 @@ actor WebhookService: WebhookServiceProtocol {
         return try await URLSession.shared.data(for: request)
     }
 
-    /// Matches a host against a pattern that may contain `*` wildcards.
-    /// e.g. `192.168.1.*` matches `192.168.1.88`, `*.local` matches `myserver.local`.
+    private func secretDataForEndpoint(_ endpointId: UUID) -> Data? {
+        if let cached = cachedSecrets[endpointId] { return cached }
+        let key = "webhook-secret-\(endpointId.uuidString)"
+        let secret = keychainService.getOrCreate(key: key)
+        let data = secret.data(using: .utf8)
+        if let data { cachedSecrets[endpointId] = data }
+        return data
+    }
+
     static func matchesWildcard(host: String, pattern: String) -> Bool {
         if !pattern.contains("*") { return host == pattern }
         let regex = "^" + NSRegularExpression.escapedPattern(for: pattern).replacingOccurrences(of: "\\*", with: ".*") + "$"
@@ -295,12 +324,34 @@ actor WebhookService: WebhookServiceProtocol {
 
 // MARK: - Models
 
+struct WebhookEndpoint: Codable, Identifiable, Equatable {
+    let id: UUID
+    var name: String
+    var url: String
+    var enabled: Bool
+    /// Stable device IDs this endpoint listens to. Empty means all observed devices.
+    var deviceFilter: Set<String>
+
+    init(id: UUID = UUID(), name: String = "", url: String = "", enabled: Bool = true, deviceFilter: Set<String> = []) {
+        self.id = id
+        self.name = name
+        self.url = url
+        self.enabled = enabled
+        self.deviceFilter = deviceFilter
+    }
+
+    func matches(deviceId: String) -> Bool {
+        deviceFilter.isEmpty || deviceFilter.contains(deviceId)
+    }
+}
+
 struct WebhookPayload: Codable {
     let timestamp: Date
     let deviceId: String
     let deviceName: String
     let serviceId: String?
     let serviceName: String?
+    let characteristicId: String?
     let characteristicType: String
     let characteristicName: String
     let oldValue: AnyCodable?

@@ -61,6 +61,7 @@ Each API surface is independently toggleable in the app settings:
 | Flag | Controls |
 |---|---|
 | REST API enabled | All `/devices`, `/scenes`, `/logs`, `/automations` endpoints |
+| REST Device Control enabled | `PUT /devices/:deviceId/control` endpoint |
 | MCP Protocol enabled | `/mcp`, `/sse`, `/messages` endpoints |
 | automations enabled | automation REST endpoints and MCP automation tools |
 | Log Access enabled | `GET /logs` endpoint and `get_logs` MCP tool |
@@ -538,6 +539,122 @@ Requires: **REST API enabled**
 Devices are filtered by the per-characteristic "enabled" setting in the device registry. Only characteristics marked as enabled are included in API responses. The `permissions` array on each characteristic reflects the MCP app's effective permissions — `notify` is only present when the characteristic is marked as observed. All IDs in responses are stable app-generated IDs (not raw HomeKit UUIDs).
 
 **404** if device not found.
+
+---
+
+### Device Status
+
+Requires: **REST API enabled**
+
+| Method | Path | Description | Response |
+|---|---|---|---|
+| `GET` | `/devices/:deviceId/status` | All characteristic values across all services | `ServiceStatus[]` |
+| `GET` | `/devices/:deviceId/status/:serviceId` | All characteristic values for one service | `ServiceStatus` |
+| `GET` | `/devices/:deviceId/status/:characteristicId` | Single characteristic value (resolved across all services) | `CharacteristicStatus` |
+| `GET` | `/devices/:deviceId/status/:serviceId/:characteristicId` | Single characteristic value within a specific service | `CharacteristicStatus` |
+
+The second path segment after `status/` is resolved as a service ID first. If no service matches, it is tried as a characteristic ID across all services.
+
+**`CharacteristicStatus`:**
+
+```json
+{
+  "id": "abc-123",
+  "name": "Brightness",
+  "value": 75,
+  "format": "int",
+  "units": "percentage"
+}
+```
+
+**`ServiceStatus`:**
+
+```json
+{
+  "id": "svc-456",
+  "name": "Lightbulb",
+  "characteristics": [ { CharacteristicStatus }, ... ]
+}
+```
+
+All IDs are stable proxy IDs. **404** if the device, service, or characteristic is not found.
+
+---
+
+### Device Control
+
+Requires: **REST API enabled** + **REST Device Control enabled**
+
+| Method | Path | Description | Response |
+|---|---|---|---|
+| `PUT` | `/devices/:deviceId/control` | Set one or more characteristic values | `{"results": ControlResult[]}` |
+
+Parameters can be provided via **JSON body** (preferred) or **query parameters** (fallback for simple integrations). If a JSON body is present, it takes priority over query parameters.
+
+#### Option A: JSON body (preferred)
+
+**Single change:**
+
+```json
+{
+  "characteristic_id": "abc-123",
+  "value": true
+}
+```
+
+**Batch changes:**
+
+```json
+{
+  "characteristics": [
+    { "characteristic_id": "abc-123", "value": true },
+    { "characteristic_id": "def-456", "value": 75, "service_id": "svc-789" }
+  ]
+}
+```
+
+JSON values carry their types directly (boolean, number, string) — no string coercion is needed.
+
+#### Option B: Query parameters (fallback)
+
+```
+PUT /devices/:deviceId/control?characteristic_id=abc-123&value=75&service_id=svc-789
+```
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `characteristic_id` | string | yes | Stable characteristic ID (from device listing) |
+| `value` | string | yes | Value to set (auto-coerced to the correct type based on characteristic format) |
+| `service_id` | string | no | Target service ID (for multi-service devices) |
+
+Value coercion rules (query params only — values are strings):
+- **bool**: `true`/`false`, `1`/`0`, `on`/`off`, `yes`/`no`
+- **int/uint8/uint16/uint32/uint64**: integer string (e.g. `75`)
+- **float**: numeric string (e.g. `21.5`)
+- **string**: used as-is
+
+Temperature values are accepted in the user's configured unit and converted automatically.
+
+#### Response
+
+```json
+{
+  "results": [
+    { "characteristic_id": "abc-123", "success": true, "characteristic": "Power State", "value": true },
+    { "characteristic_id": "def-456", "success": false, "error": "Characteristic not writable" }
+  ]
+}
+```
+
+**HTTP status codes:**
+
+| Status | Condition |
+|---|---|
+| 200 | All changes succeeded |
+| 207 | Batch with mixed results (some succeeded, some failed) |
+| 400 | Missing/invalid parameters, all changes failed, validation errors |
+| 403 | Characteristic not writable or not exposed |
+| 404 | Device/characteristic not found, or feature disabled |
 
 ---
 

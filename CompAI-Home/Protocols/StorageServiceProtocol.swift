@@ -10,6 +10,7 @@ protocol StorageServiceProtocol: AnyObject {
     var mcpServerEnabled: Bool { get set }
     var mcpProtocolEnabled: Bool { get set }
     var restApiEnabled: Bool { get set }
+    var restDeviceControlEnabled: Bool { get set }
     var hideRoomNameInTheApp: Bool { get set }
     var loggingEnabled: Bool { get set }
     var mcpLoggingEnabled: Bool { get set }
@@ -31,6 +32,7 @@ protocol StorageServiceProtocol: AnyObject {
     var automationsEnabled: Bool { get set }
     var autoBackupEnabled: Bool { get set }
     var webhookPrivateIPAllowlist: [String] { get set }
+    var webhookEndpoints: [WebhookEndpoint] { get set }
     var registryMigrationCompleted: Bool { get set }
     var automationSyncEnabled: Bool { get set }
     var sunEventLatitude: Double { get set }
@@ -70,8 +72,10 @@ protocol StorageServiceProtocol: AnyObject {
     nonisolated func readAutomationsEnabled() -> Bool
     nonisolated func readMCPProtocolEnabled() -> Bool
     nonisolated func readRestApiEnabled() -> Bool
+    nonisolated func readRestDeviceControlEnabled() -> Bool
     nonisolated func readRegistryMigrationCompleted() -> Bool
     nonisolated func readAutomationSyncEnabled() -> Bool
+    nonisolated func readWebhookEndpoints() -> [WebhookEndpoint]
     nonisolated func readWebhookPrivateIPAllowlist() -> [String]
     nonisolated func readSunEventLatitude() -> Double
     nonisolated func readSunEventLongitude() -> Double

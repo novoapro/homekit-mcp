@@ -201,10 +201,17 @@ struct ServerSettingsView: View {
                             storage.restApiEnabled = newValue
                         }
                     ))
+                    if storage.restApiEnabled {
+                        Toggle("REST Device Control", isOn: Binding(
+                            get: { storage.restDeviceControlEnabled },
+                            set: { storage.restDeviceControlEnabled = $0 }
+                        ))
+                        .padding(.leading, 20)
+                    }
                 } header: {
                     Label("Protocols", systemImage: "point.3.connected.trianglepath.dotted")
                 } footer: {
-                    Text("Choose which protocols are available. At least one must be enabled.")
+                    Text("Choose which protocols are available. At least one must be enabled. REST Device Control allows controlling devices via REST endpoints.")
                 }
             }
 
@@ -219,6 +226,9 @@ struct ServerSettingsView: View {
                     }
                     if storage.restApiEnabled {
                         endpointRow(label: "REST API", url: "http://\(displayHost):\(viewModel.storage.mcpServerPort)/devices")
+                    }
+                    if storage.restApiEnabled && storage.restDeviceControlEnabled {
+                        endpointRow(label: "REST Device Control", url: "http://\(displayHost):\(viewModel.storage.mcpServerPort)/devices/{id}/control")
                     }
                 } header: {
                     Label("Endpoints", systemImage: "link")

@@ -366,9 +366,11 @@ input, select, textarea {
 
 /* ── Sidebar content offset (desktop) ───────────────── */
 /* The outer frame (TopBar + main) is pushed right by the sidebar width so it
-   reaches the viewport's right edge. Inside, we also reserve the sidebar width
-   on the right of <main> via padding, so the scrollable content is centered
-   in the viewport while the top-bar frame still spans edge-to-edge. */
+   reaches the viewport's right edge. On wide screens, we also reserve the
+   sidebar width on the right of <main> via padding, so the scrollable content
+   is centered in the viewport while the top-bar frame still spans
+   edge-to-edge. The centering padding is skipped on narrower screens (tablets)
+   to avoid crushing content. */
 
 @media (min-width: 769px) {
   .content-offset-expanded {
@@ -379,7 +381,9 @@ input, select, textarea {
     --current-sidebar-offset: var(--sidebar-collapsed-width);
     margin-left: var(--current-sidebar-offset);
   }
+}
 
+@media (min-width: 1100px) {
   .content-offset-expanded > main,
   .content-offset-collapsed > main {
     padding-right: var(--current-sidebar-offset);

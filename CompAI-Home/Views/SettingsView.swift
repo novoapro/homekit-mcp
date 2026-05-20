@@ -184,13 +184,11 @@ struct SettingsView: View {
     }
 
     private var webhookBadge: StatusBadge? {
-        if !viewModel.webhookEnabled {
-            return StatusBadge(text: "Off", color: Theme.Status.inactive)
+        let activeCount = viewModel.webhookEndpoints.filter { $0.enabled && !$0.url.isEmpty }.count
+        if activeCount > 0 {
+            return StatusBadge(text: "\(activeCount) endpoint\(activeCount == 1 ? "" : "s")", color: Theme.Status.active)
         }
-        if storage.isWebhookConfigured() {
-            return StatusBadge(text: "Configured", color: Theme.Status.active)
-        }
-        return nil
+        return StatusBadge(text: "Off", color: Theme.Status.inactive)
     }
 
     private var automationBadge: StatusBadge {

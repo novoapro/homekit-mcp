@@ -353,13 +353,13 @@ final class MCPRequestHandler: Sendable {
             )
         }
 
-        // Look up the device and find the characteristic by its stable ID
-        let device: DeviceModel? = await MainActor.run { homeKitManager.getDeviceState(id: deviceId) }
-        guard let device else {
+        // Look up the device and transform to stable IDs so incoming stable IDs match
+        let rawDevice: DeviceModel? = await MainActor.run { homeKitManager.getDeviceState(id: deviceId) }
+        guard let rawDevice else {
             return toolResult(text: "Device not found: \(deviceId)", isError: true, id: id)
         }
+        let device = stableDevices([rawDevice]).first ?? rawDevice
 
-        // Find the characteristic and its parent service by characteristic ID
         var matchedCharacteristic: CharacteristicModel?
         var matchedServiceId: String?
         for service in device.services {
@@ -374,8 +374,8 @@ final class MCPRequestHandler: Sendable {
             return toolResult(text: "Characteristic not found: \(characteristicId)", isError: true, id: id)
         }
 
-        // Check exposure
-        let settings = registry?.readCharacteristicSettings(forHomeKitCharId: characteristic.id)
+        let hkCharId = registry?.readHomeKitCharacteristicId(characteristic.id) ?? characteristic.id
+        let settings = registry?.readCharacteristicSettings(forHomeKitCharId: hkCharId)
         guard settings?.enabled ?? true else {
             return toolResult(
                 text: "Characteristic not exposed for external access.",

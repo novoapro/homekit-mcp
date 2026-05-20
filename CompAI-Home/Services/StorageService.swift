@@ -57,6 +57,9 @@ class StorageService: ObservableObject, StorageServiceProtocol {
     @Published var restApiEnabled: Bool {
         didSet { defaults.set(restApiEnabled, forKey: Keys.restApiEnabled) }
     }
+    @Published var restDeviceControlEnabled: Bool {
+        didSet { defaults.set(restDeviceControlEnabled, forKey: Keys.restDeviceControlEnabled) }
+    }
     @Published var hideRoomNameInTheApp: Bool {
         didSet { defaults.set(hideRoomNameInTheApp, forKey: Keys.hideRoomNameInTheApp) }
     }
@@ -170,6 +173,15 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             }
         }
     }
+    @Published var webhookEndpoints: [WebhookEndpoint] {
+        didSet {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            if let data = try? encoder.encode(webhookEndpoints) {
+                defaults.set(data, forKey: Keys.webhookEndpoints)
+            }
+        }
+    }
     @Published var temperatureUnit: String {
         didSet { defaults.set(temperatureUnit, forKey: Keys.temperatureUnit) }
     }
@@ -184,6 +196,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             Keys.mcpServerEnabled: true,
             Keys.mcpProtocolEnabled: true,
             Keys.restApiEnabled: true,
+            Keys.restDeviceControlEnabled: false,
             Keys.hideRoomNameInTheApp: true,
             Keys.useServiceTypeAsName: false,
             Keys.loggingEnabled: true,
@@ -224,6 +237,17 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             defaults.removeObject(forKey: Keys.webhookURL)
         }
 
+        // Migrate single webhook URL → multi-endpoint list (one-time)
+        if defaults.object(forKey: Keys.webhookEndpoints) == nil,
+           let singleURL = keychainService.read(key: KeychainService.Keys.webhookURL), !singleURL.isEmpty {
+            let migrated = WebhookEndpoint(name: "Default", url: singleURL, enabled: true)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            if let data = try? encoder.encode([migrated]) {
+                defaults.set(data, forKey: Keys.webhookEndpoints)
+            }
+        }
+
         // Migrate hideSkippedAutomationLogs → logSkippedAutomations (inverted logic)
         if defaults.object(forKey: Keys.hideSkippedAutomationLogs) != nil {
             let oldValue = defaults.bool(forKey: Keys.hideSkippedAutomationLogs)
@@ -253,6 +277,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         self.mcpServerEnabled = defaults.bool(forKey: Keys.mcpServerEnabled)
         self.mcpProtocolEnabled = defaults.bool(forKey: Keys.mcpProtocolEnabled)
         self.restApiEnabled = defaults.bool(forKey: Keys.restApiEnabled)
+        self.restDeviceControlEnabled = defaults.bool(forKey: Keys.restDeviceControlEnabled)
         self.hideRoomNameInTheApp = defaults.bool(forKey: Keys.hideRoomNameInTheApp)
         self.useServiceTypeAsName = defaults.bool(forKey: Keys.useServiceTypeAsName)
         self.loggingEnabled = defaults.bool(forKey: Keys.loggingEnabled)
@@ -301,11 +326,18 @@ class StorageService: ObservableObject, StorageServiceProtocol {
             self.webhookPrivateIPAllowlist = []
         }
         self.temperatureUnit = defaults.string(forKey: Keys.temperatureUnit) ?? "celsius"
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        if let data = defaults.data(forKey: Keys.webhookEndpoints),
+           let endpoints = try? decoder.decode([WebhookEndpoint].self, from: data) {
+            self.webhookEndpoints = endpoints
+        } else {
+            self.webhookEndpoints = []
+        }
     }
 
     func isWebhookConfigured() -> Bool {
-        guard let url = webhookURL, !url.isEmpty else { return false }
-        return URL(string: url) != nil
+        webhookEndpoints.contains { $0.enabled && !$0.url.isEmpty && URL(string: $0.url) != nil }
     }
 
     // MARK: - Nonisolated Readers
@@ -428,6 +460,10 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         UserDefaults.standard.bool(forKey: Keys.restApiEnabled)
     }
 
+    nonisolated func readRestDeviceControlEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: Keys.restDeviceControlEnabled)
+    }
+
     nonisolated func readDeviceStateLoggingEnabled() -> Bool {
         UserDefaults.standard.bool(forKey: Keys.deviceStateLoggingEnabled)
     }
@@ -442,6 +478,13 @@ class StorageService: ObservableObject, StorageServiceProtocol {
 
     nonisolated func readAutomationSyncEnabled() -> Bool {
         UserDefaults.standard.bool(forKey: Keys.automationSyncEnabled)
+    }
+
+    nonisolated func readWebhookEndpoints() -> [WebhookEndpoint] {
+        guard let data = UserDefaults.standard.data(forKey: Keys.webhookEndpoints) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([WebhookEndpoint].self, from: data)) ?? []
     }
 
     nonisolated func readWebhookPrivateIPAllowlist() -> [String] {
@@ -477,6 +520,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         static let mcpServerEnabled = "mcpServerEnabled"
         static let mcpProtocolEnabled = "mcpProtocolEnabled"
         static let restApiEnabled = "restApiEnabled"
+        static let restDeviceControlEnabled = "restDeviceControlEnabled"
         static let hideRoomNameInTheApp = "hideRoomNameInTheApp"
         static let useServiceTypeAsName = "useServiceTypeAsName"
         static let loggingEnabled = "loggingEnabled"
@@ -508,6 +552,7 @@ class StorageService: ObservableObject, StorageServiceProtocol {
         static let registryMigrationCompleted = "registryMigrationCompleted"
         static let automationSyncEnabled = "automationSyncEnabled"
         static let webhookPrivateIPAllowlist = "webhookPrivateIPAllowlist"
+        static let webhookEndpoints = "webhookEndpoints"
         static let logAccessEnabled = "logAccessEnabled"
         static let logCacheSize = "logCacheSize"
         static let websocketEnabled = "websocketEnabled"

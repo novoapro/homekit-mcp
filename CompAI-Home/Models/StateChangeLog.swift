@@ -805,17 +805,19 @@ struct StateChange {
     let roomName: String?
     let serviceId: String?
     let serviceName: String?
+    let characteristicId: String?
     let characteristicType: String
     let oldValue: Any?
     let newValue: Any?
     let timestamp: Date
 
-    init(deviceId: String, deviceName: String, roomName: String? = nil, serviceId: String? = nil, serviceName: String? = nil, characteristicType: String, oldValue: Any? = nil, newValue: Any? = nil) {
+    init(deviceId: String, deviceName: String, roomName: String? = nil, serviceId: String? = nil, serviceName: String? = nil, characteristicId: String? = nil, characteristicType: String, oldValue: Any? = nil, newValue: Any? = nil) {
         self.deviceId = deviceId
         self.deviceName = deviceName
         self.roomName = roomName
         self.serviceId = serviceId
         self.serviceName = serviceName
+        self.characteristicId = characteristicId
         self.characteristicType = characteristicType
         self.oldValue = oldValue
         self.newValue = newValue

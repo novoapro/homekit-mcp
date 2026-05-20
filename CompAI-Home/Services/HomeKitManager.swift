@@ -646,6 +646,7 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
             // Translate to stable registry IDs for published StateChange
             let stableDeviceId = self.deviceRegistryService?.readStableDeviceId(deviceId) ?? deviceId
             let stableServiceId = self.deviceRegistryService?.readStableServiceId(serviceId) ?? serviceId
+            let stableCharId = self.deviceRegistryService?.readStableCharacteristicId(charId) ?? charId
 
             let change = StateChange(
                 deviceId: stableDeviceId,
@@ -653,6 +654,7 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
                 roomName: roomName,
                 serviceId: stableServiceId,
                 serviceName: serviceName,
+                characteristicId: stableCharId,
                 characteristicType: characteristic.characteristicType,
                 oldValue: cachedValue,
                 newValue: newValue
@@ -664,8 +666,6 @@ class HomeKitManager: NSObject, ObservableObject, HomeKitManaging {
                 }
 
                 await self.webhookService.sendStateChange(change)
-
-                let stableCharId = self.deviceRegistryService?.readStableCharacteristicId(charId) ?? charId
                 self.characteristicValueChangePublisher.send(CharacteristicValueChange(
                     deviceId: stableDeviceId,
                     serviceId: stableServiceId,
@@ -1067,6 +1067,7 @@ extension HomeKitManager: HMAccessoryDelegate {
             // Automations and triggers reference stable IDs, so StateChange must use them.
             let stableDeviceId = self.deviceRegistryService?.readStableDeviceId(deviceId) ?? deviceId
             let stableServiceId = self.deviceRegistryService?.readStableServiceId(serviceId) ?? serviceId
+            let stableCharId = self.deviceRegistryService?.readStableCharacteristicId(charId) ?? charId
 
             let change = StateChange(
                 deviceId: stableDeviceId,
@@ -1074,6 +1075,7 @@ extension HomeKitManager: HMAccessoryDelegate {
                 roomName: roomName,
                 serviceId: stableServiceId,
                 serviceName: serviceName,
+                characteristicId: stableCharId,
                 characteristicType: characteristic.characteristicType,
                 oldValue: cachedValue,
                 newValue: value
@@ -1085,8 +1087,6 @@ extension HomeKitManager: HMAccessoryDelegate {
                 }
 
                 await webhookService.sendStateChange(change)
-
-                let stableCharId = self.deviceRegistryService?.readStableCharacteristicId(charId) ?? charId
                 self.characteristicValueChangePublisher.send(CharacteristicValueChange(
                     deviceId: stableDeviceId,
                     serviceId: stableServiceId,

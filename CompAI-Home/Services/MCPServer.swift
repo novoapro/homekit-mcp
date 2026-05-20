@@ -644,6 +644,31 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
             return try await self.handleRestGetDevice(req)
         }
 
+        protected.on(.PUT, "devices", ":deviceId", "control", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            try self.guardRestDeviceControlEnabled()
+            return try await self.handleRestControlDevicePut(req)
+        }
+
+        protected.on(.GET, "devices", ":deviceId", "status") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            return try await self.handleRestDeviceStatus(req)
+        }
+
+        protected.on(.GET, "devices", ":deviceId", "status", ":serviceId") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            return try await self.handleRestDeviceStatus(req)
+        }
+
+        protected.on(.GET, "devices", ":deviceId", "status", ":serviceId", ":characteristicId") { [weak self] req async throws -> Response in
+            guard let self else { throw Abort(.serviceUnavailable) }
+            try self.guardRestApiEnabled()
+            return try await self.handleRestDeviceStatus(req)
+        }
+
         protected.on(.PATCH, "services", ":serviceId", body: .collect(maxSize: "1mb")) { [weak self] req async throws -> Response in
             guard let self else { throw Abort(.serviceUnavailable) }
             try self.guardRestApiEnabled()
@@ -915,6 +940,12 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
         }
     }
 
+    private func guardRestDeviceControlEnabled() throws {
+        guard storage.readRestDeviceControlEnabled() else {
+            throw Abort(.notFound, reason: "REST device control is not enabled. Enable it in the app settings.")
+        }
+    }
+
     private func guardLogAccessEnabled() throws {
         guard storage.readLogAccessEnabled() else {
             throw Abort(.notFound, reason: "Log access is not enabled. Enable it in the app settings.")
@@ -975,6 +1006,364 @@ class MCPServer: ObservableObject, MCPServerProtocol, @unchecked Sendable {
                     req: req, responseBody: String(data: data, encoding: .utf8))
 
         return jsonResponse(data: data)
+    }
+
+    // MARK: - REST Device Control
+
+    private struct ControlResult: Codable {
+        let characteristicId: String
+        let success: Bool
+        let characteristic: String?
+        let value: AnyCodable?
+        let error: String?
+
+        enum CodingKeys: String, CodingKey {
+            case characteristicId = "characteristic_id"
+            case success, characteristic, value, error
+        }
+    }
+
+    private func controlCharacteristic(
+        device: DeviceModel,
+        characteristicId: String,
+        value: Any,
+        serviceId: String?
+    ) async -> ControlResult {
+        var matchedCharacteristic: CharacteristicModel?
+        var matchedService: ServiceModel?
+        for service in device.services {
+            if let char = service.characteristics.first(where: { $0.id == characteristicId }) {
+                matchedCharacteristic = char
+                matchedService = service
+                break
+            }
+        }
+
+        guard let characteristic = matchedCharacteristic else {
+            return ControlResult(characteristicId: characteristicId, success: false, characteristic: nil, value: nil, error: "Characteristic not found: \(characteristicId)")
+        }
+
+        let hkCharId = registry?.readHomeKitCharacteristicId(characteristic.id) ?? characteristic.id
+        let settings = registry?.readCharacteristicSettings(forHomeKitCharId: hkCharId)
+        guard settings?.enabled ?? true else {
+            return ControlResult(characteristicId: characteristicId, success: false, characteristic: nil, value: nil, error: "Characteristic not exposed for external access")
+        }
+
+        guard characteristic.permissions.contains("write") else {
+            let displayName = CharacteristicTypes.displayName(for: characteristic.type)
+            return ControlResult(characteristicId: characteristicId, success: false, characteristic: displayName, value: nil, error: "Characteristic '\(displayName)' is not writable")
+        }
+
+        let matchedServiceId = matchedService?.id
+        let effectiveServiceId = serviceId ?? matchedServiceId
+        let displayName = CharacteristicTypes.displayName(for: characteristic.type)
+
+        var effectiveValue = value
+        if TemperatureConversion.isFahrenheit && TemperatureConversion.isTemperatureCharacteristic(characteristic.type) {
+            if let doubleVal = value as? Double {
+                effectiveValue = TemperatureConversion.fahrenheitToCelsius(doubleVal)
+            } else if let intVal = value as? Int {
+                effectiveValue = TemperatureConversion.fahrenheitToCelsius(Double(intVal))
+            }
+        }
+
+        do {
+            try CharacteristicValidator.validate(value: effectiveValue, against: characteristic)
+        } catch let error as CharacteristicValidator.ValidationError {
+            return ControlResult(characteristicId: characteristicId, success: false, characteristic: displayName, value: nil, error: error.message)
+        } catch {}
+
+        do {
+            try await homeKitManager.updateDevice(
+                id: device.id,
+                characteristicType: characteristic.type,
+                value: effectiveValue,
+                serviceId: effectiveServiceId
+            )
+            logDeviceControl(
+                device: device, service: matchedService,
+                characteristicType: characteristic.type,
+                displayName: displayName, value: value, success: true
+            )
+            return ControlResult(characteristicId: characteristicId, success: true, characteristic: displayName, value: AnyCodable(value), error: nil)
+        } catch {
+            logDeviceControl(
+                device: device, service: matchedService,
+                characteristicType: characteristic.type,
+                displayName: displayName, value: value, success: false,
+                error: error.localizedDescription
+            )
+            return ControlResult(characteristicId: characteristicId, success: false, characteristic: displayName, value: nil, error: "Failed to control device: \(error.localizedDescription)")
+        }
+    }
+
+    private func logDeviceControl(
+        device: DeviceModel, service: ServiceModel?,
+        characteristicType: String, displayName: String,
+        value: Any, success: Bool, error: String? = nil
+    ) {
+        guard storage.readLoggingEnabled(), storage.readRestLoggingEnabled() else { return }
+        let serviceName = service?.effectiveDisplayName
+        let summary = success
+            ? "Set \(displayName) → \(value) on \(device.name)"
+            : "Failed to set \(displayName) on \(device.name)"
+        let result = success ? "200 OK" : "400 \(error ?? "Failed")"
+        Task {
+            let entry = StateChangeLog.restCall(
+                method: "PUT /devices/\(device.id)/control",
+                summary: summary,
+                result: result,
+                detailedRequest: "Device: \(device.name)\nService: \(serviceName ?? "-")\nCharacteristic: \(displayName) (\(characteristicType))\nValue: \(value)",
+                detailedResponse: nil
+            )
+            await loggingService.logEntry(entry)
+        }
+    }
+
+    private func lookupFilteredDevice(_ deviceId: String) async throws -> DeviceModel {
+        let device = await MainActor.run { homeKitManager.getDeviceState(id: deviceId) }
+        guard let device else {
+            throw Abort(.notFound, reason: "Device not found: \(deviceId)")
+        }
+        let filtered = handler.stableDevices([device])
+        guard let filteredDevice = filtered.first else {
+            throw Abort(.notFound, reason: "Device not found or not exposed")
+        }
+        return filteredDevice
+    }
+
+    private func parseQueryValue(_ rawValue: String, for characteristic: CharacteristicModel) throws -> Any {
+        switch characteristic.format {
+        case "bool":
+            switch rawValue.lowercased() {
+            case "true", "1", "on", "yes": return true
+            case "false", "0", "off", "no": return false
+            default:
+                throw Abort(.badRequest, reason: "Invalid boolean value '\(rawValue)'. Use true/false, 1/0, on/off, or yes/no.")
+            }
+        case "int", "uint8", "uint16", "uint32", "uint64":
+            if let intVal = Int(rawValue) { return intVal }
+            if let doubleVal = Double(rawValue), doubleVal == doubleVal.rounded() { return Int(doubleVal) }
+            throw Abort(.badRequest, reason: "Invalid integer value '\(rawValue)' for format '\(characteristic.format)'.")
+        case "float":
+            guard let doubleVal = Double(rawValue) else {
+                throw Abort(.badRequest, reason: "Invalid numeric value '\(rawValue)' for float characteristic.")
+            }
+            return doubleVal
+        case "string":
+            return rawValue
+        default:
+            return rawValue
+        }
+    }
+
+    private struct CharacteristicStatus: Codable {
+        let id: String
+        let name: String
+        let value: AnyCodable?
+        let format: String
+        let units: String?
+    }
+
+    private struct ServiceStatus: Codable {
+        let id: String
+        let name: String
+        let characteristics: [CharacteristicStatus]
+    }
+
+    private func handleRestDeviceStatus(_ req: Request) async throws -> Response {
+        guard let deviceId = req.parameters.get("deviceId") else {
+            logRESTCall(method: "GET", path: "/devices/:id/status", statusCode: 400, resultSummary: "Bad Request")
+            throw Abort(.badRequest, reason: "Missing device ID")
+        }
+
+        let serviceIdParam = req.parameters.get("serviceId")
+        let characteristicIdParam = req.parameters.get("characteristicId")
+
+        let filteredDevice: DeviceModel
+        do {
+            filteredDevice = try await lookupFilteredDevice(deviceId)
+        } catch {
+            logRESTCall(method: "GET", path: "/devices/\(deviceId)/status", statusCode: 404, resultSummary: "Device not found")
+            throw error
+        }
+
+        let targetServices: [ServiceModel]
+        var resolvedCharId = characteristicIdParam
+        if let svcId = serviceIdParam {
+            if let service = filteredDevice.services.first(where: { $0.id == svcId }) {
+                targetServices = [service]
+            } else {
+                // Not a service — try as a characteristic ID (deviceId/characteristicId shorthand)
+                let charMatch = filteredDevice.services.flatMap(\.characteristics).first { $0.id == svcId }
+                guard charMatch != nil else {
+                    logRESTCall(method: "GET", path: "/devices/\(deviceId)/status/\(svcId)", statusCode: 404, resultSummary: "Not found")
+                    throw Abort(.notFound, reason: "No service or characteristic found with ID: \(svcId)")
+                }
+                targetServices = filteredDevice.services
+                resolvedCharId = svcId
+            }
+        } else {
+            targetServices = filteredDevice.services
+        }
+
+        if let charId = resolvedCharId {
+            var found: CharacteristicModel?
+            for service in targetServices {
+                if let char = service.characteristics.first(where: { $0.id == charId }) {
+                    found = char
+                    break
+                }
+            }
+            guard let char = found else {
+                logRESTCall(method: "GET", path: "/devices/\(deviceId)/status", statusCode: 404, resultSummary: "Characteristic not found")
+                throw Abort(.notFound, reason: "Characteristic not found: \(charId)")
+            }
+            let status = CharacteristicStatus(
+                id: char.id,
+                name: CharacteristicTypes.displayName(for: char.type),
+                value: char.value,
+                format: char.format,
+                units: char.units
+            )
+            let data = try JSONEncoder.iso8601.encode(status)
+            logRESTCall(method: "GET", path: "/devices/\(deviceId)/status", statusCode: 200,
+                        resultSummary: status.name,
+                        req: req, responseBody: String(data: data, encoding: .utf8))
+            return jsonResponse(data: data)
+        }
+
+        let serviceStatuses = targetServices.map { service in
+            ServiceStatus(
+                id: service.id,
+                name: service.effectiveDisplayName,
+                characteristics: service.characteristics.map { char in
+                    CharacteristicStatus(
+                        id: char.id,
+                        name: CharacteristicTypes.displayName(for: char.type),
+                        value: char.value,
+                        format: char.format,
+                        units: char.units
+                    )
+                }
+            )
+        }
+
+        if serviceIdParam != nil, let single = serviceStatuses.first {
+            let data = try JSONEncoder.iso8601.encode(single)
+            logRESTCall(method: "GET", path: "/devices/\(deviceId)/status", statusCode: 200,
+                        resultSummary: "\(single.characteristics.count) characteristics",
+                        req: req, responseBody: String(data: data, encoding: .utf8))
+            return jsonResponse(data: data)
+        }
+
+        let data = try JSONEncoder.iso8601.encode(serviceStatuses)
+        logRESTCall(method: "GET", path: "/devices/\(deviceId)/status", statusCode: 200,
+                    resultSummary: "\(serviceStatuses.count) services",
+                    req: req, responseBody: String(data: data, encoding: .utf8))
+        return jsonResponse(data: data)
+    }
+
+    private func handleRestControlDevicePut(_ req: Request) async throws -> Response {
+        guard let deviceId = req.parameters.get("deviceId") else {
+            logRESTCall(method: "PUT", path: "/devices/:id/control", statusCode: 400, resultSummary: "Bad Request")
+            throw Abort(.badRequest, reason: "Missing device ID")
+        }
+
+        let filteredDevice: DeviceModel
+        do {
+            filteredDevice = try await lookupFilteredDevice(deviceId)
+        } catch {
+            logRESTCall(method: "PUT", path: "/devices/\(deviceId)/control", statusCode: 404, resultSummary: "Device not found")
+            throw error
+        }
+
+        struct CharacteristicChange: Codable {
+            let characteristicId: String
+            let value: AnyCodable
+            let serviceId: String?
+
+            enum CodingKeys: String, CodingKey {
+                case characteristicId = "characteristic_id"
+                case value
+                case serviceId = "service_id"
+            }
+        }
+
+        struct BatchBody: Codable {
+            let characteristics: [CharacteristicChange]?
+            let characteristicId: String?
+            let value: AnyCodable?
+            let serviceId: String?
+
+            enum CodingKeys: String, CodingKey {
+                case characteristics
+                case characteristicId = "characteristic_id"
+                case value
+                case serviceId = "service_id"
+            }
+        }
+
+        // Try JSON body first; fall back to query parameters
+        let changes: [CharacteristicChange]
+        let body = try? req.content.decode(BatchBody.self)
+
+        if let batch = body?.characteristics, !batch.isEmpty {
+            changes = batch
+        } else if let charId = body?.characteristicId, let value = body?.value {
+            changes = [CharacteristicChange(characteristicId: charId, value: value, serviceId: body?.serviceId)]
+        } else if let charId = req.query[String.self, at: "characteristic_id"],
+                  let rawValue = req.query[String.self, at: "value"] {
+            let serviceId = req.query[String.self, at: "service_id"]
+
+            var targetCharacteristic: CharacteristicModel?
+            for service in filteredDevice.services {
+                if let char = service.characteristics.first(where: { $0.id == charId }) {
+                    targetCharacteristic = char
+                    break
+                }
+            }
+
+            guard let characteristic = targetCharacteristic else {
+                logRESTCall(method: "PUT", path: "/devices/\(deviceId)/control", statusCode: 404, resultSummary: "Characteristic not found")
+                throw Abort(.notFound, reason: "Characteristic not found: \(charId)")
+            }
+
+            let parsedValue = try parseQueryValue(rawValue, for: characteristic)
+            changes = [CharacteristicChange(characteristicId: charId, value: AnyCodable(parsedValue), serviceId: serviceId)]
+        } else {
+            logRESTCall(method: "PUT", path: "/devices/\(deviceId)/control", statusCode: 400, resultSummary: "Missing parameters")
+            throw Abort(.badRequest, reason: "Provide a JSON body with 'characteristic_id' + 'value' (or 'characteristics' array), or query parameters ?characteristic_id=...&value=...")
+        }
+
+        var results: [ControlResult] = []
+        for change in changes {
+            let result = await controlCharacteristic(
+                device: filteredDevice,
+                characteristicId: change.characteristicId,
+                value: change.value.value,
+                serviceId: change.serviceId
+            )
+            results.append(result)
+        }
+
+        let successCount = results.filter(\.success).count
+        let failureCount = results.count - successCount
+
+        let status: HTTPResponseStatus
+        if failureCount == 0 {
+            status = .ok
+        } else if successCount == 0 {
+            status = .badRequest
+        } else {
+            status = .multiStatus
+        }
+
+        struct BatchResponse: Codable { let results: [ControlResult] }
+        let response = BatchResponse(results: results)
+        let data = try JSONEncoder().encode(response)
+
+        return jsonResponse(data: data, status: status)
     }
 
     private func handleRestRenameService(_ req: Request) async throws -> Response {

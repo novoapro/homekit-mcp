@@ -166,14 +166,19 @@ extension KeychainService {
 
     // MARK: - Webhook Secret
 
-    /// Returns the existing webhook secret, or generates and stores a new one.
-    func getOrCreateWebhookSecret() -> String {
-        if let existing = read(key: Keys.webhookSecret), !existing.isEmpty {
+    /// Returns the existing value for a key, or generates and stores a new secure token.
+    func getOrCreate(key: String) -> String {
+        if let existing = read(key: key), !existing.isEmpty {
             return existing
         }
         let secret = generateSecureToken()
-        _ = save(key: Keys.webhookSecret, value: secret)
+        _ = save(key: key, value: secret)
         return secret
+    }
+
+    /// Returns the existing webhook secret, or generates and stores a new one.
+    func getOrCreateWebhookSecret() -> String {
+        getOrCreate(key: Keys.webhookSecret)
     }
 
     /// Generates a new webhook secret, replacing any existing one.

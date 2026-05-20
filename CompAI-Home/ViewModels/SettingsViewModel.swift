@@ -85,6 +85,11 @@ class SettingsViewModel: ObservableObject {
     @Published var webhookPrivateIPAllowlist: [String] {
         didSet { storage.webhookPrivateIPAllowlist = webhookPrivateIPAllowlist }
     }
+    @Published var webhookEndpoints: [WebhookEndpoint] {
+        didSet { storage.webhookEndpoints = webhookEndpoints }
+    }
+    @Published var endpointStatuses: [UUID: WebhookStatus] = [:]
+    @Published var testingEndpointId: UUID?
     @Published var temperatureUnit: String {
         willSet {
             if newValue != temperatureUnit {
@@ -223,6 +228,7 @@ class SettingsViewModel: ObservableObject {
         self.logCacheSize = storage.logCacheSize
         self.logSkippedAutomations = storage.logSkippedAutomations
         self.webhookPrivateIPAllowlist = storage.webhookPrivateIPAllowlist
+        self.webhookEndpoints = storage.webhookEndpoints
         self.temperatureUnit = storage.temperatureUnit
         self.sunEventLatitude = storage.sunEventLatitude
         self.sunEventLongitude = storage.sunEventLongitude
@@ -249,6 +255,13 @@ class SettingsViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        webhookService.endpointStatusSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] statuses in
+                self?.endpointStatuses = statuses
+            }
+            .store(in: &cancellables)
+
         mcpServer.$isRunning
             .receive(on: DispatchQueue.main)
             .sink { [weak self] running in
@@ -270,6 +283,14 @@ class SettingsViewModel: ObservableObject {
     func sendTestWebhook() {
         Task {
             _ = await webhookService.sendTest()
+        }
+    }
+
+    func sendTestWebhook(endpointId: UUID) {
+        testingEndpointId = endpointId
+        Task {
+            _ = await webhookService.sendTest(endpointId: endpointId)
+            await MainActor.run { self.testingEndpointId = nil }
         }
     }
 

@@ -693,6 +693,20 @@ actor DeviceRegistryService {
         hkSceneIdToStableId[hkId]
     }
 
+    /// Returns (stableId, name, roomName) for devices that have at least one observed characteristic.
+    func getObservedDevices() -> [(id: String, name: String, roomName: String?)] {
+        var result: [(id: String, name: String, roomName: String?)] = []
+        for (stableId, entry) in devices {
+            let hasObserved = entry.services.contains { svc in
+                svc.characteristics.contains { $0.observed }
+            }
+            if hasObserved {
+                result.append((id: stableId, name: entry.name, roomName: entry.roomName))
+            }
+        }
+        return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
     // MARK: - Model Transformation (nonisolated, for MCP output)
 
     /// Filters devices to only include enabled characteristics, transforms to stable IDs,

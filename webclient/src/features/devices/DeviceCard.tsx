@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { getServiceIcon } from '@/utils/service-icons';
 import { CharacteristicsTable } from './CharacteristicsTable';
@@ -14,10 +14,18 @@ export const DeviceCard = memo(function DeviceCard({ device, isExpanded, onToggl
   const primaryService = device.services[0];
   const iconName = getServiceIcon(primaryService?.type) ?? getServiceIcon(primaryService?.name) ?? 'house';
   const serviceCount = device.services.length;
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const handleToggle = useCallback(() => {
     onToggleDevice(device.id);
   }, [onToggleDevice, device.id]);
+
+  const copyText = useCallback((text: string, key: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1500);
+    });
+  }, []);
 
   return (
     <div className={`device-card ${isExpanded ? 'expanded' : ''}`}>
@@ -51,6 +59,18 @@ export const DeviceCard = memo(function DeviceCard({ device, isExpanded, onToggl
 
       {isExpanded && (
         <div className="device-card-body">
+          <div className="device-id-row">
+            <span className="device-id-label">Device ID</span>
+            <span className="device-id-value">{device.id}</span>
+            <button
+              className="char-copy-btn"
+              title="Copy device ID"
+              onClick={() => copyText(device.id, `dev-${device.id}`)}
+            >
+              <Icon name="copy" size={12} />
+              {copiedKey === `dev-${device.id}` && <span className="char-copied-tip">Copied!</span>}
+            </button>
+          </div>
           {device.services.map(svc => {
             const svcIcon = getServiceIcon(svc.type) ?? getServiceIcon(svc.name) ?? 'slider-horizontal';
             return (
@@ -59,10 +79,22 @@ export const DeviceCard = memo(function DeviceCard({ device, isExpanded, onToggl
                   <Icon name={svcIcon} size={16} style={{ color: 'var(--text-secondary)' }} />
                   <span className="device-service-name">{svc.name}</span>
                   <span className="device-service-type-badge">{svc.type}</span>
+                  <button
+                    className="char-copy-btn"
+                    title="Copy service ID"
+                    onClick={() => copyText(svc.id, `svc-${svc.id}`)}
+                  >
+                    <Icon name="copy" size={11} />
+                    {copiedKey === `svc-${svc.id}` && <span className="char-copied-tip">Copied!</span>}
+                  </button>
+                </div>
+                <div className="device-service-id">
+                  {svc.id}
                 </div>
                 <CharacteristicsTable
                   characteristics={svc.characteristics}
                   serviceId={svc.id}
+                  deviceId={device.id}
                 />
               </div>
             );

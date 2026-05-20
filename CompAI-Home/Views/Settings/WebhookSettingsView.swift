@@ -4,23 +4,11 @@ struct WebhookSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var storage: StorageService
 
-    @State private var webhookURL: String
-    @State private var hasEdited = false
-    @State private var showingSaveAlert = false
     @State private var newAllowlistEntry = ""
 
     init(viewModel: SettingsViewModel) {
         self.viewModel = viewModel
         self.storage = viewModel.storage
-        self._webhookURL = State(initialValue: viewModel.storage.webhookURL ?? "")
-    }
-
-    private var urlIsValid: Bool {
-        webhookURL.isEmpty || viewModel.isValidURL(webhookURL)
-    }
-
-    private var hasUnsavedChanges: Bool {
-        hasEdited && webhookURL != (viewModel.storage.webhookURL ?? "")
     }
 
     var body: some View {
@@ -68,109 +56,210 @@ struct WebhookSettingsView: View {
             }
 
             Section {
-                Toggle("Enable Device State Notifications", isOn: $viewModel.webhookEnabled)
-
-                Group {
-                    TextField("https://example.com/webhook", text: $webhookURL)
-                        .textFieldStyle(.plain)
-                        .foregroundColor(Theme.Tint.secondary)
-                        .keyboardType(.URL)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                        .onAppear {
-                            webhookURL = viewModel.storage.webhookURL ?? ""
-                        }
-                        .onChange(of: webhookURL) { _ in
-                            hasEdited = true
-                        }
-
-                    if hasEdited && !webhookURL.isEmpty && !urlIsValid {
-                        Label("Enter a valid HTTP or HTTPS URL", systemImage: "exclamationmark.triangle")
-                            .font(.footnote)
-                            .foregroundColor(.orange)
-                    }
-
-                    HStack {
-                        Button("Save") {
-                            viewModel.storage.webhookURL = webhookURL.isEmpty ? nil : webhookURL
-                            hasEdited = false
-                            showingSaveAlert = true
-                        }
-                        .disabled(!hasUnsavedChanges || (!webhookURL.isEmpty && !urlIsValid))
-
-                        if !webhookURL.isEmpty && viewModel.storage.isWebhookConfigured() {
-                            Spacer()
-                            Button("Clear") {
-                                webhookURL = ""
-                                viewModel.storage.webhookURL = nil
-                                hasEdited = false
-                            }
-                            .foregroundColor(.red)
-                        }
-                    }
-
-                    if viewModel.storage.isWebhookConfigured() {
-                        Label("Webhook configured", systemImage: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                    }
+                if viewModel.webhookEndpoints.isEmpty {
+                    Text("No webhook endpoints configured.")
+                        .foregroundStyle(.secondary)
                 }
-                .disabled(!viewModel.webhookEnabled)
-                .opacity(viewModel.webhookEnabled ? 1 : 0.5)
+
+                ForEach($viewModel.webhookEndpoints) { $endpoint in
+                    WebhookEndpointRow(
+                        endpoint: $endpoint,
+                        status: viewModel.endpointStatuses[endpoint.id] ?? .idle,
+                        isTesting: viewModel.testingEndpointId == endpoint.id,
+                        isValidURL: viewModel.isValidURL,
+                        onTest: { viewModel.sendTestWebhook(endpointId: endpoint.id) },
+                        onDelete: {
+                            viewModel.webhookEndpoints.removeAll { $0.id == endpoint.id }
+                        },
+                        deviceRegistryService: viewModel.deviceRegistryService
+                    )
+                }
             } header: {
-                Label("Device State Notifications", systemImage: "paperplane")
-            } footer: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Posts a signed payload to this URL whenever a device state changes. Configure which devices trigger notifications in the Devices tab.")
-                    Text("Payloads are signed with HMAC-SHA256 in the X-Signature-256 header.")
-                }
-            }
-
-            if viewModel.webhookEnabled {
-                Section {
-                    HStack {
-                        switch viewModel.webhookStatus {
-                        case .idle:
-                            Label("No activity yet", systemImage: "circle")
-                                .foregroundColor(.secondary)
-                        case .sending:
-                            Label("Sending...", systemImage: "arrow.up.circle")
-                                .foregroundColor(.blue)
-                        case .lastSuccess(let date):
-                            Label("Last delivery: \(date, style: .relative) ago", systemImage: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                        case .lastFailure(_, let error):
-                            Label("Failed: \(error)", systemImage: "xmark.circle.fill")
-                                .foregroundColor(.red)
-                        }
-                    }
-                    .font(.subheadline)
-
+                HStack {
+                    Label("Endpoints", systemImage: "antenna.radiowaves.left.and.right")
+                    Spacer()
                     Button {
-                        viewModel.sendTestWebhook()
+                        viewModel.webhookEndpoints.append(WebhookEndpoint())
                     } label: {
-                        HStack {
-                            if viewModel.isSendingTest {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
-                            Text("Send Test Webhook")
-                        }
+                        Image(systemName: "plus.circle.fill")
                     }
-                    .disabled(!viewModel.storage.isWebhookConfigured() || viewModel.isSendingTest)
-                } header: {
-                    Label("Status", systemImage: "antenna.radiowaves.left.and.right")
+                    .buttonStyle(.borderless)
                 }
+            } footer: {
+                Text("Posts a signed payload to each enabled endpoint whenever an observed device state changes. Each endpoint has its own HMAC-SHA256 signing secret in the X-Signature-256 header. Configure which devices are observed in the Devices tab.")
             }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .background(Theme.mainBackground)
         .navigationTitle("Webhooks")
-        .alert("Saved", isPresented: $showingSaveAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Webhook URL has been saved.")
+    }
+}
+
+// MARK: - Endpoint Row
+
+private struct WebhookEndpointRow: View {
+    @Binding var endpoint: WebhookEndpoint
+    let status: WebhookStatus
+    let isTesting: Bool
+    let isValidURL: (String) -> Bool
+    let onTest: () -> Void
+    let onDelete: () -> Void
+    let deviceRegistryService: DeviceRegistryService
+
+    @State private var isExpanded = false
+    @State private var showDeviceFilter = false
+    @State private var observedDevices: [(id: String, name: String, roomName: String?)] = []
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            endpointContent
+        } label: {
+            endpointLabel
         }
+        .task { await loadObservedDevices() }
+    }
+
+    @ViewBuilder
+    private var endpointLabel: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(endpoint.enabled ? .green : .gray)
+                .frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(endpoint.name.isEmpty ? "Unnamed Endpoint" : endpoint.name)
+                    .font(.body)
+                if !endpoint.url.isEmpty {
+                    Text(endpoint.url)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var endpointContent: some View {
+        Toggle("Enabled", isOn: $endpoint.enabled)
+
+        TextField("Name", text: $endpoint.name)
+            .textFieldStyle(.roundedBorder)
+
+        TextField("https://example.com/webhook", text: $endpoint.url)
+            .textFieldStyle(.roundedBorder)
+            .keyboardType(.URL)
+            .autocapitalization(.none)
+            .disableAutocorrection(true)
+
+        if !endpoint.url.isEmpty && !isValidURL(endpoint.url) {
+            Label("Enter a valid HTTP or HTTPS URL", systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundColor(.orange)
+        }
+
+        // Device filter
+        deviceFilterSection
+
+        // Status & actions
+        statusRow
+
+        HStack {
+            Button {
+                onTest()
+            } label: {
+                HStack {
+                    if isTesting {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text("Send Test")
+                }
+            }
+            .disabled(endpoint.url.isEmpty || !isValidURL(endpoint.url) || isTesting)
+
+            Spacer()
+
+            Button("Remove", role: .destructive) {
+                onDelete()
+            }
+        }
+        .buttonStyle(.borderless)
+    }
+
+    @ViewBuilder
+    private var deviceFilterSection: some View {
+        DisclosureGroup("Device Filter") {
+            if observedDevices.isEmpty {
+                Text("No observed devices. Enable observation in the Devices tab first.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(endpoint.deviceFilter.isEmpty ? "All observed devices" : "\(endpoint.deviceFilter.count) device(s) selected")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if !endpoint.deviceFilter.isEmpty {
+                    Button("Clear filter (listen to all)") {
+                        endpoint.deviceFilter = []
+                    }
+                    .font(.caption)
+                    .buttonStyle(.borderless)
+                }
+
+                ForEach(observedDevices, id: \.id) { device in
+                    let isSelected = endpoint.deviceFilter.contains(device.id)
+                    Button {
+                        if isSelected {
+                            endpoint.deviceFilter.remove(device.id)
+                        } else {
+                            endpoint.deviceFilter.insert(device.id)
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(isSelected ? .blue : .secondary)
+                            VStack(alignment: .leading) {
+                                Text(device.name)
+                                if let room = device.roomName {
+                                    Text(room)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusRow: some View {
+        HStack {
+            switch status {
+            case .idle:
+                Label("No activity yet", systemImage: "circle")
+                    .foregroundColor(.secondary)
+            case .sending:
+                Label("Sending...", systemImage: "arrow.up.circle")
+                    .foregroundColor(.blue)
+            case .lastSuccess(let date):
+                Label("Last delivery: \(date, style: .relative) ago", systemImage: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+            case .lastFailure(_, let error):
+                Label("Failed: \(error)", systemImage: "xmark.circle.fill")
+                    .foregroundColor(.red)
+            }
+        }
+        .font(.caption)
+    }
+
+    private func loadObservedDevices() async {
+        let devices = await deviceRegistryService.getObservedDevices()
+        await MainActor.run { observedDevices = devices }
     }
 }
 

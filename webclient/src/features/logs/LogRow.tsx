@@ -279,6 +279,7 @@ export const LogRow = memo(function LogRow({ log, index }: LogRowProps) {
           <>
             <div className="api-content">
               <span className="method-badge rest">{log.method || 'REST'}</span>
+              {log.summary && <span className="api-text">{log.summary}</span>}
             </div>
             {parsedResult && (
               <div className="api-result">

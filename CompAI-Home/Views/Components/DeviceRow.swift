@@ -77,6 +77,14 @@ struct DeviceRow: View {
 
                         Spacer()
                     }
+
+                    if isExpanded {
+                        Text(device.id)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(Theme.Text.tertiary)
+                            .lineLimit(1)
+                            .textSelection(.enabled)
+                    }
                 }
 
                 Spacer()
@@ -182,9 +190,28 @@ struct DeviceRow: View {
                                                 .buttonStyle(.plain)
                                                 .help("Reset to default name")
                                             }
+
+                                            Button {
+                                                UIPasteboard.general.string = stableId
+                                            } label: {
+                                                Image(systemName: "doc.on.doc")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(Theme.Text.tertiary)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .help("Copy service ID")
                                         }
                                     }
                                     .padding(.horizontal, Theme.Spacing.medium)
+
+                                    if let stableId = stableServiceId(for: service) {
+                                        Text(stableId)
+                                            .font(.system(size: 10, design: .monospaced))
+                                            .foregroundColor(Theme.Text.tertiary)
+                                            .lineLimit(1)
+                                            .textSelection(.enabled)
+                                            .padding(.horizontal, Theme.Spacing.medium)
+                                    }
 
                                     LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
                                         ForEach(displayCharacteristics.filter { $0.service.id == service.id }, id: \.char.id) { item in
@@ -231,6 +258,12 @@ struct DeviceRow: View {
                 UIPasteboard.general.string = device.name
             } label: {
                 Label("Copy Device Name", systemImage: "doc.on.doc")
+            }
+
+            Button {
+                UIPasteboard.general.string = device.id
+            } label: {
+                Label("Copy Device ID", systemImage: "number")
             }
 
             Divider()
@@ -286,6 +319,8 @@ struct DeviceRow: View {
 
     private func characteristicTile(service: ServiceModel, char: CharacteristicModel) -> some View {
         let stableCharId = viewModel.registryService.readStableCharacteristicId(char.id)
+        let stableDevId = viewModel.registryService.readStableDeviceId(device.id) ?? device.id
+        let displayCharId = stableCharId ?? char.id
         let settings = stableCharId.flatMap { charSettings[$0] } ?? (enabled: true, observed: false)
         let canObserve = settings.enabled && char.permissions.contains("notify")
 
@@ -307,6 +342,12 @@ struct DeviceRow: View {
                             .font(.system(size: 14))
                             .foregroundColor(Theme.Text.secondary)
                     }
+
+                    Text(displayCharId)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(Theme.Text.tertiary)
+                        .lineLimit(1)
+                        .textSelection(.enabled)
                 }
                 Spacer()
             }
@@ -314,40 +355,168 @@ struct DeviceRow: View {
             Divider()
 
             HStack(spacing: 4) {
+                MiniToggle(isOn: Binding(
+                    get: { settings.enabled },
+                    set: { val in
+                        if let id = stableCharId {
+                            charSettings[id] = (enabled: val, observed: val ? settings.observed : false)
+                            viewModel.setCharacteristicEnabled(stableCharId: id, enabled: val)
+                        }
+                    }
+                ), label: "Enabled")
+
+                Spacer()
+
+                if char.permissions.contains("notify") {
                     MiniToggle(isOn: Binding(
-                        get: { settings.enabled },
+                        get: { settings.observed },
                         set: { val in
                             if let id = stableCharId {
-                                charSettings[id] = (enabled: val, observed: val ? settings.observed : false)
-                                viewModel.setCharacteristicEnabled(stableCharId: id, enabled: val)
+                                charSettings[id] = (enabled: settings.enabled, observed: val)
+                                viewModel.setCharacteristicObserved(stableCharId: id, observed: val)
                             }
                         }
-                    ), label: "Enabled")
+                    ), label: "Observed")
+                    .disabled(!canObserve)
+                    .opacity(canObserve ? 1 : 0.4)
+                } else {
+                    Text("No notify")
+                        .font(.system(size: 11))
+                        .foregroundColor(Theme.Text.tertiary)
+                }
+            }
 
-                    Spacer()
+            Divider()
 
-                    if char.permissions.contains("notify") {
-                        MiniToggle(isOn: Binding(
-                            get: { settings.observed },
-                            set: { val in
-                                if let id = stableCharId {
-                                    charSettings[id] = (enabled: settings.enabled, observed: val)
-                                    viewModel.setCharacteristicObserved(stableCharId: id, observed: val)
-                                }
-                            }
-                        ), label: "Observed")
-                        .disabled(!canObserve)
-                        .opacity(canObserve ? 1 : 0.4)
-                    } else {
-                        Text("No notify")
-                            .font(.system(size: 11))
-                            .foregroundColor(Theme.Text.tertiary)
+            HStack(spacing: 6) {
+                tileActionButton(label: "ID", systemImage: "doc.on.doc") {
+                    UIPasteboard.general.string = displayCharId
+                }
+
+                if char.permissions.contains("write") {
+                    tileActionButton(label: "URL", systemImage: "link") {
+                        let sv = controlSampleValue(for: char)
+                        let port = UserDefaults.standard.integer(forKey: "mcpServerPort")
+                        let host = UserDefaults.standard.string(forKey: "mcpServerBindAddress") ?? "127.0.0.1"
+                        let displayHost = host == "0.0.0.0" ? "localhost" : host
+                        let pv = possibleValuesDescription(for: char)
+                        var text = "// Device ID: \(stableDevId)\n"
+                        text += "// Possible values: \(pv)\n"
+                        text += "// Method: PUT (query params as fallback for simple integrations)\n"
+                        text += "http://\(displayHost):\(port)/devices/\(stableDevId)/control?characteristic_id=\(displayCharId)&value=\(sv)"
+                        UIPasteboard.general.string = text
+                    }
+
+                    tileActionButton(label: "JSON", systemImage: "curlybraces") {
+                        let sv = controlSampleValue(for: char)
+                        let pv = possibleValuesDescription(for: char)
+                        let port = UserDefaults.standard.integer(forKey: "mcpServerPort")
+                        let host = UserDefaults.standard.string(forKey: "mcpServerBindAddress") ?? "127.0.0.1"
+                        let displayHost = host == "0.0.0.0" ? "localhost" : host
+                        let json = """
+                        // Device ID: \(stableDevId)
+                        // Possible values: \(pv)
+                        // PUT http://\(displayHost):\(port)/devices/\(stableDevId)/control
+                        {
+                          "characteristic_id": "\(displayCharId)",
+                          "value": \(controlSampleJsonValue(for: char, sampleValue: sv))
+                        }
+                        """
+                        UIPasteboard.general.string = json
                     }
                 }
             }
+        }
         .padding(10)
         .background(Theme.surfaceOverlay)
         .cornerRadius(Theme.CornerRadius.small)
+    }
+
+    private func tileActionButton(label: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10))
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(Theme.Text.tertiary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Theme.contentBackground)
+            .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func controlSampleValue(for char: CharacteristicModel) -> String {
+        if let validValues = char.validValues, !validValues.isEmpty {
+            if let raw = char.value?.value {
+                let numeric = coerceToInt(raw)
+                if validValues.contains(numeric) { return "\(numeric)" }
+            }
+            return "\(validValues[0])"
+        }
+        if let raw = char.value?.value {
+            if let b = raw as? Bool { return b ? "true" : "false" }
+            if let i = raw as? Int { return "\(i)" }
+            if let d = raw as? Double { return "\(d)" }
+            return "\(raw)"
+        }
+        switch char.format {
+        case "bool": return "true"
+        case "int", "uint8", "uint16", "uint32", "uint64":
+            if let min = char.minValue { return "\(Int(min))" }
+            return "0"
+        case "float":
+            if let min = char.minValue { return "\(min)" }
+            return "0.0"
+        default: return "value"
+        }
+    }
+
+    private func controlSampleJsonValue(for char: CharacteristicModel, sampleValue: String) -> String {
+        if char.validValues != nil && !char.validValues!.isEmpty {
+            return sampleValue
+        }
+        switch char.format {
+        case "bool": return sampleValue
+        case "int", "uint8", "uint16", "uint32", "uint64": return sampleValue
+        case "float": return sampleValue
+        default: return "\"\(sampleValue)\""
+        }
+    }
+
+    private func coerceToInt(_ value: Any) -> Int {
+        if let b = value as? Bool { return b ? 1 : 0 }
+        if let i = value as? Int { return i }
+        if let d = value as? Double { return Int(d) }
+        return 0
+    }
+
+    private func possibleValuesDescription(for char: CharacteristicModel) -> String {
+        if let validValues = char.validValues, !validValues.isEmpty {
+            let options = CharacteristicInputConfig.buildPickerOptions(for: char.type, values: validValues)
+            return options.map { "\($0.value) (\($0.label))" }.joined(separator: ", ")
+        }
+        switch char.format {
+        case "bool":
+            return "true (On), false (Off)"
+        case "int", "uint8", "uint16", "uint32", "uint64":
+            let min = char.minValue.map { String(Int($0)) } ?? "0"
+            let max = char.maxValue.map { String(Int($0)) } ?? "255"
+            let step = char.stepValue.map { " (step: \(Int($0)))" } ?? ""
+            return "\(min) – \(max)\(step)"
+        case "float":
+            let min = char.minValue.map { String($0) } ?? "0.0"
+            let max = char.maxValue.map { String($0) } ?? "100.0"
+            let step = char.stepValue.map { " (step: \($0))" } ?? ""
+            return "\(min) – \(max)\(step)"
+        case "string":
+            return "string"
+        default:
+            return "any"
+        }
     }
 
     /// Loads settings for this device's characteristics from the registry.
